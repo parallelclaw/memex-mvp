@@ -2,7 +2,7 @@
 
 > **Claude забывает каждую сессию. Memex помнит навсегда.**
 
-Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 4 простых tool'а.
+Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 5 простых tool'ов.
 
 Никакого облака. Никакого аккаунта. Только твой ноут.
 
@@ -20,11 +20,12 @@ SQLite + FTS5 (~/.memex/data/memex.db)
    ↓
 MCP server (stdio JSON-RPC)
    ↓
-любой клиент → 4 tool'а:
-   • memex_search          — full-text поиск
-   • memex_recent          — последние N сообщений
-   • memex_get_conversation — полный транскрипт чата
-   • memex_list_sources    — что импортировано
+любой клиент → 5 tool'ов:
+   • memex_search             — full-text поиск
+   • memex_recent             — последние N сообщений
+   • memex_list_conversations — список чатов по recency
+   • memex_get_conversation   — полный транскрипт чата
+   • memex_list_sources       — что импортировано
 ```
 
 Спроси своему агенту «помнишь как мы решили проблему с миграцией Postgres?» — он **сам** вызовет `memex_search`, найдёт релевантное и ответит с реальным контекстом.
@@ -143,6 +144,9 @@ Full-text поиск через FTS5. Возвращает ranked сниппет
 
 ### `memex_recent(limit?, source?)`
 Последние N сообщений по timestamp.
+
+### `memex_list_conversations(limit?, source?, since_ts?)`
+Список чатов отсортированных по последней активности (most recent first). Каждая запись — `conversation_id`, источник, заголовок, диапазон дат и кол-во сообщений. Удобно, когда хочется быстро увидеть какие у тебя вообще разговоры с конкретным ботом или внутри одного источника, прежде чем вытаскивать полный транскрипт.
 
 ### `memex_get_conversation(conversation_id, limit?)`
 Полный transcript одного чата.

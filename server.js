@@ -475,6 +475,28 @@ const TOOLS = [
     },
   },
   {
+    name: 'memex_list_conversations',
+    description:
+      'List conversations sorted by most recent activity. Use this to browse what chats exist ' +
+      'across sources, or to find a specific conversation by title before pulling its full ' +
+      'transcript with memex_get_conversation. Each entry has conversation_id, source, title, ' +
+      'message_count, and date range.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', default: 20, minimum: 1, maximum: 200 },
+        source: {
+          type: 'string',
+          description: 'Optional source filter: "telegram", "claude-code", "claude-cowork", etc.',
+        },
+        since_ts: {
+          type: 'integer',
+          description: 'Optional Unix timestamp — only conversations with last activity at or after this time.',
+        },
+      },
+    },
+  },
+  {
     name: 'memex_list_sources',
     description:
       'List which sources have been imported and how many messages are stored from each. Useful for diagnostics.',
@@ -579,6 +601,47 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         })
         .join('\n');
       return textResult(formatted);
+    }
+
+    if (name === 'memex_list_conversations') {
+      const limit = Math.min(200, Math.max(1, args.limit || 20));
+      const where = [];
+      const params = [];
+      if (args.source) {
+        where.push('source = ?');
+        params.push(args.source);
+      }
+      if (args.since_ts) {
+        where.push('last_ts >= ?');
+        params.push(args.since_ts);
+      }
+      const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+      params.push(limit);
+
+      const rows = db
+        .prepare(
+          `SELECT conversation_id, source, title, first_ts, last_ts, message_count
+             FROM conversations
+             ${whereClause}
+         ORDER BY last_ts DESC
+            LIMIT ?`
+        )
+        .all(...params);
+
+      if (rows.length === 0) return textResult('No conversations found.');
+
+      const fmtDate = (ts) =>
+        ts ? new Date(ts * 1000).toISOString().slice(0, 10) : '?';
+      const lines = [`**${rows.length} conversation(s)** (most recent first):`, ''];
+      for (const r of rows) {
+        const first = fmtDate(r.first_ts);
+        const last = fmtDate(r.last_ts);
+        const range = first === last ? last : `${first} → ${last}`;
+        lines.push(
+          `- ${range} · **${r.source}** · ${r.title || r.conversation_id} — ${r.message_count} msgs · \`${r.conversation_id}\``
+        );
+      }
+      return textResult(lines.join('\n'));
     }
 
     if (name === 'memex_list_sources') {

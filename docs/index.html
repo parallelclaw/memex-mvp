@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="memex — local-first MCP server that gives any AI agent (Cursor, Cline, Claude Code, Continue, Zed) shared memory across all your past conversations. Telegram + Claude Code + Cowork in one searchable index.">
+<title>memex · your AI's missing memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0e12;
+    --bg-soft: #1a1c24;
+    --bg-card: rgba(255,255,255,0.03);
+    --text: #e8e6e1;
+    --text-soft: #98968e;
+    --text-muted: #5d5b54;
+    --accent: #5fb6cd;
+    --accent-light: #82d0e6;
+    --accent-bg: rgba(95, 182, 205, 0.12);
+    --green: #7cc28e;
+    --border: rgba(255,255,255,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, kbd { font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  a { color: var(--accent-light); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(13, 14, 18, 0.92);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .logo { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; color: var(--text); }
+  .logo .accent { color: var(--accent); }
+  .nav-links { display: flex; align-items: center; gap: 8px; }
+  .lang-toggle {
+    display: inline-flex; align-items: center;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px;
+    overflow: hidden;
+  }
+  .lang-toggle button {
+    background: none; border: none; padding: 6px 12px;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    color: var(--text-soft);
+  }
+  .lang-toggle button.active { background: var(--accent); color: var(--bg); }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--text); color: var(--bg);
+    font-weight: 600; font-size: 13px;
+    transition: background 0.15s;
+  }
+  .gh-btn:hover { text-decoration: none; background: var(--accent); }
+
+  /* Hero */
+  .hero {
+    padding: 100px 24px 64px;
+    background: linear-gradient(180deg, #0d0e12 0%, #131523 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-inner { max-width: 880px; margin: 0 auto; text-align: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 999px;
+    background: var(--accent-bg); color: var(--accent-light);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
+    margin-bottom: 26px;
+    border: 1px solid rgba(95, 182, 205, 0.25);
+  }
+  h1 {
+    font-size: clamp(36px, 6vw, 60px);
+    font-weight: 900; letter-spacing: -0.035em;
+    line-height: 1.04;
+    margin-bottom: 24px;
+  }
+  h1 .strike {
+    text-decoration: line-through;
+    text-decoration-color: rgba(255,255,255,0.25);
+    text-decoration-thickness: 3px;
+    color: var(--text-soft);
+  }
+  h1 .accent { color: var(--accent); }
+  .lede {
+    font-size: clamp(17px, 1.9vw, 21px);
+    color: var(--text-soft);
+    max-width: 720px; margin: 0 auto 40px;
+    line-height: 1.5;
+  }
+  .cta-row {
+    display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .cta-primary, .cta-secondary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 24px; border-radius: 12px;
+    font-weight: 700; font-size: 15px; letter-spacing: -0.005em;
+    border: 1.5px solid transparent; cursor: pointer;
+    transition: transform 0.15s;
+    font-family: inherit;
+  }
+  .cta-primary {
+    background: var(--accent); color: var(--bg);
+  }
+  .cta-primary:hover {
+    background: var(--accent-light); transform: translateY(-1px);
+    text-decoration: none;
+  }
+  .cta-secondary {
+    background: var(--bg-card); color: var(--text);
+    border-color: var(--border);
+  }
+  .cta-secondary:hover { border-color: var(--accent); text-decoration: none; }
+  .cta-meta { font-size: 13px; color: var(--text-muted); }
+
+  /* How it works diagram */
+  .diagram-section {
+    padding: 64px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .diagram {
+    max-width: 760px; margin: 0 auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 28px 32px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px; line-height: 1.85;
+    color: var(--text);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .diagram .arrow { color: var(--accent); }
+  .diagram .comment { color: var(--text-muted); }
+
+  /* Features */
+  .features {
+    padding: 72px 24px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .section-title {
+    font-size: clamp(24px, 3vw, 32px);
+    font-weight: 800; letter-spacing: -0.02em;
+    text-align: center; margin-bottom: 12px;
+  }
+  .section-sub {
+    text-align: center; color: var(--text-soft);
+    max-width: 600px; margin: 0 auto 48px;
+  }
+  .feat-grid {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+  }
+  .feat {
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 22px;
+  }
+  .feat-icon { font-size: 26px; margin-bottom: 12px; }
+  .feat h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .feat p { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
+
+  /* Tools */
+  .tools {
+    padding: 72px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tools-list {
+    max-width: 760px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .tool {
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 22px;
+  }
+  .tool-name {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    color: var(--accent); margin-bottom: 6px;
+  }
+  .tool-desc { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
+
+  /* Companion */
+  .companion {
+    padding: 72px 24px;
+    background: var(--bg);
+  }
+  .companion-card {
+    max-width: 720px; margin: 0 auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 32px;
+    text-align: center;
+  }
+  .companion-card h3 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+
+  /* Footer */
+  footer {
+    padding: 36px 24px;
+    border-top: 1px solid var(--border);
+    text-align: center; font-size: 14px; color: var(--text-muted);
+  }
+  footer a { color: var(--accent-light); margin: 0 10px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="logo">me<span class="accent">mex</span></div>
+    <div class="nav-links">
+      <div class="lang-toggle">
+        <button class="active" data-lang="en" onclick="setLang('en')">EN</button>
+        <button data-lang="ru" onclick="setLang('ru')">RU</button>
+      </div>
+      <a class="gh-btn" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div class="pill" data-en="Personal AI Control Plane · v0.1" data-ru="Personal AI Control Plane · v0.1">Personal AI Control Plane · v0.1</div>
+    <h1>
+      <span class="strike" data-en="Claude forgets" data-ru="Claude забывает">Claude forgets</span>
+      <span data-en="every session." data-ru="каждую сессию.">every session.</span><br>
+      <span class="accent" data-en="memex remembers." data-ru="memex помнит.">memex remembers.</span>
+    </h1>
+    <p class="lede" data-en="A local-first MCP server that gives any AI agent (Cursor, Cline, Claude Code, Continue, Zed) shared memory across all your past conversations — Claude Code, Cowork, Telegram exports — in one FTS5-searchable index."
+       data-ru="Локальный MCP-сервер, который даёт любому AI-агенту (Cursor, Cline, Claude Code, Continue, Zed) общую память через все ваши прошлые разговоры — Claude Code, Cowork, Telegram-экспорты — в одном FTS5-индексе.">
+       A local-first MCP server that gives any AI agent (Cursor, Cline, Claude Code, Continue, Zed) shared memory across all your past conversations — Claude Code, Cowork, Telegram exports — in one FTS5-searchable index.
+    </p>
+    <div class="cta-row">
+      <a class="cta-primary" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
+        <span data-en="Get on GitHub" data-ru="Открыть на GitHub">Get on GitHub</span>
+      </a>
+      <a class="cta-secondary" href="https://github.com/parallelclaw/memex-mvp#установка-за-3-минуты" target="_blank" rel="noopener">
+        <span data-en="Install in 3 min" data-ru="Установка за 3 мин">Install in 3 min</span>
+      </a>
+    </div>
+    <p class="cta-meta" data-en="MIT license · Local-only · No telemetry · No cloud"
+                       data-ru="MIT-лицензия · Полностью локально · Без телеметрии · Без облака">
+       MIT license · Local-only · No telemetry · No cloud
+    </p>
+  </div>
+</section>
+
+<section class="diagram-section">
+  <h2 class="section-title" data-en="How it works" data-ru="Как это работает">How it works</h2>
+  <p class="section-sub" data-en="One folder. One database. Any agent can ask."
+                          data-ru="Одна папка. Одна база. Любой агент может спросить.">
+    One folder. One database. Any agent can ask.
+  </p>
+  <div class="diagram">~/.memex/inbox/   <span class="comment">← drop conversations here (or symlink)</span>
+    <span class="arrow">↓</span>     chokidar watcher (~1s pickup)
+parser           <span class="comment">Telegram JSON / Claude Code JSONL (flat + nested)</span>
+    <span class="arrow">↓</span>
+SQLite + FTS5   <span class="comment">~/.memex/data/memex.db</span>
+    <span class="arrow">↓</span>
+MCP server      <span class="comment">stdio JSON-RPC, 4 tools exposed</span>
+    <span class="arrow">↓</span>
+any client:
+   • Cursor       <span class="comment">~/.cursor/mcp.json</span>
+   • Claude Code  <span class="comment">~/.claude/config.json</span>
+   • Cline · Continue · Zed · ...
+
+your agent calls memex_search() / memex_recent() automatically</div>
+</section>
+
+<section class="features">
+  <h2 class="section-title" data-en="What it gives you" data-ru="Что даёт">What it gives you</h2>
+  <div class="feat-grid">
+    <div class="feat">
+      <div class="feat-icon">🧠</div>
+      <h3 data-en="Cross-session memory" data-ru="Сквозная память">Cross-session memory</h3>
+      <p data-en="Your agent remembers what you discussed last week, last month, in another session, with another agent. Real continuity."
+         data-ru="Ваш агент помнит что вы обсуждали неделю назад, месяц назад, в другой сессии, с другим агентом. Реальная continuity.">
+        Your agent remembers what you discussed last week, last month, in another session, with another agent. Real continuity.
+      </p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔓</div>
+      <h3 data-en="Cross-agent memory" data-ru="Кросс-агентская память">Cross-agent memory</h3>
+      <p data-en="Discussion in Cowork? Cursor sees it. Conversation in Claude Code? ChatGPT can read it. One source of truth, any client."
+         data-ru="Обсуждение в Cowork? Cursor его видит. Разговор в Claude Code? ChatGPT может прочитать. Один источник истины, любой клиент.">
+        Discussion in Cowork? Cursor sees it. Conversation in Claude Code? ChatGPT can read it. One source of truth, any client.
+      </p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔒</div>
+      <h3 data-en="Truly local" data-ru="Полностью локально">Truly local</h3>
+      <p data-en="Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survive Anthropic bans by definition."
+         data-ru="Каждый байт остаётся у вас на ноуте. Ни облака, ни телеметрии, ни аккаунта. SQLite-файл который ваш. Переживёт любой Anthropic-бан by definition.">
+        Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survive Anthropic bans by definition.
+      </p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⚡</div>
+      <h3 data-en="Drop and forget" data-ru="Бросил и забыл">Drop and forget</h3>
+      <p data-en="Drop a Telegram export or a Claude Code .jsonl into the inbox folder. Memex picks it up in seconds, indexes via FTS5, and exposes through MCP."
+         data-ru="Бросил Telegram-экспорт или Claude Code .jsonl в inbox-папку. Memex подхватывает за секунды, индексирует через FTS5, и отдаёт через MCP.">
+        Drop a Telegram export or a Claude Code .jsonl into the inbox folder. Memex picks it up in seconds, indexes via FTS5, and exposes through MCP.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="tools">
+  <h2 class="section-title" data-en="MCP tools your agent gets" data-ru="MCP-tool'ы которые получает агент">MCP tools your agent gets</h2>
+  <p class="section-sub" data-en="Tiny surface, big impact. The agent decides when to call them."
+                          data-ru="Маленький surface, большой impact. Агент сам решает когда их вызвать.">
+    Tiny surface, big impact. The agent decides when to call them.
+  </p>
+  <div class="tools-list">
+    <div class="tool">
+      <div class="tool-name">memex_search(query, limit?, source?)</div>
+      <div class="tool-desc" data-en="Full-text search across your memory. Returns ranked snippets with conversation_id and timestamp."
+                              data-ru="Full-text поиск по всей памяти. Возвращает ranked сниппеты с conversation_id и timestamp.">
+        Full-text search across your memory. Returns ranked snippets with conversation_id and timestamp.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">memex_recent(limit?, source?)</div>
+      <div class="tool-desc" data-en="Latest N messages by timestamp. For 'what was I just talking about'."
+                              data-ru="Последние N сообщений по timestamp. Для «что я только что обсуждал».">
+        Latest N messages by timestamp. For 'what was I just talking about'.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">memex_get_conversation(conversation_id, limit?)</div>
+      <div class="tool-desc" data-en="Full transcript of one chat. Use after search to dive deeper into a specific session."
+                              data-ru="Полный transcript одного чата. Использовать после search для глубокого захода в конкретную сессию.">
+        Full transcript of one chat. Use after search to dive deeper into a specific session.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">memex_list_sources()</div>
+      <div class="tool-desc" data-en="What's been imported: counts per source, recent imports, paths to inbox and DB."
+                              data-ru="Что импортировано: счётчики по источникам, недавние импорты, пути к inbox и БД.">
+        What's been imported: counts per source, recent imports, paths to inbox and DB.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="companion">
+  <div class="companion-card">
+    <h3 data-en="Companion: claude-backup" data-ru="Companion: claude-backup">Companion: claude-backup</h3>
+    <p style="color: var(--text-soft); font-size: 15.5px; margin-bottom: 18px;"
+       data-en="Don't want to manually drop files? claude-backup is a Python CLI that auto-discovers all your Claude Code and Cowork sessions and feeds them into memex's inbox in one command."
+       data-ru="Не хочешь вручную бросать файлы? claude-backup — Python CLI который сам находит все ваши Claude Code и Cowork сессии и кидает их в memex inbox одной командой.">
+      Don't want to manually drop files? claude-backup is a Python CLI that auto-discovers all your Claude Code and Cowork sessions and feeds them into memex's inbox in one command.
+    </p>
+    <pre style="background: var(--bg-soft); padding: 14px 18px; border-radius: 8px; font-size: 13.5px; color: var(--text); margin-bottom: 16px; text-align: left; overflow-x: auto;"><code>pip install claude-backup
+claude-backup feed-memex
+# → 16 sessions in your memex inbox in 5 seconds</code></pre>
+    <a href="https://github.com/parallelclaw/claude-backup" target="_blank" rel="noopener" style="font-size: 14px;">github.com/parallelclaw/claude-backup →</a>
+  </div>
+</section>
+
+<footer>
+  <p>
+    <a href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/parallelclaw/memex-mvp/blob/main/README.md" target="_blank" rel="noopener" data-en="README" data-ru="README">README</a>
+    <a href="https://github.com/parallelclaw/memex-mvp/issues" target="_blank" rel="noopener" data-en="Report issue" data-ru="Issues">Report issue</a>
+  </p>
+  <p style="margin-top: 12px; font-size: 12.5px;">
+    <span data-en="MIT · Built by" data-ru="MIT · Сделал">MIT · Built by</span>
+    <a href="https://github.com/parallelclaw" target="_blank" rel="noopener">parallelclaw</a>
+  </p>
+</footer>
+
+<script>
+  let currentLang = 'en';
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.querySelectorAll('.lang-toggle button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+    document.querySelectorAll('[data-en], [data-ru]').forEach(el => {
+      const text = el.dataset[lang];
+      if (text === undefined) return;
+      el.innerHTML = text;
+    });
+    try { localStorage.setItem('memex-lang', lang); } catch(e) {}
+  }
+  try {
+    const saved = localStorage.getItem('memex-lang');
+    if (saved === 'ru' || saved === 'en') setLang(saved);
+  } catch(e) {}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "name": "memex-mvp",
+  "version": "0.1.0",
+  "description": "Local-first MCP server for cross-agent AI memory. Drop chat exports into ~/.memex/inbox/ and Claude can search them.",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "memex-mvp": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^11.0.0",
+    "chokidar": "^3.6.0"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "memex",
+    "memory",
+    "ai",
+    "local-first",
+    "telegram",
+    "openclaw"
+  ],
+  "author": "sedelev",
+  "license": "MIT"
+}

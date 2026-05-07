@@ -1,0 +1,25 @@
+# Node
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# Memory data — never commit user content
+data/
+inbox/
+
+# Logs
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets
+.env
+.env.local
+
+# Build
+dist/
+build/

@@ -545,6 +545,33 @@ the user and ask before acting on it.
 - DON'T give up after one query. Two or three attempts is the norm
   for a corpus that mixes Russian and English keyword tokenisation.
 
+══ ABSTENTION — keyword hits ≠ topical match ══
+
+FTS5 returns a hit whenever the literal word matches, regardless of
+whether the surrounding context is relevant. "Япония" matches both
+"trip to Japan" and "Japanese economy and the yen exchange rate" —
+those are different topics, and you shouldn't merge them.
+
+BEFORE ANSWERING, READ THE SNIPPETS. Ask: do these actually address
+what the user asked? If not, refuse honestly:
+
+  "I searched memex but nothing in there is specifically about X.
+  The keyword matched in [unrelated context], but that's a different
+  topic. Want me to try a different angle?"
+
+NEVER stitch an answer together from semantically-unrelated snippets
+just because the keyword matched. That's hallucination dressed up as
+recall, and it's worse than admitting you don't know.
+
+══ EXPAND MATCH — when snippets are cut off ══
+
+By default memex_search returns ~360-char previews. If a snippet
+clearly stops before the actual answer (e.g. cuts mid-table, mid-list,
+or right after a heading) — re-call memex_search with the same query
+plus expand_match: true. You'll get the full untruncated message text,
+which often contains the answer in one shot — saving a follow-up
+memex_get_conversation call.
+
 ══ ARCHIVE ══
 
 Archived conversations are hidden from default list/search but stay
@@ -602,6 +629,12 @@ const TOOLS = [
           default: false,
           description:
             'If true, also search inside archived conversations. Default: false (archived chats are excluded from search).',
+        },
+        expand_match: {
+          type: 'boolean',
+          default: false,
+          description:
+            'If true, return the full untruncated text of each matching message (instead of the 360-char preview). Use when the snippet was cut off before the actual answer. Costs more tokens but saves a follow-up memex_get_conversation call when the answer fits in one message.',
         },
         format: {
           type: 'string',
@@ -780,6 +813,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const limit = Math.min(50, Math.max(1, args.limit || 10));
       const groupByConv = args.group_by_conversation !== false; // default true
       const includeArchived = args.include_archived === true;
+      const expandMatch = args.expand_match === true;
+      const textLimit = expandMatch ? Infinity : 360;
       const format = pickFormat(args);
       // FTS5 needs special handling for non-alphanumeric input — quote tokens
       const query = String(args.query || '')
@@ -860,6 +895,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           query: args.query,
           count: rows.length,
           grouped_by_conversation: groupByConv,
+          expand_match: expandMatch,
           results: rows.map((r) => ({
             conversation_id: r.conversation_id,
             title: r.conversation_title || null,
@@ -869,7 +905,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             sender: r.sender || r.role,
             role: r.role,
             snippet: r.snippet,
-            text: truncate(r.text, 360),
+            text: truncate(r.text, textLimit),
             match_count: groupByConv ? r.match_count : undefined,
             archived: !!r.archived_at,
           })),
@@ -881,11 +917,12 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const date = fmtDateTime(r.ts) || '???';
           const matchSuffix =
             groupByConv && r.match_count > 1 ? ` · ${r.match_count} matches in this chat` : '';
+          const textLabel = expandMatch ? '_full message:_' : '_full text:_';
           return [
             `### Result ${i + 1} · ${r.source} · ${date}${matchSuffix}`,
             `**${r.sender || r.role}** in ${r.conversation_title || r.conversation_id}`,
             `> ${r.snippet}`,
-            `_full text:_ ${truncate(r.text, 360)}`,
+            `${textLabel} ${truncate(r.text, textLimit)}`,
             `_conversation_id:_ \`${r.conversation_id}\``,
           ].join('\n');
         })

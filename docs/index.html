@@ -198,6 +198,57 @@
   }
   .tool-desc { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
 
+  /* Gaps comparison */
+  .gaps {
+    padding: 64px 24px 64px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #0d0e12 0%, #11141c 100%);
+  }
+  .gaps-grid {
+    max-width: 940px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-card);
+  }
+  .gap-cell {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14.5px; line-height: 1.5;
+    color: var(--text-soft);
+  }
+  .gap-cell-native {
+    border-right: 1px solid var(--border);
+  }
+  .gap-cell-memex {
+    color: var(--text);
+    background: rgba(95, 182, 205, 0.04);
+  }
+  .gap-cell-header {
+    font-weight: 800; font-size: 12.5px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-soft);
+    padding: 12px 22px;
+  }
+  .gap-cell-header.memex { color: var(--accent); }
+  .gap-row-last { border-bottom: none; }
+  .gap-mark { display: inline-block; margin-right: 8px; font-size: 13px; }
+  .gap-mark.x { color: #c66; }
+  .gap-mark.v { color: var(--green); }
+  .gap-source {
+    display: block;
+    font-size: 11.5px; color: var(--text-muted);
+    margin-top: 4px; font-family: 'JetBrains Mono', monospace;
+  }
+  @media (max-width: 720px) {
+    .gaps-grid { grid-template-columns: 1fr; }
+    .gap-cell-native { border-right: none; }
+  }
+
   /* AI-installer card */
   .ai-install {
     max-width: 760px; margin: 0 auto 32px;
@@ -337,9 +388,9 @@
       <span data-en="Every AI you use." data-ru="Все твои AI.">Every AI you use.</span><br>
       <span class="accent" data-en="One memory you own." data-ru="Одна память. Твоя.">One memory you own.</span>
     </h1>
-    <p class="lede" data-en="Claude has Memory. ChatGPT has memory. Cursor, Cline, Cowork, and your AI Telegram bots don't — and even what Claude remembers is gone the moment your account is. memex captures every AI conversation into one local SQLite file you own, searchable from any MCP-compatible agent."
-       data-ru="У Claude есть Memory. У ChatGPT — memory. У Cursor, Cline, Cowork и твоих AI-Telegram-ботов — нет. И даже то что помнит Claude, исчезает в момент когда исчезает твой аккаунт. memex складывает каждый AI-разговор в один локальный SQLite-файл который твой, доступный из любого MCP-совместимого агента.">
-       Claude has Memory. ChatGPT has memory. Cursor, Cline, Cowork, and your AI Telegram bots don't — and even what Claude remembers is gone the moment your account is. memex captures every AI conversation into one local SQLite file you own, searchable from any MCP-compatible agent.
+    <p class="lede" data-en="Native AI memory has five structural gaps — per-project silos, no bridge between products, no cross-AI by design, one-machine binding, and gone the moment your account is. memex captures every conversation into one local SQLite file you own, searchable from any MCP-compatible agent."
+       data-ru="У нативной AI-памяти пять структурных дыр — per-project silos, нет мостов между продуктами, нет cross-AI by design, привязка к одной машине, и всё умирает вместе с аккаунтом. memex складывает каждый разговор в один локальный SQLite-файл который твой, доступный из любого MCP-совместимого агента.">
+       Native AI memory has five structural gaps — per-project silos, no bridge between products, no cross-AI by design, one-machine binding, and gone the moment your account is. memex captures every conversation into one local SQLite file you own, searchable from any MCP-compatible agent.
     </p>
     <div class="cta-row">
       <a class="cta-primary" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
@@ -353,6 +404,100 @@
                        data-ru="MIT · Локальный SQLite-файл который твой · Переживёт любой бан провайдера">
        MIT · Local SQLite file you own · Survives provider bans by design
     </p>
+  </div>
+</section>
+
+<section class="gaps">
+  <h2 class="section-title"
+      data-en="Five gaps in native AI memory"
+      data-ru="Пять дыр в нативной AI-памяти">Five gaps in native AI memory</h2>
+  <p class="section-sub"
+     data-en="Even Claude Memory (Pro/Max), ChatGPT memory, and Claude Code's CLAUDE.md leave structural holes. memex closes all five — verifiable against Anthropic's own open feature requests."
+     data-ru="Даже Claude Memory (Pro/Max), ChatGPT memory и Claude Code CLAUDE.md оставляют структурные дыры. memex закрывает все пять — каждая проверяема по открытым feature requests Anthropic.">
+    Even Claude Memory (Pro/Max), ChatGPT memory, and Claude Code's CLAUDE.md leave structural holes. memex closes all five — verifiable against Anthropic's own open feature requests.
+  </p>
+
+  <div class="gaps-grid">
+    <div class="gap-cell gap-cell-header" data-en="Native AI memory" data-ru="Нативная AI-память">Native AI memory</div>
+    <div class="gap-cell gap-cell-header memex" data-en="memex" data-ru="memex">memex</div>
+
+    <div class="gap-cell gap-cell-native">
+      <span class="gap-mark x">✗</span>
+      <strong data-en="Per-project, not cross-project."
+              data-ru="Per-project, не cross-project.">Per-project, not cross-project.</strong>
+      <span data-en=" Claude Memory keeps separate state per project — no recall across them."
+            data-ru=" Claude Memory ведёт отдельное состояние на каждый проект — recall между ними нет."> Claude Memory keeps separate state per project — no recall across them.</span>
+      <span class="gap-source">anthropics/claude-code #36561, #39195</span>
+    </div>
+    <div class="gap-cell gap-cell-memex">
+      <span class="gap-mark v">✓</span>
+      <span data-en="One global SQLite index across every project, every chat, every machine."
+            data-ru="Один глобальный SQLite-индекс по всем проектам, всем чатам, всем машинам.">
+        One global SQLite index across every project, every chat, every machine.
+      </span>
+    </div>
+
+    <div class="gap-cell gap-cell-native">
+      <span class="gap-mark x">✗</span>
+      <strong data-en="No bridge between Anthropic's own products."
+              data-ru="Между продуктами самого Anthropic — мостов нет.">No bridge between Anthropic's own products.</strong>
+      <span data-en=" Web Claude can't see your Code sessions. Code can't see Cowork. API can't see anything else."
+            data-ru=" Web Claude не видит твои Code-сессии. Code не видит Cowork. API не видит ни того ни другого."> Web Claude can't see your Code sessions. Code can't see Cowork. API can't see anything else.</span>
+    </div>
+    <div class="gap-cell gap-cell-memex">
+      <span class="gap-mark v">✓</span>
+      <span data-en="Web Claude exports, Code .jsonl, Cowork sessions (incl. subagents) — all in one searchable index."
+            data-ru="Экспорты web Claude, Code .jsonl, Cowork-сессии (со всеми subagent'ами) — всё в одном поисковом индексе.">
+        Web Claude exports, Code .jsonl, Cowork sessions (incl. subagents) — all in one searchable index.
+      </span>
+    </div>
+
+    <div class="gap-cell gap-cell-native">
+      <span class="gap-mark x">✗</span>
+      <strong data-en="No cross-AI memory by design."
+              data-ru="Cross-AI памяти не существует by design.">No cross-AI memory by design.</strong>
+      <span data-en=" ChatGPT, Cursor, Cline, Continue, Zed, Telegram AI bots — every provider keeps its own silo. None can read another's."
+            data-ru=" ChatGPT, Cursor, Cline, Continue, Zed, Telegram-боты — каждый провайдер держит свой silo. Никто не читает чужой."> ChatGPT, Cursor, Cline, Continue, Zed, Telegram AI bots — every provider keeps its own silo. None can read another's.</span>
+    </div>
+    <div class="gap-cell gap-cell-memex">
+      <span class="gap-mark v">✓</span>
+      <span data-en="Any MCP-compatible client (and there's a growing list) reads the same memex memory through 8 standard tools."
+            data-ru="Любой MCP-совместимый клиент (а список растёт) читает одну и ту же memex-память через 8 стандартных тулов.">
+        Any MCP-compatible client (and there's a growing list) reads the same memex memory through 8 standard tools.
+      </span>
+    </div>
+
+    <div class="gap-cell gap-cell-native">
+      <span class="gap-mark x">✗</span>
+      <strong data-en="Tied to one machine."
+              data-ru="Привязка к одной машине.">Tied to one machine.</strong>
+      <span data-en=" Claude Code's history lives in ~/.claude/projects/ on whichever laptop you used. New machine = blank slate."
+            data-ru=" История Claude Code лежит в ~/.claude/projects/ на конкретном ноуте. Новый ноут = чистый лист."> Claude Code's history lives in ~/.claude/projects/ on whichever laptop you used. New machine = blank slate.</span>
+      <span class="gap-source">anthropics/claude-code #25739</span>
+    </div>
+    <div class="gap-cell gap-cell-memex">
+      <span class="gap-mark v">✓</span>
+      <span data-en="Plain SQLite file. Sync via iCloud / Syncthing / rsync / git-annex — your choice. Or run memex on every machine and let auto-capture rebuild locally."
+            data-ru="Обычный SQLite-файл. Синк через iCloud / Syncthing / rsync / git-annex — на ваш вкус. Или запусти memex на каждой машине и пусть auto-capture соберёт локально.">
+        Plain SQLite file. Sync via iCloud / Syncthing / rsync / git-annex — your choice. Or run memex on every machine and let auto-capture rebuild locally.
+      </span>
+    </div>
+
+    <div class="gap-cell gap-cell-native gap-row-last">
+      <span class="gap-mark x">✗</span>
+      <strong data-en="Account dies → memory dies."
+              data-ru="Аккаунт умирает — память умирает.">Account dies → memory dies.</strong>
+      <span data-en=" Anthropic banned multiple orgs without warning in April 2026. Country policy blocks companies with >50% RU/CN/IR/KP ownership. Lose access — lose Memory + Projects + history with it."
+            data-ru=" В апреле 2026 Anthropic заблокировал многие организации без предупреждения. Country policy блокирует компании с >50% владения RU/CN/IR/KP. Потерял доступ — потерял Memory + Projects + всю историю вместе с ним."> Anthropic banned multiple orgs without warning in April 2026. Country policy blocks companies with >50% RU/CN/IR/KP ownership. Lose access — lose Memory + Projects + history with it.</span>
+      <span class="gap-source">HN #47853021 · April 2026</span>
+    </div>
+    <div class="gap-cell gap-cell-memex gap-row-last">
+      <span class="gap-mark v">✓</span>
+      <span data-en="The SQLite file on your laptop doesn't depend on any provider. Your AI history is yours by architecture, not policy."
+            data-ru="SQLite-файл на твоём ноуте не зависит ни от какого провайдера. Твоя AI-история — твоя by architecture, не по policy.">
+        The SQLite file on your laptop doesn't depend on any provider. Your AI history is yours by architecture, not policy.
+      </span>
+    </div>
   </div>
 </section>
 

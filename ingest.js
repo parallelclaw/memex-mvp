@@ -313,9 +313,42 @@ function shouldIngest(filePath) {
   if (!filePath.endsWith('.jsonl')) return false;
   const name = basename(filePath);
   if (name === 'audit.jsonl') return false; // tool-call audit log, not dialogue
-  // Skip subagent transcripts — they're tool spawns, not standalone chats
-  if (filePath.split(sep).includes('subagents')) return false;
   return true;
+}
+
+/**
+ * Decide what inbox filename to use for a given source file.
+ *
+ * Cowork main session:
+ *   .../local_<MAIN>/.claude/projects/<encoded>/<INNER>.jsonl
+ *   → inbox/cowork-<INNER first 8>.jsonl
+ *
+ * Cowork subagent (parented to a main session):
+ *   .../local_<MAIN>/.claude/projects/<encoded>/<INNER>/subagents/agent-<AGENT>.jsonl
+ *   → inbox/cowork-<INNER first 8>-sub-<AGENT first 8>.jsonl
+ *
+ * Plain Claude Code session:
+ *   ~/.claude/projects/<encoded>/<UUID>.jsonl
+ *   → inbox/code-<UUID first 8>.jsonl
+ */
+function inboxNameFor(srcPath, source) {
+  const parts = srcPath.split(sep);
+  const subIdx = parts.indexOf('subagents');
+  if (subIdx > 0) {
+    // Subagent transcript. Parent inner UUID is the dir containing subagents/.
+    const innerUUID = parts[subIdx - 1];
+    const innerShort = innerUUID.slice(0, 8);
+    const agentName = basename(srcPath, '.jsonl'); // 'agent-<...>'
+    const m = agentName.match(/^agent-(.+)$/);
+    if (!m) return null;
+    // Strip non-alphanumerics (handles names like 'agent-acompact-d7a9...').
+    const agentShort = m[1].replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    return `${source.prefix}-${innerShort}-sub-${agentShort}.jsonl`;
+  }
+  // Main session — use file stem.
+  const stem = basename(srcPath, '.jsonl');
+  const shortId = stem.slice(0, 8);
+  return `${source.prefix}-${shortId}.jsonl`;
 }
 
 // -------------------- Codepoint-aware slice --------------------
@@ -364,10 +397,12 @@ function emitToInbox(srcPath, source) {
     return { changed: false };
   }
 
-  const stem = basename(srcPath, '.jsonl');
-  const shortId = stem.slice(0, 8);
-  const targetPath = join(INBOX, `${source.prefix}-${shortId}.jsonl`);
+  const inboxName = inboxNameFor(srcPath, source);
+  if (!inboxName) return { error: 'cannot-name' };
+  const targetPath = join(INBOX, inboxName);
   const tmpPath = targetPath + '.tmp';
+  // Reuse first 8 chars of the inbox stem for record-id seeding.
+  const shortId = inboxName.replace(new RegExp(`^${source.prefix}-`), '').replace(/\.jsonl$/, '');
 
   let parsed;
   try { parsed = parseFileForDialogue(srcPath); }
@@ -424,8 +459,10 @@ function schedule(srcPath, source) {
     if (r.error) {
       log(`! ${basename(srcPath)} (${source.name}): ${r.error}`);
     } else if (r.changed) {
-      const stem = basename(srcPath, '.jsonl').slice(0, 8);
-      log(`+ ${source.prefix}-${stem}.jsonl ← ${r.msgCount} msgs from ${source.name}` +
+      const inboxName = inboxNameFor(srcPath, source) || basename(srcPath);
+      const isSubagent = inboxName.includes('-sub-');
+      log(`+ ${inboxName} ← ${r.msgCount} msgs from ${source.name}` +
+          (isSubagent ? ' [subagent]' : '') +
           (r.hadTitle ? ' (with ai-title)' : ''));
     }
   }, DEBOUNCE_MS));

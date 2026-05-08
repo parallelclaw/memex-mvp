@@ -118,6 +118,18 @@ try {
 } catch (err) {
   if (!String(err.message).includes('duplicate column name')) throw err;
 }
+// parent_conversation_id (added 0.3) — links Cowork subagent transcripts to
+// their parent main session. NULL for top-level conversations.
+try {
+  db.exec(`ALTER TABLE conversations ADD COLUMN parent_conversation_id TEXT`);
+} catch (err) {
+  if (!String(err.message).includes('duplicate column name')) throw err;
+}
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_parent ON conversations(parent_conversation_id)`);
+} catch (err) {
+  // index creation is idempotent via IF NOT EXISTS
+}
 
 const insertMessage = db.prepare(`
   INSERT OR IGNORE INTO messages (source, conversation_id, msg_id, role, sender, text, ts, metadata)
@@ -127,13 +139,17 @@ const insertMessage = db.prepare(`
 // same file gets reprocessed, because messages dedupe via UNIQUE(msg_id) but
 // the counter would still add). Recompute message_count from the source of
 // truth (the messages table) every time.
+//
+// parent_conversation_id is set by the importer when the conversation is a
+// Cowork subagent (id contains "-sub-"). Once set, it sticks via COALESCE.
 const upsertConversation = db.prepare(`
-  INSERT INTO conversations (conversation_id, source, title, first_ts, last_ts, message_count)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT INTO conversations (conversation_id, source, title, first_ts, last_ts, message_count, parent_conversation_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(conversation_id) DO UPDATE SET
     title = excluded.title,
     first_ts = MIN(first_ts, excluded.first_ts),
     last_ts = MAX(last_ts, excluded.last_ts),
+    parent_conversation_id = COALESCE(excluded.parent_conversation_id, parent_conversation_id),
     message_count = (
       SELECT COUNT(*) FROM messages
        WHERE messages.conversation_id = conversations.conversation_id
@@ -224,7 +240,8 @@ function importTelegram(filePath) {
           title,
           isFinite(first_ts) ? first_ts : null,
           last_ts || null,
-          chatMsgs
+          chatMsgs,
+          null // parent_conversation_id — N/A for telegram
         );
         totalImported += chatMsgs;
       }
@@ -313,16 +330,28 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
   tx(lines);
 
   if (imported > 0) {
-    const title =
+    // Cowork subagent transcripts get conversation ids of the form
+    //   claude-cowork-cowork-<innerShort>-sub-<agentShort>
+    // and we link them back to the parent (main) session for nav/roll-up.
+    let parent_conversation_id = null;
+    const subMatch = conversationId.match(/^(claude-(?:code|cowork)-(?:code|cowork)-[0-9a-f]+)-sub-/);
+    if (subMatch) {
+      parent_conversation_id = subMatch[1];
+    }
+    const baseTitle =
       aiTitle ||
       (firstUserText ? `${sourceLabel} · ${firstUserText}` : `${sourceLabel} · ${fileName}`);
+    const title = parent_conversation_id
+      ? `↳ subagent · ${baseTitle.replace(/^Claude (Cowork|Code) · /, '')}`
+      : baseTitle;
     upsertConversation.run(
       conversationId,
       source,
       title,
       isFinite(first_ts) ? first_ts : null,
       last_ts || null,
-      imported
+      imported,
+      parent_conversation_id
     );
   }
   return imported;
@@ -578,6 +607,25 @@ Archived conversations are hidden from default list/search but stay
 fully indexed. Pass include_archived: true on search/list to include
 them. Visibility flag only — never deletes data.
 
+══ COWORK SUBAGENTS ══
+
+Cowork main sessions can spawn subagent helpers (delegated via tool
+calls). Each subagent's transcript is captured as a separate
+conversation with id of the form:
+  claude-cowork-cowork-<INNER>-sub-<AGENT>
+linked back to its parent main session via parent_conversation_id.
+
+memex_list_conversations HIDES subagents by default (they're not
+standalone chats). memex_search INCLUDES them — search results may
+return both main and subagent matches. Subagent results show the
+"↳ subagent · ..." prefix in their title.
+
+When you want the FULL story of a Cowork session including all
+spawned subagents, call:
+  memex_get_conversation({ conversation_id, include_subagents: true })
+This merges main + subagent messages in chronological order with a
+[↳ subagent] tag on each subagent line.
+
 ══ KNOWN LIMITATIONS (v0.1) ══
 
 - Keyword search only. Semantic via BGE-M3 + sqlite-vec is roadmap.
@@ -672,12 +720,18 @@ const TOOLS = [
   {
     name: 'memex_get_conversation',
     description:
-      'Return the full transcript of one conversation by its conversation_id (which other tools include in their output).',
+      'Return the full transcript of one conversation by its conversation_id (which other tools include in their output). Pass include_subagents: true to also fold in all Cowork subagent transcripts that were spawned from this main session.',
     inputSchema: {
       type: 'object',
       properties: {
         conversation_id: { type: 'string' },
         limit: { type: 'integer', default: 200, minimum: 1, maximum: 2000 },
+        include_subagents: {
+          type: 'boolean',
+          default: false,
+          description:
+            'If true and the requested id is a Cowork main session, also include all its subagent transcripts in chronological order.',
+        },
         format: {
           type: 'string',
           enum: ['markdown', 'json'],
@@ -711,6 +765,12 @@ const TOOLS = [
           default: false,
           description:
             'If true, also include archived conversations in the listing. Default: false.',
+        },
+        include_subagents: {
+          type: 'boolean',
+          default: false,
+          description:
+            'If true, also include Cowork subagent transcripts (tool-spawned helpers) in the listing. Default: false — they\'re hidden because they\'re not standalone chats.',
         },
         format: {
           type: 'string',
@@ -992,43 +1052,64 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
     if (name === 'memex_get_conversation') {
       const limit = Math.min(2000, Math.max(1, args.limit || 200));
+      const includeSubagents = args.include_subagents === true;
       const format = pickFormat(args);
+
+      // Build the conversation_id list: requested id, plus any subagents
+      // parented to it if the user asked.
+      const ids = [args.conversation_id];
+      if (includeSubagents) {
+        const subs = db
+          .prepare(`SELECT conversation_id FROM conversations WHERE parent_conversation_id = ?`)
+          .all(args.conversation_id);
+        for (const s of subs) ids.push(s.conversation_id);
+      }
+      const placeholders = ids.map(() => '?').join(',');
       const rows = db
         .prepare(
-          `SELECT sender, role, text, ts
+          `SELECT conversation_id, sender, role, text, ts
              FROM messages
-            WHERE conversation_id = ?
+            WHERE conversation_id IN (${placeholders})
          ORDER BY ts ASC
             LIMIT ?`
         )
-        .all(args.conversation_id, limit);
+        .all(...ids, limit);
       if (rows.length === 0) {
         return format === 'json'
-          ? jsonResult({ conversation_id: args.conversation_id, count: 0, messages: [] })
+          ? jsonResult({ conversation_id: args.conversation_id, count: 0, messages: [], subagent_ids: ids.slice(1) })
           : textResult(`No messages found for ${args.conversation_id}.`);
       }
       if (format === 'json') {
         return jsonResult({
           conversation_id: args.conversation_id,
           count: rows.length,
+          subagent_ids: ids.slice(1),
           messages: rows.map((r) => ({
             ts: r.ts || null,
             date: fmtDateTime(r.ts),
             sender: r.sender,
             role: r.role,
             text: r.text,
+            from_subagent: r.conversation_id !== args.conversation_id ? r.conversation_id : null,
           })),
         });
       }
       const formatted = rows
-        .map((r) => `[${fmtDateTime(r.ts) || ''}] **${r.sender}**: ${r.text}`)
+        .map((r) => {
+          const tag = r.conversation_id !== args.conversation_id ? ' [↳ subagent]' : '';
+          return `[${fmtDateTime(r.ts) || ''}] **${r.sender}**${tag}: ${r.text}`;
+        })
         .join('\n');
-      return textResult(formatted);
+      const header = includeSubagents && ids.length > 1
+        ? `_Including ${ids.length - 1} subagent transcript(s)._\n\n`
+        : '';
+      return textResult(header + formatted);
     }
 
     if (name === 'memex_list_conversations') {
       const limit = Math.min(200, Math.max(1, args.limit || 20));
       const includeArchived = args.include_archived === true;
+      const includeSubagents = args.include_subagents === true;
       const format = pickFormat(args);
       const where = [];
       const params = [];
@@ -1043,12 +1124,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       if (!includeArchived) {
         where.push('(archived_at IS NULL OR archived_at = 0)');
       }
+      if (!includeSubagents) {
+        // Subagents are tool-spawned helpers, not standalone chats — hide
+        // them from the listing by default. They remain searchable.
+        where.push('parent_conversation_id IS NULL');
+      }
       const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
       params.push(limit);
 
       const rows = db
         .prepare(
-          `SELECT conversation_id, source, title, first_ts, last_ts, message_count, archived_at
+          `SELECT conversation_id, source, title, first_ts, last_ts, message_count, archived_at, parent_conversation_id
              FROM conversations
              ${whereClause}
          ORDER BY last_ts DESC
@@ -1066,6 +1152,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         return jsonResult({
           count: rows.length,
           include_archived: includeArchived,
+          include_subagents: includeSubagents,
           conversations: rows.map((r) => ({
             conversation_id: r.conversation_id,
             title: r.title || null,
@@ -1077,6 +1164,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             message_count: r.message_count,
             archived: !!r.archived_at,
             archived_at: r.archived_at || null,
+            parent_conversation_id: r.parent_conversation_id || null,
+            is_subagent: !!r.parent_conversation_id,
           })),
         });
       }
@@ -1151,10 +1240,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         .all();
       const total = db.prepare(`SELECT COUNT(*) AS c FROM messages`).get().c;
       const activeConv = db
-        .prepare(`SELECT COUNT(*) AS c FROM conversations WHERE archived_at IS NULL OR archived_at = 0`)
+        .prepare(
+          `SELECT COUNT(*) AS c FROM conversations
+            WHERE (archived_at IS NULL OR archived_at = 0)
+              AND parent_conversation_id IS NULL`
+        )
         .get().c;
       const archivedConv = db
         .prepare(`SELECT COUNT(*) AS c FROM conversations WHERE archived_at IS NOT NULL AND archived_at != 0`)
+        .get().c;
+      const subagentConv = db
+        .prepare(`SELECT COUNT(*) AS c FROM conversations WHERE parent_conversation_id IS NOT NULL`)
         .get().c;
       const range = db
         .prepare(`SELECT MIN(ts) AS first, MAX(ts) AS last FROM messages WHERE ts > 0`)
@@ -1163,7 +1259,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         .prepare(
           `SELECT conversation_id, source, title, last_ts, message_count
              FROM conversations
-            WHERE archived_at IS NULL OR archived_at = 0
+            WHERE (archived_at IS NULL OR archived_at = 0)
+              AND parent_conversation_id IS NULL
          ORDER BY last_ts DESC
             LIMIT ?`
         )
@@ -1181,6 +1278,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           total_messages: total,
           active_conversations: activeConv,
           archived_conversations: archivedConv,
+          subagent_conversations: subagentConv,
           date_range: {
             first_ts: range.first || null,
             last_ts: range.last || null,
@@ -1229,7 +1327,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       lines.push(`**Memex corpus snapshot**`, '');
       lines.push(
         `- **${total.toLocaleString()} messages** in **${activeConv} active conversations**` +
-          (archivedConv > 0 ? ` (${archivedConv} archived)` : '')
+          (archivedConv > 0 ? ` (${archivedConv} archived)` : '') +
+          (subagentConv > 0 ? ` · ${subagentConv} subagent transcript(s) — hidden by default, search includes them` : '')
       );
       if (range.first) {
         lines.push(`- Date range: ${fmtDate(range.first)} → ${fmtDate(range.last)}`);

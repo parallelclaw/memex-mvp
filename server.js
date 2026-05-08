@@ -215,6 +215,21 @@ function importTelegram(filePath) {
 /** Skip these top-level event types — they're not dialogue. */
 const CLAUDE_CODE_SKIP_TYPES = new Set(['queue-operation', 'ai-title', 'summary']);
 
+/** Auto-generated user messages produced by /compact, /resume, and
+ *  continuation flows. They're real messages (we keep them in the
+ *  index), but they're never useful as conversation titles. */
+const CONTINUATION_PREFIXES = [
+  'This session is being continued',
+  'Continue from where you left off',
+  'Please continue from where you left off',
+];
+function isContinuationBoilerplate(text) {
+  for (const p of CONTINUATION_PREFIXES) if (text.startsWith(p)) return true;
+  // XML/tag-wrapped artefacts (uploaded_files, system-reminder, command-name…)
+  if (text.startsWith('<')) return true;
+  return false;
+}
+
 /** Extract a clean dialogue message from a Claude Code JSONL record.
  *
  *  Handles both:
@@ -336,7 +351,14 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
         last_ts = Math.max(last_ts, ts);
       }
       if (msg.role === 'user' && !firstUserText) {
-        firstUserText = msg.text.trim().replace(/\s+/g, ' ').slice(0, 80);
+        const text = msg.text.trim().replace(/\s+/g, ' ');
+        // Continuation/resume sessions auto-generate boilerplate first
+        // messages ("This session is being continued...", "Continue from
+        // where you left off.", etc.) that aren't useful as titles —
+        // skip them and let the next real user message win.
+        if (text && !isContinuationBoilerplate(text)) {
+          firstUserText = text.slice(0, 80);
+        }
       }
       insertMessage.run(
         source,

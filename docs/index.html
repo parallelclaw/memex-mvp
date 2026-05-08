@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="memex — local-first MCP server that gives any AI agent (Cursor, Cline, Claude Code, Continue, Zed) shared memory across all your past conversations. Telegram + Claude Code + Cowork in one searchable index.">
-<title>memex · your AI's missing memory</title>
+<meta name="description" content="One memory across every AI you use — Claude, ChatGPT, Cursor, Cline, Cowork, Telegram bots — in one local SQLite file you own. Survives provider bans by design. Local-first MCP server, MIT license.">
+<title>memex · one memory across every AI you use</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -332,15 +332,14 @@
 
 <section class="hero">
   <div class="hero-inner">
-    <div class="pill" data-en="Live · v0.2 · Local-first" data-ru="Live · v0.2 · Локально">Live · v0.2 · Local-first</div>
+    <div class="pill" data-en="Cross-AI · Local-first · v0.2" data-ru="Cross-AI · Local-first · v0.2">Cross-AI · Local-first · v0.2</div>
     <h1>
-      <span class="strike" data-en="Claude forgets" data-ru="Claude забывает">Claude forgets</span>
-      <span data-en="every session." data-ru="каждую сессию.">every session.</span><br>
-      <span class="accent" data-en="memex remembers. Live." data-ru="memex помнит. В реальном времени.">memex remembers. Live.</span>
+      <span data-en="Every AI you use." data-ru="Все твои AI.">Every AI you use.</span><br>
+      <span class="accent" data-en="One memory you own." data-ru="Одна память. Твоя.">One memory you own.</span>
     </h1>
-    <p class="lede" data-en="Local-first AI memory with an auto-capture daemon. Every Claude Code, Cowork, and Telegram conversation flows into one searchable index in real time. Any MCP-compatible agent — Cursor, Cline, Claude Code, Continue, Zed — recalls it proactively, no prompting required."
-       data-ru="Локальная AI-память с фоновым daemon'ом авто-захвата. Каждый разговор Claude Code, Cowork и Telegram попадает в единый поисковый индекс в реальном времени. Любой MCP-совместимый агент — Cursor, Cline, Claude Code, Continue, Zed — обращается к ней проактивно, без напоминаний.">
-       Local-first AI memory with an auto-capture daemon. Every Claude Code, Cowork, and Telegram conversation flows into one searchable index in real time. Any MCP-compatible agent — Cursor, Cline, Claude Code, Continue, Zed — recalls it proactively, no prompting required.
+    <p class="lede" data-en="Claude has Memory. ChatGPT has memory. Cursor, Cline, Cowork, and your AI Telegram bots don't — and even what Claude remembers is gone the moment your account is. memex captures every AI conversation into one local SQLite file you own, searchable from any MCP-compatible agent."
+       data-ru="У Claude есть Memory. У ChatGPT — memory. У Cursor, Cline, Cowork и твоих AI-Telegram-ботов — нет. И даже то что помнит Claude, исчезает в момент когда исчезает твой аккаунт. memex складывает каждый AI-разговор в один локальный SQLite-файл который твой, доступный из любого MCP-совместимого агента.">
+       Claude has Memory. ChatGPT has memory. Cursor, Cline, Cowork, and your AI Telegram bots don't — and even what Claude remembers is gone the moment your account is. memex captures every AI conversation into one local SQLite file you own, searchable from any MCP-compatible agent.
     </p>
     <div class="cta-row">
       <a class="cta-primary" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
@@ -350,9 +349,9 @@
         <span data-en="Quickstart ↓" data-ru="Быстрый старт ↓">Quickstart ↓</span>
       </a>
     </div>
-    <p class="cta-meta" data-en="MIT license · Local-only · No telemetry · No cloud"
-                       data-ru="MIT-лицензия · Полностью локально · Без телеметрии · Без облака">
-       MIT license · Local-only · No telemetry · No cloud
+    <p class="cta-meta" data-en="MIT · Local SQLite file you own · Survives provider bans by design"
+                       data-ru="MIT · Локальный SQLite-файл который твой · Переживёт любой бан провайдера">
+       MIT · Local SQLite file you own · Survives provider bans by design
     </p>
   </div>
 </section>
@@ -420,10 +419,10 @@ on every topic the user references — no prompting needed</div>
     </div>
     <div class="feat">
       <div class="feat-icon">🔒</div>
-      <h3 data-en="Truly local" data-ru="Полностью локально">Truly local</h3>
-      <p data-en="Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survives any provider ban by definition — your memory was always yours."
-         data-ru="Каждый байт остаётся у вас на ноуте. Ни облака, ни телеметрии, ни аккаунта. SQLite-файл который ваш. Переживёт любой бан провайдера by definition — память всегда была вашей.">
-        Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survives any provider ban by definition — your memory was always yours.
+      <h3 data-en="Survives any ban" data-ru="Переживёт любой бан">Survives any ban</h3>
+      <p data-en="Anthropic decides when Claude Memory disappears. memex doesn't. Account suspended? Country blocked? TOS update? The SQLite file on your laptop doesn't care. Your AI history stays yours, by architecture — not policy."
+         data-ru="Anthropic решает когда Claude Memory исчезнет. memex — нет. Аккаунт приостановлен? Страна заблокирована? TOS обновился? SQLite-файлу на твоём ноуте на это плевать. Твоя AI-история остаётся твоей by architecture — не по policy.">
+        Anthropic decides when Claude Memory disappears. memex doesn't. Account suspended? Country blocked? TOS update? The SQLite file on your laptop doesn't care. Your AI history stays yours, by architecture — not policy.
       </p>
     </div>
     <div class="feat">

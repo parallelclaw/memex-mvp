@@ -241,22 +241,22 @@
 
 <section class="hero">
   <div class="hero-inner">
-    <div class="pill" data-en="Personal AI Control Plane · v0.1" data-ru="Personal AI Control Plane · v0.1">Personal AI Control Plane · v0.1</div>
+    <div class="pill" data-en="Live · v0.2 · Local-first" data-ru="Live · v0.2 · Локально">Live · v0.2 · Local-first</div>
     <h1>
       <span class="strike" data-en="Claude forgets" data-ru="Claude забывает">Claude forgets</span>
       <span data-en="every session." data-ru="каждую сессию.">every session.</span><br>
-      <span class="accent" data-en="memex remembers." data-ru="memex помнит.">memex remembers.</span>
+      <span class="accent" data-en="memex remembers. Live." data-ru="memex помнит. В реальном времени.">memex remembers. Live.</span>
     </h1>
-    <p class="lede" data-en="A local-first MCP server that gives any AI agent (Cursor, Cline, Claude Code, Continue, Zed) shared memory across all your past conversations — Claude Code, Cowork, Telegram exports — in one FTS5-searchable index."
-       data-ru="Локальный MCP-сервер, который даёт любому AI-агенту (Cursor, Cline, Claude Code, Continue, Zed) общую память через все ваши прошлые разговоры — Claude Code, Cowork, Telegram-экспорты — в одном FTS5-индексе.">
-       A local-first MCP server that gives any AI agent (Cursor, Cline, Claude Code, Continue, Zed) shared memory across all your past conversations — Claude Code, Cowork, Telegram exports — in one FTS5-searchable index.
+    <p class="lede" data-en="Local-first AI memory with an auto-capture daemon. Every Claude Code, Cowork, and Telegram conversation flows into one searchable index in real time. Any MCP-compatible agent — Cursor, Cline, Claude Code, Continue, Zed — recalls it proactively, no prompting required."
+       data-ru="Локальная AI-память с фоновым daemon'ом авто-захвата. Каждый разговор Claude Code, Cowork и Telegram попадает в единый поисковый индекс в реальном времени. Любой MCP-совместимый агент — Cursor, Cline, Claude Code, Continue, Zed — обращается к ней проактивно, без напоминаний.">
+       Local-first AI memory with an auto-capture daemon. Every Claude Code, Cowork, and Telegram conversation flows into one searchable index in real time. Any MCP-compatible agent — Cursor, Cline, Claude Code, Continue, Zed — recalls it proactively, no prompting required.
     </p>
     <div class="cta-row">
       <a class="cta-primary" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
         <span data-en="Get on GitHub" data-ru="Открыть на GitHub">Get on GitHub</span>
       </a>
-      <a class="cta-secondary" href="https://github.com/parallelclaw/memex-mvp#установка-за-3-минуты" target="_blank" rel="noopener">
-        <span data-en="Install in 3 min" data-ru="Установка за 3 мин">Install in 3 min</span>
+      <a class="cta-secondary" href="#quickstart">
+        <span data-en="Quickstart ↓" data-ru="Быстрый старт ↓">Quickstart ↓</span>
       </a>
     </div>
     <p class="cta-meta" data-en="MIT license · Local-only · No telemetry · No cloud"
@@ -272,55 +272,75 @@
                           data-ru="Одна папка. Одна база. Любой агент может спросить.">
     One folder. One database. Any agent can ask.
   </p>
-  <div class="diagram">~/.memex/inbox/   <span class="comment">← drop conversations here (or symlink)</span>
-    <span class="arrow">↓</span>     chokidar watcher (~1s pickup)
-parser           <span class="comment">Telegram JSON / Claude Code JSONL (flat + nested)</span>
+  <div class="diagram">~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
+~/Library/.../local-agent-mode  <span class="comment">← Cowork sessions (incl. subagents)</span>
+    <span class="arrow">↓</span>     <span class="comment">memex-sync daemon · FSEvents · ~1.5s debounce</span>
+~/.memex/inbox/                 <span class="comment">← atomic snapshot writes</span>
+    <span class="arrow">↓</span>     <span class="comment">chokidar inbox watcher</span>
+parser                          <span class="comment">Claude JSONL (flat + nested) / Telegram JSON</span>
     <span class="arrow">↓</span>
-SQLite + FTS5   <span class="comment">~/.memex/data/memex.db</span>
+SQLite + FTS5                   <span class="comment">~/.memex/data/memex.db · UNIQUE(msg_id) dedup</span>
     <span class="arrow">↓</span>
-MCP server      <span class="comment">stdio JSON-RPC, 4 tools exposed</span>
+MCP server                      <span class="comment">stdio JSON-RPC · 8 tools · proactive instructions</span>
     <span class="arrow">↓</span>
 any client:
-   • Cursor       <span class="comment">~/.cursor/mcp.json</span>
    • Claude Code  <span class="comment">~/.claude/config.json</span>
+   • Cursor       <span class="comment">~/.cursor/mcp.json</span>
    • Cline · Continue · Zed · ...
 
-your agent calls memex_search() / memex_recent() automatically</div>
+your agent calls memex_overview() at session start, then memex_search()
+on every topic the user references — no prompting needed</div>
 </section>
 
 <section class="features">
   <h2 class="section-title" data-en="What it gives you" data-ru="Что даёт">What it gives you</h2>
   <div class="feat-grid">
     <div class="feat">
-      <div class="feat-icon">🧠</div>
-      <h3 data-en="Cross-session memory" data-ru="Сквозная память">Cross-session memory</h3>
-      <p data-en="Your agent remembers what you discussed last week, last month, in another session, with another agent. Real continuity."
-         data-ru="Ваш агент помнит что вы обсуждали неделю назад, месяц назад, в другой сессии, с другим агентом. Реальная continuity.">
-        Your agent remembers what you discussed last week, last month, in another session, with another agent. Real continuity.
+      <div class="feat-icon">🔄</div>
+      <h3 data-en="Live auto-capture" data-ru="Live авто-захват">Live auto-capture</h3>
+      <p data-en="memex-sync daemon watches your Claude Code and Cowork directories via FSEvents. Every new session captured into memory within ~1.5 seconds. One install command, runs forever."
+         data-ru="Daemon memex-sync через FSEvents следит за директориями Claude Code и Cowork. Каждая новая сессия попадает в память за ~1.5 секунды. Одна команда install — работает вечно.">
+        memex-sync daemon watches your Claude Code and Cowork directories via FSEvents. Every new session captured into memory within ~1.5 seconds. One install command, runs forever.
       </p>
     </div>
     <div class="feat">
-      <div class="feat-icon">🔓</div>
-      <h3 data-en="Cross-agent memory" data-ru="Кросс-агентская память">Cross-agent memory</h3>
-      <p data-en="Discussion in Cowork? Cursor sees it. Conversation in Claude Code? ChatGPT can read it. One source of truth, any client."
-         data-ru="Обсуждение в Cowork? Cursor его видит. Разговор в Claude Code? ChatGPT может прочитать. Один источник истины, любой клиент.">
-        Discussion in Cowork? Cursor sees it. Conversation in Claude Code? ChatGPT can read it. One source of truth, any client.
+      <div class="feat-icon">🎯</div>
+      <h3 data-en="Proactive recall" data-ru="Проактивный recall">Proactive recall</h3>
+      <p data-en="Server-side instructions teach any connecting agent to call memex first — for any topic, name, or decision the user references. No more 'please remember to check memex'. Decision tree, abstention rules, FTS5 syntax — all baked in."
+         data-ru="Серверные инструкции учат любого подключённого агента сначала идти в память — на любую тему, имя, решение которые упомянул пользователь. Никаких «не забудь проверить memex». Decision tree, abstention rules, FTS5 syntax — всё внутри.">
+        Server-side instructions teach any connecting agent to call memex first — for any topic, name, or decision the user references. No more 'please remember to check memex'. Decision tree, abstention rules, FTS5 syntax — all baked in.
+      </p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🧠</div>
+      <h3 data-en="Cross-session, cross-agent" data-ru="Cross-session, cross-agent">Cross-session, cross-agent</h3>
+      <p data-en="Discussion in Cowork? Cursor sees it. Conversation in Claude Code? Continue can read it. Telegram chat with your AI bot? All searchable. One source of truth, any client."
+         data-ru="Обсуждение в Cowork? Cursor его видит. Разговор в Claude Code? Continue может прочитать. Telegram-чат с AI-ботом? Всё ищется. Один источник истины, любой клиент.">
+        Discussion in Cowork? Cursor sees it. Conversation in Claude Code? Continue can read it. Telegram chat with your AI bot? All searchable. One source of truth, any client.
+      </p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🌳</div>
+      <h3 data-en="Subagent-aware" data-ru="Subagent-aware">Subagent-aware</h3>
+      <p data-en="Cowork sessions spawn helper subagents. Their transcripts captured separately and linked to parent. Search finds delegated research. Pull a main session with include_subagents:true to see the full picture."
+         data-ru="Cowork-сессии порождают subagent'ов-помощников. Их транскрипты захватываются отдельно и связываются с родителем. Поиск находит делегированный research. include_subagents:true в get_conversation выдаёт полную картину.">
+        Cowork sessions spawn helper subagents. Their transcripts captured separately and linked to parent. Search finds delegated research. Pull a main session with include_subagents:true to see the full picture.
       </p>
     </div>
     <div class="feat">
       <div class="feat-icon">🔒</div>
       <h3 data-en="Truly local" data-ru="Полностью локально">Truly local</h3>
-      <p data-en="Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survive Anthropic bans by definition."
-         data-ru="Каждый байт остаётся у вас на ноуте. Ни облака, ни телеметрии, ни аккаунта. SQLite-файл который ваш. Переживёт любой Anthropic-бан by definition.">
-        Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survive Anthropic bans by definition.
+      <p data-en="Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survives any provider ban by definition — your memory was always yours."
+         data-ru="Каждый байт остаётся у вас на ноуте. Ни облака, ни телеметрии, ни аккаунта. SQLite-файл который ваш. Переживёт любой бан провайдера by definition — память всегда была вашей.">
+        Every byte stays on your laptop. No cloud, no telemetry, no account. SQLite file you own. Survives any provider ban by definition — your memory was always yours.
       </p>
     </div>
     <div class="feat">
       <div class="feat-icon">⚡</div>
-      <h3 data-en="Drop and forget" data-ru="Бросил и забыл">Drop and forget</h3>
-      <p data-en="Drop a Telegram export or a Claude Code .jsonl into the inbox folder. Memex picks it up in seconds, indexes via FTS5, and exposes through MCP."
-         data-ru="Бросил Telegram-экспорт или Claude Code .jsonl в inbox-папку. Memex подхватывает за секунды, индексирует через FTS5, и отдаёт через MCP.">
-        Drop a Telegram export or a Claude Code .jsonl into the inbox folder. Memex picks it up in seconds, indexes via FTS5, and exposes through MCP.
+      <h3 data-en="Two pieces, opt-in" data-ru="Две части, opt-in">Two pieces, opt-in</h3>
+      <p data-en="MCP server (passive memory) installs with npm. Auto-capture daemon (live updates) installs separately with one command. You decide. Without consent, nothing runs in your background."
+         data-ru="MCP-сервер (пассивная память) ставится через npm. Daemon авто-захвата (live-обновления) ставится отдельно одной командой. Решение за вами. Без согласия ничего не крутится у вас в фоне.">
+        MCP server (passive memory) installs with npm. Auto-capture daemon (live updates) installs separately with one command. You decide. Without consent, nothing runs in your background.
       </p>
     </div>
   </div>
@@ -334,33 +354,88 @@ your agent calls memex_search() / memex_recent() automatically</div>
   </p>
   <div class="tools-list">
     <div class="tool">
-      <div class="tool-name">memex_search(query, limit?, source?)</div>
-      <div class="tool-desc" data-en="Full-text search across your memory. Returns ranked snippets with conversation_id and timestamp."
-                              data-ru="Full-text поиск по всей памяти. Возвращает ranked сниппеты с conversation_id и timestamp.">
-        Full-text search across your memory. Returns ranked snippets with conversation_id and timestamp.
+      <div class="tool-name">memex_overview(recent_limit?, format?)</div>
+      <div class="tool-desc" data-en="One-shot corpus snapshot for orienting at session start: sources, totals, date range, recent conversation titles, and live sync-status banner. Agents call this first."
+                              data-ru="Снэпшот корпуса для ориентации в начале сессии: источники, итоги, диапазон дат, последние чаты с заголовками, баннер sync-статуса. Агенты вызывают её первой.">
+        One-shot corpus snapshot for orienting at session start: sources, totals, date range, recent conversation titles, and live sync-status banner. Agents call this first.
       </div>
     </div>
     <div class="tool">
-      <div class="tool-name">memex_recent(limit?, source?)</div>
-      <div class="tool-desc" data-en="Latest N messages by timestamp. For 'what was I just talking about'."
-                              data-ru="Последние N сообщений по timestamp. Для «что я только что обсуждал».">
-        Latest N messages by timestamp. For 'what was I just talking about'.
+      <div class="tool-name">memex_search(query, limit?, source?, group_by_conversation?, expand_match?, include_archived?, format?)</div>
+      <div class="tool-desc" data-en="FTS5 search with per-conversation dedup by default (one best hit per chat + match_count). expand_match:true returns full message text instead of 360-char preview."
+                              data-ru="FTS5 поиск с дедупом по чату по дефолту (один лучший хит + match_count). expand_match:true возвращает полный текст сообщения вместо 360-char preview.">
+        FTS5 search with per-conversation dedup by default (one best hit per chat + match_count). expand_match:true returns full message text instead of 360-char preview.
       </div>
     </div>
     <div class="tool">
-      <div class="tool-name">memex_get_conversation(conversation_id, limit?)</div>
-      <div class="tool-desc" data-en="Full transcript of one chat. Use after search to dive deeper into a specific session."
-                              data-ru="Полный transcript одного чата. Использовать после search для глубокого захода в конкретную сессию.">
-        Full transcript of one chat. Use after search to dive deeper into a specific session.
+      <div class="tool-name">memex_list_conversations(limit?, source?, since_ts?, include_archived?, include_subagents?, format?)</div>
+      <div class="tool-desc" data-en="Browse chats sorted by recency. Each entry shows conversation_id, title, source, date range, message_count. Subagents hidden by default."
+                              data-ru="Список чатов отсортированных по recency. Каждая запись — conversation_id, title, source, диапазон дат, message_count. Subagents скрыты по дефолту.">
+        Browse chats sorted by recency. Each entry shows conversation_id, title, source, date range, message_count. Subagents hidden by default.
       </div>
     </div>
     <div class="tool">
-      <div class="tool-name">memex_list_sources()</div>
-      <div class="tool-desc" data-en="What's been imported: counts per source, recent imports, paths to inbox and DB."
-                              data-ru="Что импортировано: счётчики по источникам, недавние импорты, пути к inbox и БД.">
-        What's been imported: counts per source, recent imports, paths to inbox and DB.
+      <div class="tool-name">memex_get_conversation(conversation_id, limit?, include_subagents?, format?)</div>
+      <div class="tool-desc" data-en="Full transcript of one chat. include_subagents:true folds in all spawned subagent transcripts in chronological order with a [↳ subagent] tag."
+                              data-ru="Полный transcript одного чата. include_subagents:true сливает все subagent-транскрипты в хронологию с тегом [↳ subagent].">
+        Full transcript of one chat. include_subagents:true folds in all spawned subagent transcripts in chronological order with a [↳ subagent] tag.
       </div>
     </div>
+    <div class="tool">
+      <div class="tool-name">memex_recent(limit?, source?, include_archived?, format?)</div>
+      <div class="tool-desc" data-en="Latest N messages by timestamp across all sources. For 'what was I just talking about'."
+                              data-ru="Последние N сообщений по timestamp по всем источникам. Для «что я только что обсуждал».">
+        Latest N messages by timestamp across all sources. For 'what was I just talking about'.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">memex_archive_conversation(conversation_id, archive?)</div>
+      <div class="tool-desc" data-en="Hide a chat from default listing/search without deleting. Stays fully indexed; pass include_archived:true to include it. Visibility flag, never a delete."
+                              data-ru="Скрыть чат из дефолтной выдачи и поиска не удаляя. Остаётся в индексе; include_archived:true чтобы вернуть. Флаг видимости, никогда не delete.">
+        Hide a chat from default listing/search without deleting. Stays fully indexed; pass include_archived:true to include it. Visibility flag, never a delete.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">memex_status(format?)</div>
+      <div class="tool-desc" data-en="Health check for the memex-sync daemon: installed/running/PID, last capture freshness, watched files count, actionable advice if something's off."
+                              data-ru="Health check для memex-sync daemon'а: installed/running/PID, свежесть последнего захвата, число watched-файлов, actionable advice если что-то не так.">
+        Health check for the memex-sync daemon: installed/running/PID, last capture freshness, watched files count, actionable advice if something's off.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">memex_list_sources(format?)</div>
+      <div class="tool-desc" data-en="Diagnostic: message counts per source, recent imports, paths to inbox and DB, archived count."
+                              data-ru="Диагностика: счётчики по источникам, недавние импорты, пути к inbox и БД, счётчик архивных.">
+        Diagnostic: message counts per source, recent imports, paths to inbox and DB, archived count.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="companion" id="quickstart">
+  <div class="companion-card" style="text-align: left;">
+    <h3 style="text-align: center;" data-en="Quickstart" data-ru="Быстрый старт">Quickstart</h3>
+    <p style="color: var(--text-soft); font-size: 15.5px; margin-bottom: 18px; text-align: center;"
+       data-en="From clone to a self-updating AI memory in under 5 minutes."
+       data-ru="От clone до самообновляющейся AI-памяти за 5 минут.">
+      From clone to a self-updating AI memory in under 5 minutes.
+    </p>
+    <pre style="background: var(--bg-soft); padding: 16px 20px; border-radius: 8px; font-size: 13.5px; color: var(--text); margin-bottom: 16px; overflow-x: auto;"><code><span style="color: var(--text-muted);"># 1. Install</span>
+git clone https://github.com/parallelclaw/memex-mvp
+cd memex-mvp && npm install
+
+<span style="color: var(--text-muted);"># 2. Wire to your agent (Claude Code shown — same shape for Cursor/Cline/Continue/Zed)</span>
+<span style="color: var(--text-muted);"># Add to ~/.claude/config.json:</span>
+{ "mcpServers": { "memex": { "command": "node", "args": ["<span style="color: var(--accent-light);">$(pwd)/server.js</span>"] } } }
+
+<span style="color: var(--text-muted);"># 3. Enable live auto-capture (optional but recommended)</span>
+npx memex-sync install     <span style="color: var(--text-muted);"># macOS LaunchAgent · runs in background forever</span>
+npx memex-sync status      <span style="color: var(--text-muted);"># installed / running / watching N sessions</span></code></pre>
+    <p style="color: var(--text-soft); font-size: 14px; text-align: center;"
+       data-en="That's it. Open Claude Code (or any other MCP client). Ask: <code>покажи через memex_overview что у меня в памяти</code>. Done."
+       data-ru="Всё. Открывай Claude Code (или любой другой MCP-клиент). Скажи: <code>покажи через memex_overview что у меня в памяти</code>. Готово.">
+      That's it. Open Claude Code (or any other MCP client). Ask: <code>покажи через memex_overview что у меня в памяти</code>. Done.
+    </p>
   </div>
 </section>
 
@@ -368,13 +443,13 @@ your agent calls memex_search() / memex_recent() automatically</div>
   <div class="companion-card">
     <h3 data-en="Companion: claude-backup" data-ru="Companion: claude-backup">Companion: claude-backup</h3>
     <p style="color: var(--text-soft); font-size: 15.5px; margin-bottom: 18px;"
-       data-en="Don't want to manually drop files? claude-backup is a Python CLI that auto-discovers all your Claude Code and Cowork sessions and feeds them into memex's inbox in one command."
-       data-ru="Не хочешь вручную бросать файлы? claude-backup — Python CLI который сам находит все ваши Claude Code и Cowork сессии и кидает их в memex inbox одной командой.">
-      Don't want to manually drop files? claude-backup is a Python CLI that auto-discovers all your Claude Code and Cowork sessions and feeds them into memex's inbox in one command.
+       data-en="Want a one-shot bulk import of your past sessions before memex-sync took over? claude-backup is a Python CLI that scans every Claude Code and Cowork session and feeds them into memex's inbox in one command."
+       data-ru="Хочешь разово импортировать всё что было до того как заработал memex-sync? claude-backup — Python CLI, сканирует все Claude Code и Cowork сессии и кидает их в memex inbox одной командой.">
+      Want a one-shot bulk import of your past sessions before memex-sync took over? claude-backup is a Python CLI that scans every Claude Code and Cowork session and feeds them into memex's inbox in one command.
     </p>
     <pre style="background: var(--bg-soft); padding: 14px 18px; border-radius: 8px; font-size: 13.5px; color: var(--text); margin-bottom: 16px; text-align: left; overflow-x: auto;"><code>pip install claude-backup
 claude-backup feed-memex
-# → 16 sessions in your memex inbox in 5 seconds</code></pre>
+# → all your historical sessions in memex inbox in seconds</code></pre>
     <a href="https://github.com/parallelclaw/claude-backup" target="_blank" rel="noopener" style="font-size: 14px;">github.com/parallelclaw/claude-backup →</a>
   </div>
 </section>

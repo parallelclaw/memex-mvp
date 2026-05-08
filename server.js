@@ -445,6 +445,12 @@ const TOOLS = [
           type: 'string',
           description: 'Optional filter: "telegram", "claude-code", "claude-cowork", etc.',
         },
+        group_by_conversation: {
+          type: 'boolean',
+          default: true,
+          description:
+            'If true (default), returns one best-ranked hit per conversation along with a match_count of total matches in that chat. Set to false to get every individual matching message (legacy behaviour).',
+        },
       },
       required: ['query'],
     },
@@ -512,6 +518,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   try {
     if (name === 'memex_search') {
       const limit = Math.min(50, Math.max(1, args.limit || 10));
+      const groupByConv = args.group_by_conversation !== false; // default true
       // FTS5 needs special handling for non-alphanumeric input — quote tokens
       const query = String(args.query || '')
         .trim()
@@ -521,8 +528,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       if (!query) return textResult('Empty query.');
 
       const sourceFilter = args.source ? `AND m.source = ?` : '';
-      const params = [query, limit];
-      if (args.source) params.splice(1, 0, args.source);
+      // When grouping, fetch wider so we have enough unique conversations after dedup.
+      const fetchLimit = groupByConv ? Math.min(500, limit * 10) : limit;
+      const matchParams = args.source ? [query, args.source] : [query];
 
       const sql = `
         SELECT m.id, m.source, m.conversation_id, m.sender, m.role,
@@ -537,15 +545,44 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       ORDER BY rank
          LIMIT ?
       `;
-      const rows = db.prepare(sql).all(...params);
+      let rows = db.prepare(sql).all(...matchParams, fetchLimit);
       if (rows.length === 0)
         return textResult(`No results for "${args.query}".`);
+
+      if (groupByConv) {
+        // Real per-conversation match counts across the whole corpus, not just the fetched window.
+        const counts = new Map();
+        const countSql = `
+          SELECT m.conversation_id, COUNT(*) AS match_count
+            FROM messages_fts
+            JOIN messages m ON m.id = messages_fts.rowid
+           WHERE messages_fts MATCH ?
+             ${sourceFilter}
+           GROUP BY m.conversation_id
+        `;
+        for (const c of db.prepare(countSql).all(...matchParams)) {
+          counts.set(c.conversation_id, c.match_count);
+        }
+        // Rows are rank-sorted, so the first occurrence per conversation is the best one.
+        const seen = new Set();
+        const deduped = [];
+        for (const r of rows) {
+          if (seen.has(r.conversation_id)) continue;
+          seen.add(r.conversation_id);
+          r.match_count = counts.get(r.conversation_id) || 1;
+          deduped.push(r);
+          if (deduped.length >= limit) break;
+        }
+        rows = deduped;
+      }
 
       const formatted = rows
         .map((r, i) => {
           const date = r.ts ? new Date(r.ts * 1000).toISOString().slice(0, 16).replace('T', ' ') : '???';
+          const matchSuffix =
+            groupByConv && r.match_count > 1 ? ` · ${r.match_count} matches in this chat` : '';
           return [
-            `### Result ${i + 1} · ${r.source} · ${date}`,
+            `### Result ${i + 1} · ${r.source} · ${date}${matchSuffix}`,
             `**${r.sender || r.role}** in ${r.conversation_title || r.conversation_id}`,
             `> ${r.snippet}`,
             `_full text:_ ${truncate(r.text, 360)}`,
@@ -554,7 +591,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         })
         .join('\n\n---\n\n');
 
-      return textResult(`Found ${rows.length} result(s) for "${args.query}":\n\n${formatted}`);
+      const headerSuffix = groupByConv ? ' (one hit per conversation)' : '';
+      return textResult(
+        `Found ${rows.length} result(s)${headerSuffix} for "${args.query}":\n\n${formatted}`
+      );
     }
 
     if (name === 'memex_recent') {

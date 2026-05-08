@@ -139,8 +139,10 @@ Sources:
 
 ## MCP tools
 
-### `memex_search(query, limit?, source?)`
+### `memex_search(query, limit?, source?, group_by_conversation?)`
 Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой. Опциональный фильтр по source.
+
+**По умолчанию `group_by_conversation: true`** — возвращает один лучший хит на каждый conversation_id плюс `match_count` (сколько всего совпадений в этом чате). Это убирает шум, когда один длинный диалог занимает всю выдачу одинаковыми кусками. Передай `false` чтобы получить классический список всех совпадений.
 
 ### `memex_recent(limit?, source?)`
 Последние N сообщений по timestamp.

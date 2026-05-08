@@ -198,6 +198,61 @@
   }
   .tool-desc { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
 
+  /* AI-installer card */
+  .ai-install {
+    max-width: 760px; margin: 0 auto 32px;
+    background: linear-gradient(180deg, rgba(95,182,205,0.08) 0%, rgba(95,182,205,0.02) 100%);
+    border: 1px solid rgba(95,182,205,0.3); border-radius: 14px;
+    padding: 28px 32px;
+    position: relative;
+  }
+  .ai-install .recommended {
+    position: absolute; top: -12px; left: 28px;
+    background: var(--accent); color: var(--bg);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+    padding: 4px 12px; border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .ai-install h4 { font-size: 19px; font-weight: 700; margin: 8px 0 8px; letter-spacing: -0.01em; }
+  .ai-install p.lede2 { color: var(--text-soft); font-size: 15px; line-height: 1.55; margin-bottom: 16px; }
+  .copy-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .copy-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; border-radius: 8px;
+    background: var(--accent); color: var(--bg);
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    border: none; font-family: inherit;
+    transition: background 0.15s;
+  }
+  .copy-btn:hover { background: var(--accent-light); }
+  .copy-btn.copied { background: var(--green); }
+  .copy-meta { font-size: 13px; color: var(--text-muted); }
+  .prompt-block {
+    background: var(--bg-soft);
+    padding: 16px 20px; border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; line-height: 1.6;
+    color: var(--text);
+    overflow-x: auto;
+    max-height: 320px; overflow-y: auto;
+    border: 1px solid var(--border);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .or-divider {
+    text-align: center;
+    margin: 28px 0 20px;
+    color: var(--text-muted); font-size: 13px; letter-spacing: 0.06em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .or-divider::before, .or-divider::after {
+    content: ''; display: inline-block; vertical-align: middle;
+    width: 60px; height: 1px; background: var(--border);
+    margin: 0 14px;
+  }
+
   /* Quickstart steps */
   .step {
     border-left: 3px solid var(--accent);
@@ -449,8 +504,98 @@ on every topic the user references — no prompting needed</div>
 </section>
 
 <section class="companion" id="quickstart">
+  <h2 class="section-title" style="text-align: center; margin-bottom: 8px;"
+      data-en="Quickstart" data-ru="Установка">Quickstart</h2>
+  <p class="section-sub" style="margin-bottom: 36px;"
+     data-en="Two paths. Pick the one that fits."
+     data-ru="Два пути. Выбери тот что удобнее.">
+    Two paths. Pick the one that fits.
+  </p>
+
+  <div class="ai-install">
+    <span class="recommended" data-en="🤖 Easiest" data-ru="🤖 Проще всего">🤖 Easiest</span>
+    <h4 data-en="Let your AI install memex for you"
+        data-ru="Пусть твой AI установит memex сам">Let your AI install memex for you</h4>
+    <p class="lede2"
+       data-en="Already chatting with Claude Code, Cursor, Cline, Continue, or Zed? Any of them can do the whole install in 2 minutes — clone, wire the MCP config, turn on auto-capture. Just paste this prompt into the agent. It will show you each command before running, ask for confirmation on anything risky, and tell you when to restart."
+       data-ru="Уже общаешься с Claude Code, Cursor, Cline, Continue или Zed? Любой из них поставит memex за 2 минуты — клонирует, пропишет MCP-конфиг, включит авто-захват. Просто вставь этот промпт в агента. Он покажет каждую команду перед запуском, спросит подтверждение на рискованные действия, и скажет когда нужно перезапустить.">
+      Already chatting with Claude Code, Cursor, Cline, Continue, or Zed? Any of them can do the whole install in 2 minutes — clone, wire the MCP config, turn on auto-capture. Just paste this prompt into the agent. It will show you each command before running, ask for confirmation on anything risky, and tell you when to restart.
+    </p>
+    <div class="copy-row">
+      <button class="copy-btn" id="copy-btn" onclick="copyInstallPrompt()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+        <span class="btn-label" data-en="Copy install prompt" data-ru="Скопировать промпт">Copy install prompt</span>
+      </button>
+      <span class="copy-meta"
+            data-en="Then paste into your AI agent's chat."
+            data-ru="Потом вставь в чат твоего AI-агента.">
+        Then paste into your AI agent's chat.
+      </span>
+    </div>
+    <pre id="install-prompt" class="prompt-block">Install memex on this machine. Memex is a local-first AI memory tool — it captures my Claude Code and Cowork conversations into a searchable SQLite index that any MCP-compatible agent can query. Repo: https://github.com/parallelclaw/memex-mvp
+
+Do these four steps in order. Show each command before you run it. Stop and ask if anything fails or looks wrong.
+
+1. Clone and install
+   - Suggest a parent directory (default: ~/Documents). Confirm with me.
+   - cd into that directory
+   - git clone https://github.com/parallelclaw/memex-mvp
+   - cd memex-mvp
+   - npm install
+   Verify: server.js exists; npm install completed without fatal errors.
+
+2. Wire memex into my MCP client
+   - You're running inside one of: Claude Code, Cursor, Cline, Continue, Zed.
+     Tell me which one you've inferred and which config file you'll edit.
+     Common locations:
+       Claude Code  → ~/.claude/config.json (or platform-specific equivalent)
+       Cursor       → ~/.cursor/mcp.json
+       Cline        → VS Code settings.json (cline.mcpServers)
+       Continue     → ~/.continue/config.json
+       Zed          → ~/.config/zed/settings.json (context_servers)
+     If unclear, ask me.
+   - Read the existing config (if present). Show me a diff before saving.
+   - MERGE this entry into mcpServers — never overwrite other servers I have:
+     {
+       "mcpServers": {
+         "memex": {
+           "command": "node",
+           "args": ["&lt;absolute path to memex-mvp/server.js&gt;"]
+         }
+       }
+     }
+     Use the absolute path from step 1 (run pwd inside memex-mvp).
+   - If the config file doesn't exist, create the parent directory and write a minimal valid file with just memex.
+   Verify: re-read the file after save; confirm memex entry is present and the path is absolute.
+
+3. Turn on live auto-capture (recommended)
+   - From the memex-mvp directory: npx memex-sync install
+   - Then npx memex-sync status — should print "daemon installed", "running (PID …)", "watching N sessions".
+   Verify: status output shows a non-zero PID.
+
+4. Tell me what to do next
+   - Tell me to fully quit and reopen the MCP client (Cmd+Q on macOS) so it picks up the new memex tools.
+   - After restart, suggest I ask: "show me what memex has in memory"
+     — that triggers memex_overview and confirms everything works end-to-end.
+
+Safety rules — read these before starting:
+- If `node` or `npm` aren't installed, stop and tell me to install Node.js (recommend nvm.sh). Don't try to install Node yourself.
+- Never run rm, sudo, or anything destructive without explicit confirmation from me.
+- Show every command before running it. If I say "no" or "stop", halt and explain.
+- If a step fails, do NOT auto-retry or auto-fix — tell me what failed and ask how to proceed.
+- When editing my MCP config, always preserve existing entries. If you can't merge cleanly, abort and tell me.
+
+Begin by greeting me, asking which directory to clone into, and confirming which MCP client I'm using.</pre>
+  </div>
+
+  <div class="or-divider"
+       data-en="— or do it yourself —"
+       data-ru="— или сделай вручную —">
+    — or do it yourself —
+  </div>
+
   <div class="companion-card" style="text-align: left; max-width: 760px;">
-    <h3 style="text-align: center;" data-en="Quickstart — 4 steps, ~5 minutes" data-ru="Быстрый старт — 4 шага, ~5 минут">Quickstart — 4 steps, ~5 minutes</h3>
+    <h3 style="text-align: center;" data-en="Manual install — 4 steps, ~5 minutes" data-ru="Установка вручную — 4 шага, ~5 минут">Manual install — 4 steps, ~5 minutes</h3>
     <p style="color: var(--text-soft); font-size: 15px; margin-bottom: 8px; text-align: center;"
        data-en="Each step shows where it happens. Do them in order. You only do this once."
        data-ru="Каждый шаг помечен где он делается. По порядку. Делается один раз.">
@@ -591,6 +736,39 @@ claude-backup feed-memex
     const saved = localStorage.getItem('memex-lang');
     if (saved === 'ru' || saved === 'en') setLang(saved);
   } catch(e) {}
+
+  // Copy install prompt to clipboard
+  function copyInstallPrompt() {
+    const pre = document.getElementById('install-prompt');
+    // textContent strips HTML entities like &lt; and gives us "<absolute path>" cleanly
+    const text = pre.textContent;
+    const btn = document.getElementById('copy-btn');
+    const label = btn.querySelector('.btn-label');
+    const original = label.textContent;
+    const ok = (msg) => {
+      btn.classList.add('copied');
+      label.textContent = msg;
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        label.textContent = original;
+      }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => ok(currentLang === 'ru' ? '✓ Скопировано!' : '✓ Copied!'))
+        .catch(() => fallbackCopy(text, ok));
+    } else {
+      fallbackCopy(text, ok);
+    }
+  }
+  function fallbackCopy(text, ok) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(currentLang === 'ru' ? '✓ Скопировано!' : '✓ Copied!'); }
+    catch (e) { alert('Copy failed — please select and copy the prompt manually.'); }
+    document.body.removeChild(ta);
+  }
 </script>
 
 </body>

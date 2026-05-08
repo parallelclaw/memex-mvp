@@ -6,10 +6,12 @@
   "main": "server.js",
   "bin": {
     "memex-mvp": "./server.js",
+    "memex-sync": "./ingest.js",
     "memex-ingest": "./ingest.js"
   },
   "scripts": {
     "start": "node server.js",
+    "sync": "node ingest.js",
     "ingest": "node ingest.js",
     "test": "node test/parser.test.js"
   },

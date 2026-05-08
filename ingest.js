@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /**
- * memex-ingest — long-running daemon that auto-ingests Claude Code and
+ * memex-sync — long-running daemon that auto-captures Claude Code and
  * Cowork sessions into memex's inbox in near-realtime.
+ *
+ * CLI usage:
+ *   memex-sync             # run in foreground (debug / launchctl ProgramArguments)
+ *   memex-sync install     # register macOS LaunchAgent (autostart on login)
+ *   memex-sync uninstall   # unload + remove LaunchAgent (data is preserved)
+ *   memex-sync status      # show daemon state, watched files, last activity
+ *   memex-sync logs        # tail -f the daemon log
  *
  * Architecture (variant C — hybrid):
  *   - chokidar (FSEvents on macOS, inotify on Linux) watches the source
@@ -23,13 +30,15 @@
  */
 
 import chokidar from 'chokidar';
-import { homedir } from 'node:os';
-import { join, basename, sep } from 'node:path';
+import { homedir, platform } from 'node:os';
+import { join, basename, sep, resolve } from 'node:path';
 import {
   existsSync, statSync, readFileSync, writeFileSync, renameSync,
   mkdirSync, openSync, readSync, closeSync, unlinkSync, readdirSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { execSync, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { extractMessageFromRecord, extractAiTitle } from './lib/parse.js';
 
 // -------------------- Paths & config --------------------
@@ -39,6 +48,213 @@ const INBOX = join(MEMEX_DIR, 'inbox');
 const DATA = join(MEMEX_DIR, 'data');
 const STATE_PATH = join(DATA, 'ingest-state.json');
 const LOG_PATH = join(DATA, 'ingest.log');
+
+// LaunchAgent metadata (macOS). Linux/systemd-user support to follow.
+const LAUNCH_LABEL = 'com.parallelclaw.memex.sync';
+const LEGACY_LABEL = 'com.parallelclaw.memex.ingest'; // pre-rename, migrated transparently
+const PLIST_PATH = join(HOME, 'Library', 'LaunchAgents', `${LAUNCH_LABEL}.plist`);
+const LEGACY_PLIST_PATH = join(HOME, 'Library', 'LaunchAgents', `${LEGACY_LABEL}.plist`);
+
+// -------------------- Subcommand dispatch --------------------
+const subcommand = process.argv[2];
+if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === false) {
+  // Run as CLI tool, not as daemon
+  const handlers = {
+    install: cmdInstall,
+    uninstall: cmdUninstall,
+    status: cmdStatus,
+    logs: cmdLogs,
+    serve: cmdServe, // explicit foreground; same as no-arg
+  };
+  const handler = handlers[subcommand];
+  if (!handler) {
+    console.error(`unknown command: ${subcommand}`);
+    console.error(`usage: memex-sync [install|uninstall|status|logs|serve]`);
+    process.exit(2);
+  }
+  handler();
+  // CLI handlers either exit themselves or fall through to daemon mode (cmdServe)
+} else if (subcommand === '--help' || subcommand === '-h') {
+  console.log(`memex-sync — auto-capture daemon for memex memory
+
+usage:
+  memex-sync                    run in foreground (default; same as 'serve')
+  memex-sync install            register macOS LaunchAgent (autostart on login)
+  memex-sync uninstall          unload and remove LaunchAgent (data preserved)
+  memex-sync status             show daemon health, watched files, last activity
+  memex-sync logs               tail the daemon log
+
+paths:
+  state:   ${STATE_PATH}
+  log:     ${LOG_PATH}
+  plist:   ${PLIST_PATH}`);
+  process.exit(0);
+}
+
+// -------------------- CLI command handlers --------------------
+
+function cmdInstall() {
+  if (platform() !== 'darwin') {
+    console.error('install: macOS-only for now (LaunchAgent). Linux systemd-user support pending.');
+    console.error('on Linux you can run: nohup memex-sync &');
+    process.exit(1);
+  }
+
+  // Migrate legacy plist (pre-rename) if present.
+  if (existsSync(LEGACY_PLIST_PATH)) {
+    console.log('migrating legacy LaunchAgent (com.parallelclaw.memex.ingest → .sync)...');
+    try { execSync(`launchctl unload ${JSON.stringify(LEGACY_PLIST_PATH)}`, { stdio: 'ignore' }); }
+    catch (_) {}
+    try { unlinkSync(LEGACY_PLIST_PATH); } catch (_) {}
+  }
+
+  const nodePath = process.execPath;
+  const scriptPath = resolve(fileURLToPath(import.meta.url));
+
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LAUNCH_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${nodePath}</string>
+    <string>${scriptPath}</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>Nice</key><integer>5</integer>
+  <key>StandardOutPath</key><string>${join(DATA, 'launchd.out.log')}</string>
+  <key>StandardErrorPath</key><string>${join(DATA, 'launchd.err.log')}</string>
+  <key>WorkingDirectory</key><string>${resolve(scriptPath, '..')}</string>
+</dict>
+</plist>
+`;
+
+  mkdirSync(join(HOME, 'Library', 'LaunchAgents'), { recursive: true });
+  // Stop existing instance first (idempotent)
+  try { execSync(`launchctl unload ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' }); }
+  catch (_) {}
+  writeFileSync(PLIST_PATH, plist);
+  try {
+    execSync(`launchctl load ${JSON.stringify(PLIST_PATH)}`, { stdio: 'inherit' });
+  } catch (e) {
+    console.error(`launchctl load failed: ${e.message}`);
+    process.exit(1);
+  }
+
+  console.log(`✓ memex-sync installed and running`);
+  console.log(`  plist: ${PLIST_PATH}`);
+  console.log(`  log:   ${LOG_PATH}`);
+  console.log(`\nIt will autostart on login. To check status: memex-sync status`);
+  console.log(`To stop and remove: memex-sync uninstall`);
+  process.exit(0);
+}
+
+function cmdUninstall() {
+  if (platform() !== 'darwin') {
+    console.error('uninstall: macOS-only for now.');
+    process.exit(1);
+  }
+  let removed = 0;
+  for (const p of [PLIST_PATH, LEGACY_PLIST_PATH]) {
+    if (existsSync(p)) {
+      try { execSync(`launchctl unload ${JSON.stringify(p)}`, { stdio: 'ignore' }); } catch (_) {}
+      try { unlinkSync(p); removed++; } catch (_) {}
+    }
+  }
+  if (removed > 0) {
+    console.log(`✓ memex-sync uninstalled (${removed} LaunchAgent file${removed > 1 ? 's' : ''} removed)`);
+    console.log(`\nMemory database at ~/.memex/data/memex.db is preserved.`);
+    console.log(`To fully purge: rm -rf ~/.memex`);
+  } else {
+    console.log(`memex-sync was not installed (nothing to remove).`);
+  }
+  process.exit(0);
+}
+
+function cmdStatus() {
+  // Discover state + plist + running PID
+  const installed = existsSync(PLIST_PATH);
+  const legacyInstalled = existsSync(LEGACY_PLIST_PATH);
+  let runningPid = null;
+  let label = installed ? LAUNCH_LABEL : (legacyInstalled ? LEGACY_LABEL : null);
+  if (label) {
+    try {
+      const out = execSync(`launchctl list | grep ${label}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      const m = out.match(/^(\d+|-)\s+(\d+|-)\s+\S+/m);
+      if (m && m[1] !== '-') runningPid = parseInt(m[1], 10);
+    } catch (_) {}
+  }
+
+  let state = {};
+  let stateFresh = null;
+  if (existsSync(STATE_PATH)) {
+    try { state = JSON.parse(readFileSync(STATE_PATH, 'utf-8')); }
+    catch (_) {}
+    try {
+      const ageMs = Date.now() - statSync(STATE_PATH).mtimeMs;
+      stateFresh = ageMs;
+    } catch (_) {}
+  }
+  const watchedCount = Object.keys(state).length;
+  let codeCount = 0, coworkCount = 0;
+  for (const p of Object.keys(state)) {
+    // Cowork paths embed `.claude/projects/` too (inside Application Support);
+    // check the cowork-specific marker first.
+    if (p.includes('local-agent-mode-sessions')) coworkCount++;
+    else if (p.includes('/.claude/projects/')) codeCount++;
+  }
+
+  // Output
+  console.log('memex-sync status\n');
+  if (installed) {
+    console.log(`  daemon:    installed (${PLIST_PATH})`);
+  } else if (legacyInstalled) {
+    console.log(`  daemon:    installed under legacy label (run 'memex-sync install' to migrate)`);
+  } else {
+    console.log(`  daemon:    NOT installed`);
+    console.log(`             enable autostart with: memex-sync install`);
+  }
+  if (runningPid) {
+    console.log(`  process:   running (PID ${runningPid})`);
+  } else {
+    console.log(`  process:   not running`);
+  }
+  if (watchedCount > 0) {
+    console.log(`  watching:  ${codeCount} Claude Code · ${coworkCount} Cowork session(s) (${watchedCount} files total)`);
+  } else {
+    console.log(`  watching:  no sessions seen yet`);
+  }
+  if (stateFresh !== null) {
+    const min = Math.floor(stateFresh / 60000);
+    const human = min < 1 ? 'just now' : (min < 60 ? `${min} min ago` : `${Math.floor(min / 60)}h ${min % 60}m ago`);
+    console.log(`  last activity: ${human}`);
+  }
+  console.log('');
+  console.log(`  log:       ${LOG_PATH}`);
+  console.log(`  state:     ${STATE_PATH}`);
+
+  process.exit(0);
+}
+
+function cmdLogs() {
+  if (!existsSync(LOG_PATH)) {
+    console.error(`no log file at ${LOG_PATH} — daemon never started?`);
+    process.exit(1);
+  }
+  // tail -f via spawn
+  const tail = spawn('tail', ['-n', '50', '-f', LOG_PATH], { stdio: 'inherit' });
+  process.on('SIGINT', () => { tail.kill('SIGINT'); process.exit(0); });
+  tail.on('exit', (code) => process.exit(code || 0));
+}
+
+function cmdServe() {
+  // Fall through to the daemon body below
+}
 
 const RESCAN_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const DEBOUNCE_MS = 1500;

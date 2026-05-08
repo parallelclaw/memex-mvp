@@ -2,7 +2,7 @@
 
 > **Claude забывает каждую сессию. Memex помнит навсегда.**
 
-Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 7 простых tool'ов.
+Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 8 простых tool'ов.
 
 Никакого облака. Никакого аккаунта. Только твой ноут.
 
@@ -20,13 +20,14 @@ SQLite + FTS5 (~/.memex/data/memex.db)
    ↓
 MCP server (stdio JSON-RPC)
    ↓
-любой клиент → 7 tool'ов:
-   • memex_overview              — снэпшот корпуса (для ориентации в начале сессии)
+любой клиент → 8 tool'ов:
+   • memex_overview              — снэпшот корпуса + статус auto-capture
    • memex_search                — full-text поиск (с дедупом по чатам)
    • memex_recent                — последние N сообщений
    • memex_list_conversations    — список чатов по recency
    • memex_get_conversation      — полный транскрипт чата
    • memex_archive_conversation  — скрыть чат из выдачи (но не из поиска)
+   • memex_status                — здоровье memex-sync daemon'а
    • memex_list_sources          — что импортировано
 ```
 
@@ -96,56 +97,51 @@ claude-backup feed-memex
 # → готово
 ```
 
-### Auto-ingest daemon (live tail)
+### Two pieces
 
-Если хочешь **автоматический live-ingest** новых Claude Code/Cowork сессий — есть встроенный daemon:
+memex поставляется в виде **двух независимых частей:**
+
+- **MCP server** (`server.js`) — пассивная база знаний, всегда доступна после `npm install`. Отдаёт 8 tool'ов любому MCP-агенту.
+- **memex-sync** (`ingest.js`) — **опциональный** фоновый daemon. Watch'ит `~/.claude/projects/` (Code) и `~/Library/Application Support/Claude/local-agent-mode-sessions/` (Cowork) через FSEvents и автоматически добавляет новые сессии в память в реальном времени.
+
+> **Без memex-sync память замёрзла** на момент последнего ручного импорта. **С ним** — каждая новая сессия становится searchable за ~1.5 секунды.
+
+### Включить auto-capture (memex-sync)
+
+Одна команда — и dameon регистрируется как macOS LaunchAgent, автозапускается при логине, переживает перезагрузку и крэши:
 
 ```bash
-npm run ingest
-# или: node ingest.js
+npx memex-sync install
 ```
 
-Что он делает:
-- Watch'ит `~/.claude/projects/` (Code) и `~/Library/Application Support/Claude/local-agent-mode-sessions/` (Cowork) через FSEvents
-- На каждое изменение JSONL — атомарно эмитит dialogue-only snapshot в `~/.memex/inbox/`
-- Per-file state в `~/.memex/data/ingest-state.json` (sha1 first 256B + size + mtime) — повторный запуск ничего не пересоздаёт
+Дальше:
+
+```bash
+npx memex-sync status      # три состояния: installed / running / watching
+npx memex-sync logs        # tail -f лог в реальном времени
+npx memex-sync uninstall   # снять с автозапуска (БД остаётся)
+```
+
+Без `install` daemon можно гонять и в foreground'е (для отладки):
+
+```bash
+npx memex-sync             # = serve, в foreground
+```
+
+### Что под капотом
+
+- chokidar (FSEvents на macOS, inotify на Linux) на обе source-директории
+- Per-file state в `~/.memex/data/ingest-state.json` (sha1 первых 256B + size + mtime) — повторный запуск пропускает неизменённые файлы
 - Safety rescan каждые 30 минут — ловит пропущенные FSEvents после sleep/lid-close
+- Atomic writes (temp + rename) в `~/.memex/inbox/` — никаких частичных JSONL
 - Idempotent: новые сообщения идут через UNIQUE(msg_id), дубли отсекаются на уровне БД
+- LaunchAgent работает с `LowPriorityIO=true`, `Nice=5` — не мешает основной работе ноута
 
-Daemon работает рядом с MCP-сервером, не вместо него. MCP-сервер по-прежнему отвечает на запросы агентов, daemon — отдельный процесс который кормит inbox.
+memex MCP server и memex-sync — два независимых процесса. MCP server отвечает агентам, memex-sync кормит inbox. Связи нет, кроме общей файловой системы.
 
-#### Запуск как LaunchAgent (macOS, опционально)
+### Подсказка для агента
 
-Для постоянной работы в фоне (не зависимо от того, открыт ли Claude Code) — оформи как LaunchAgent. Минимальный plist:
-
-```xml
-<!-- ~/Library/LaunchAgents/com.parallelclaw.memex.ingest.plist -->
-<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.parallelclaw.memex.ingest</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/local/bin/node</string>
-    <string>/абсолютный/путь/до/memex-mvp/ingest.js</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>ProcessType</key><string>Background</string>
-  <key>LowPriorityIO</key><true/>
-  <key>StandardErrorPath</key><string>/tmp/memex-ingest.err.log</string>
-  <key>StandardOutPath</key><string>/tmp/memex-ingest.out.log</string>
-</dict>
-</plist>
-```
-
-Загрузить:
-```bash
-launchctl load ~/Library/LaunchAgents/com.parallelclaw.memex.ingest.plist
-launchctl list | grep memex
-```
-
-Это самый ленивый workflow. Один раз — и забыл.
+Если ты подключил memex к Claude Code/Cursor/Cline и каждый раз когда вызываешь `memex_overview` видишь сверху ⚪ или 🔴 — это значит auto-capture не включён. Агент сам это увидит и предложит юзеру команду `npx memex-sync install`. Это та самая «один раз и забыл» механика — без README-чтения.
 
 ---
 

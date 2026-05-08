@@ -22,6 +22,7 @@ import chokidar from 'chokidar';
 import { homedir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { mkdirSync, readFileSync, renameSync, existsSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import {
   extractMessageFromRecord,
   isContinuationBoilerplate,
@@ -399,7 +400,7 @@ chokidar
 // — what the server is, when to use which tool, search tips, gotchas.
 const SERVER_INSTRUCTIONS = `Memex is the user's personal memory across all their AI conversations
 (Telegram, Claude Code, Claude Cowork, …) — one SQLite + FTS5 database
-exposed via 6 tools.
+exposed via 8 tools.
 
 USE MEMEX PROACTIVELY. The whole point of this server is that the user
 has invested in indexing their past discussions; recall them. Whenever
@@ -413,11 +414,48 @@ without context the user spent months building is much larger.
 
 ON YOUR FIRST MEMEX CALL IN A NEW SESSION, START WITH memex_overview.
 It returns a single-page snapshot — sources breakdown, totals, date
-range, and the 10 most recent conversation titles. This gives you a
-mental map of what is and is not in memory, so subsequent searches
-are sharper than blind guessing. One overview call costs ~500 tokens
-and saves many wasted memex_search attempts. Skip it only if the user
-explicitly named a conversation_id you can fetch directly.
+range, the 10 most recent conversation titles, AND the live status of
+the auto-capture daemon. This gives you a mental map of what is and
+is not in memory, so subsequent searches are sharper than blind
+guessing. One overview call costs ~500 tokens and saves many wasted
+memex_search attempts. Skip it only if the user explicitly named a
+conversation_id you can fetch directly.
+
+══ AUTO-CAPTURE DAEMON (memex-sync) ══
+
+memex ships as TWO PIECES:
+  • this MCP server — always available; lets you query memory
+  • memex-sync — an OPTIONAL background daemon that auto-captures new
+    Claude Code and Cowork sessions in real time
+
+Without memex-sync, the corpus FREEZES at last manual import. With it,
+every new session is searchable within ~1.5 seconds of being written.
+
+memex_overview always prints a sync-status banner at the top:
+  🟢  daemon running, memory is live
+  🔴  daemon installed but not running
+  ⚪  daemon NOT installed — capture is OFF
+
+WHEN YOU SEE ⚪ OR 🔴 AT THE TOP OF memex_overview, surface this to
+the user in your response — don't bury it. A natural way to phrase it:
+
+  "By the way — your memex auto-capture is off, so any new sessions
+  won't show up in memory until you enable it. One command turns it
+  on: \`npx memex-sync install\`. Want me to walk you through it?"
+
+ALSO surface the warning when:
+  • user is surprised a recent session isn't in memory
+  • memex_overview's date range ends days before today
+  • memex_search returns nothing for something the user just discussed
+
+For deeper diagnostics call memex_status — it returns the full picture
+(installed / running / PID / last capture / per-platform watched count)
+plus an \`advice\` string with the exact command the user should run.
+
+NEVER run install/uninstall/status commands yourself via Bash. The
+user must consent to a background process being installed on their
+machine. Your job is to recommend, explain the value, and answer
+follow-up questions ("does it use battery?", "where is the data?").
 
 ══ TOOL SELECTION ══
 
@@ -452,6 +490,12 @@ memex_archive_conversation — hide a chat from default listing/search.
   Use when the user asks to declutter, mute, or archive. NEVER
   describe this as a delete — archived data stays fully indexed and
   searchable via include_archived: true.
+
+memex_status — health check for the memex-sync auto-capture daemon.
+  Returns daemon installed/running state, PID, last capture freshness,
+  per-platform watched count, and an actionable advice string.
+  Use when the user is surprised a recent session is missing, or when
+  memex_overview's banner shows a warning.
 
 ══ DEFAULT FLOW ══
 
@@ -635,6 +679,25 @@ const TOOLS = [
           description:
             'If true, also include archived conversations in the listing. Default: false.',
         },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown',
+        },
+      },
+    },
+  },
+  {
+    name: 'memex_status',
+    description:
+      'Health check for the memex auto-sync daemon (memex-sync). Reports whether the ' +
+      'background daemon is installed and running, when it last captured data, and how many ' +
+      'sessions are being watched. Use this when the user is surprised that a recent session ' +
+      'is missing from memory, or when memex_overview shows no fresh data — to diagnose ' +
+      'whether the corpus is actually live or frozen.',
+    inputSchema: {
+      type: 'object',
+      properties: {
         format: {
           type: 'string',
           enum: ['markdown', 'json'],
@@ -994,6 +1057,49 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return textResult(lines.join('\n'));
     }
 
+    if (name === 'memex_status') {
+      const format = pickFormat(args);
+      const s = getSyncStatus();
+      if (format === 'json') {
+        return jsonResult({
+          mcp_server: 'running',
+          daemon_installed: s.installed || s.legacyInstalled,
+          daemon_running: s.running,
+          daemon_pid: s.pid,
+          last_ingest_at: s.lastIngestAt,
+          last_ingest_human: formatFreshness(s.freshnessMs),
+          watched_files: s.watchedFiles,
+          sessions: s.sessionsByPlatform,
+          legacy_label: s.legacyInstalled && !s.installed,
+          advice: s.advice,
+        });
+      }
+      const lines = [];
+      lines.push('**memex status**', '');
+      lines.push(`- MCP server: 🟢 running`);
+      if (s.installed || s.legacyInstalled) {
+        lines.push(
+          `- memex-sync daemon: ${s.running ? '🟢 running (PID ' + s.pid + ')' : '🔴 installed but not running'}`
+        );
+        if (s.legacyInstalled && !s.installed) {
+          lines.push('  ⚠️ running under legacy label — run `npx memex-sync install` to migrate');
+        }
+      } else {
+        lines.push('- memex-sync daemon: ⚪ not installed');
+      }
+      if (s.watchedFiles > 0) {
+        lines.push(
+          `- watching: ${s.sessionsByPlatform.code} Claude Code · ${s.sessionsByPlatform.cowork} Cowork session(s)`
+        );
+        lines.push(`- last capture: ${formatFreshness(s.freshnessMs)}`);
+      }
+      if (s.advice) {
+        lines.push('');
+        lines.push(`💡 **${s.advice}**`);
+      }
+      return textResult(lines.join('\n'));
+    }
+
     if (name === 'memex_overview') {
       const recentLimit = Math.min(50, Math.max(1, args.recent_limit || 10));
       const format = pickFormat(args);
@@ -1027,7 +1133,14 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         .all(recentLimit);
 
       if (format === 'json') {
+        const sync = getSyncStatus();
         return jsonResult({
+          sync_status: {
+            daemon_installed: sync.installed || sync.legacyInstalled,
+            daemon_running: sync.running,
+            last_capture_human: formatFreshness(sync.freshnessMs),
+            advice: sync.advice,
+          },
           total_messages: total,
           active_conversations: activeConv,
           archived_conversations: archivedConv,
@@ -1053,7 +1166,29 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         });
       }
 
+      // Sync-status banner — surfaced at the top of every overview so the agent
+      // can naturally lead with it when reporting back to the user. Without
+      // this, users with no daemon installed never realise their memory is
+      // frozen.
+      const sync = getSyncStatus();
       const lines = [];
+      if (!sync.installed && !sync.legacyInstalled) {
+        lines.push(
+          '⚪ **Auto-capture is OFF.** New Claude Code/Cowork sessions are NOT being added',
+          'to memory automatically. To enable real-time capture (recommended), ask the user',
+          'to run: `npx memex-sync install`',
+          ''
+        );
+      } else if (!sync.running) {
+        lines.push(
+          '🔴 **Auto-capture daemon installed but NOT running.** Memory may be stale.',
+          'User can run: `npx memex-sync status` to diagnose.',
+          ''
+        );
+      } else {
+        const f = formatFreshness(sync.freshnessMs);
+        lines.push(`🟢 Auto-capture: running · last update ${f}`, '');
+      }
       lines.push(`**Memex corpus snapshot**`, '');
       lines.push(
         `- **${total.toLocaleString()} messages** in **${activeConv} active conversations**` +
@@ -1175,6 +1310,100 @@ function textResult(text) {
 }
 function jsonResult(obj) {
   return { content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] };
+}
+
+/**
+ * Check the memex-sync daemon health.
+ *
+ * Returns: { installed, legacyInstalled, running, pid, lastIngestAt,
+ *            watchedFiles, freshnessMs, advice }
+ *
+ * Source of truth:
+ *   - LaunchAgent plist files at ~/Library/LaunchAgents/com.parallelclaw.memex.{sync,ingest}.plist
+ *   - launchctl list (running PID, exit code)
+ *   - mtime of ~/.memex/data/ingest-state.json (last successful capture)
+ */
+function getSyncStatus() {
+  const plistDir = join(HOME, 'Library', 'LaunchAgents');
+  const plistPath = join(plistDir, 'com.parallelclaw.memex.sync.plist');
+  const legacyPlistPath = join(plistDir, 'com.parallelclaw.memex.ingest.plist');
+  const installed = existsSync(plistPath);
+  const legacyInstalled = existsSync(legacyPlistPath);
+
+  let pid = null;
+  const label = installed
+    ? 'com.parallelclaw.memex.sync'
+    : (legacyInstalled ? 'com.parallelclaw.memex.ingest' : null);
+  if (label) {
+    try {
+      // execSync is synchronous and fast (~5ms) — fine for an on-demand status call.
+      const out = execSync(`launchctl list | grep ${label}`, {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).toString();
+      const m = out.match(/^(\d+|-)\s+(\d+|-)\s+\S+/m);
+      if (m && m[1] !== '-') pid = parseInt(m[1], 10);
+    } catch (_) {}
+  }
+
+  const stateFile = join(MEMEX_DIR, 'data', 'ingest-state.json');
+  let lastIngestAt = null;
+  let freshnessMs = null;
+  let watchedFiles = 0;
+  let codeCount = 0;
+  let coworkCount = 0;
+  if (existsSync(stateFile)) {
+    try {
+      const stat = statSync(stateFile);
+      lastIngestAt = stat.mtimeMs / 1000;
+      freshnessMs = Date.now() - stat.mtimeMs;
+      const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+      watchedFiles = Object.keys(state).length;
+      for (const p of Object.keys(state)) {
+        if (p.includes('local-agent-mode-sessions')) coworkCount++;
+        else if (p.includes('/.claude/projects/')) codeCount++;
+      }
+    } catch (_) {}
+  }
+
+  let advice = null;
+  if (!installed && !legacyInstalled) {
+    advice =
+      'memex-sync is NOT installed. To enable real-time auto-capture of new Claude Code/Cowork sessions, ' +
+      'run: `npx memex-sync install`. Without it, your memory only updates when you manually run ' +
+      '`claude-backup feed-memex`.';
+  } else if (!pid) {
+    advice =
+      'memex-sync is installed but not running. Try: `npx memex-sync status` to diagnose, ' +
+      'or `npx memex-sync uninstall && npx memex-sync install` to reset.';
+  } else if (legacyInstalled && !installed) {
+    advice =
+      'memex-sync is running under the legacy label (com.parallelclaw.memex.ingest). ' +
+      'Run `npx memex-sync install` to migrate to the new label.';
+  } else if (freshnessMs !== null && freshnessMs > 24 * 60 * 60 * 1000) {
+    advice =
+      'memex-sync hasn\'t captured anything in over 24 hours. Either you haven\'t had any AI ' +
+      'sessions, or the daemon is stuck. Check `npx memex-sync logs`.';
+  }
+
+  return {
+    installed,
+    legacyInstalled,
+    running: !!pid,
+    pid,
+    lastIngestAt,
+    freshnessMs,
+    watchedFiles,
+    sessionsByPlatform: { code: codeCount, cowork: coworkCount },
+    advice,
+  };
+}
+
+function formatFreshness(ms) {
+  if (ms === null) return 'unknown';
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  return `${Math.floor(min / 60)}h ${min % 60}m ago`;
 }
 function pickFormat(args) {
   return args.format === 'json' ? 'json' : 'markdown';

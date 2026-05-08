@@ -475,9 +475,83 @@ chokidar
   });
 
 // -------------------- MCP Server --------------------
+
+// Sent to clients in the MCP `initialize` response. The connecting agent
+// sees this as part of its system context, so put practical guidance here
+// — what the server is, when to use which tool, search tips, gotchas.
+const SERVER_INSTRUCTIONS = `Memex is a local-first cross-agent memory. It indexes the user's past
+conversations across Telegram, Claude Code, Claude Cowork (and more) into
+one SQLite + FTS5 database, exposed via 6 tools. Use it whenever the user
+asks about something they discussed before, or when extra context from
+prior sessions would make your answer better.
+
+WHEN TO USE WHICH TOOL
+
+- memex_search       — find past discussions by keyword. Default group_by_conversation
+                       returns one best hit per chat + match_count, so a long thread
+                       can't dominate the output. Set false only when you really need
+                       every individual match.
+- memex_list_conversations — browse what chats exist. Sorted by recency.
+                       Good first step before pulling a transcript.
+- memex_get_conversation   — pull the full transcript of one conversation_id.
+                       Expensive in tokens — only call after locating the chat
+                       via search/list, and prefer a sensible limit.
+- memex_recent       — "what was I just talking about" — newest messages
+                       across all sources, sorted by time.
+- memex_list_sources — diagnostic: totals, recent imports, DB paths,
+                       count of archived conversations.
+- memex_archive_conversation — hide a chat from default listing/search
+                       without removing it. Use for noisy personal chats
+                       (e.g. with family) that pollute work queries.
+
+SEARCH TIPS (FTS5)
+
+- "phrase in quotes"          — exact adjacent words
+- term1 term2                 — both, any order (implicit AND)
+- term1 OR term2              — either
+- prefix*                     — prefix match
+- Russian + English mix freely (unicode61 tokenizer, diacritic-insensitive).
+- Start broad to discover which chats discussed a topic, then drill in
+  with memex_get_conversation. Don't dump full transcripts if a snippet
+  answers the question.
+- Distinctive terms beat common ones. "memex" or "BGE-M3" recall sharply;
+  "tool" or "design" return noise.
+
+OUTPUT FORMAT
+
+- Every read tool accepts format: "markdown" (default, for humans) or
+  format: "json" (structured, fewer tokens, no regex parsing).
+- When YOU plan to read fields programmatically — pass format: "json".
+- When the result will be shown to the user — leave the default markdown.
+
+ARCHIVE
+
+- Archived conversations are excluded from list/search by default but
+  stay fully indexed. Pass include_archived: true to include them.
+- Archive is a visibility flag, never deletes data.
+
+KNOWN LIMITATIONS (v0.1)
+
+- Keyword search only — "арбитраж" won't match "монетизация трафика".
+  Semantic search via BGE-M3 + sqlite-vec is on the roadmap.
+- /compact-continuation chains are NOT auto-linked. The same logical
+  discussion split across continuations appears as separate
+  conversations with similar (sometimes identical) fallback titles.
+  This is correct behaviour — don't conclude they're duplicates without
+  comparing short_ids and date ranges.
+- Re-imports are idempotent (UNIQUE on msg_id + recount-on-upsert), so
+  the user can safely re-run claude-backup feed-memex any time.
+
+CONVENTIONS
+
+- Always cite conversation_id when referencing a specific past chat,
+  so the user can drill in.
+- Quote past content sparingly and accurately; if the user wants more,
+  they can call memex_get_conversation themselves.`;
+
 const server = new Server(
   { name: 'memex', version: '0.1.0' },
-  { capabilities: { tools: {} } }
+  { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS }
 );
 
 const TOOLS = [

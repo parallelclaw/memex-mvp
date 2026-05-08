@@ -143,6 +143,8 @@ Sources:
 > **Все tool'ы поддерживают параметр `format: "markdown" | "json"`** (дефолт `"markdown"`).
 > Markdown — для глаз, JSON — для агентов: меньше токенов, можно парсить поля напрямую.
 
+> **Server-side instructions для агентов.** В MCP `initialize`-ответе сервер отдаёт ~3 КБ системного контекста: что хранится, какой tool когда выбирать, FTS5-синтаксис, известные ограничения. Любой подключающийся агент (Claude Code, Cursor, Cline, Continue) получает это автоматически — отдельную инструкцию писать не нужно. Текст в `SERVER_INSTRUCTIONS` в [server.js](server.js).
+
 ### `memex_search(query, limit?, source?, group_by_conversation?, include_archived?, format?)`
 Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой. Опциональный фильтр по source.
 

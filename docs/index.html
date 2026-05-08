@@ -198,6 +198,25 @@
   }
   .tool-desc { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
 
+  /* Positioning manifesto */
+  .manifesto {
+    max-width: 760px; margin: 32px auto 0;
+    border-left: 3px solid var(--accent);
+    padding: 14px 22px;
+    background: rgba(95, 182, 205, 0.04);
+    border-radius: 0 10px 10px 0;
+    font-size: 14.5px; line-height: 1.6;
+    color: var(--text-soft);
+  }
+  .manifesto strong { color: var(--text); font-weight: 700; }
+  .manifesto-tag {
+    display: inline-block;
+    font-size: 11px; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
   /* Gaps comparison */
   .gaps {
     padding: 64px 24px 64px;
@@ -498,6 +517,14 @@
         The SQLite file on your laptop doesn't depend on any provider. Your AI history is yours by architecture, not policy.
       </span>
     </div>
+  </div>
+
+  <div class="manifesto">
+    <span class="manifesto-tag" data-en="And one more thing —" data-ru="И ещё одно —">And one more thing —</span>
+    <p data-en="<strong>memex is MIT-licensed and not VC-funded.</strong> The code on GitHub IS the product — forkable, runnable forever, and impossible to quietly kill via acquihire. Rewind/Limitless got bought by Meta and shut down their Mac app on December 19, 2025. Local-first tools die when their owners cash out. memex can't, because there's no central owner to buy."
+       data-ru="<strong>memex под MIT-лицензией и не VC-funded.</strong> Код на GitHub — это и есть продукт: его можно форкнуть, запустить навсегда, и невозможно тихо убить через acquihire. Rewind/Limitless купила Meta и закрыла Mac-приложение 19 декабря 2025. Local-first инструменты умирают когда их владельцы кэшаут'ятся. memex не может, потому что не существует central-owner'а которого можно купить.">
+      <strong>memex is MIT-licensed and not VC-funded.</strong> The code on GitHub IS the product — forkable, runnable forever, and impossible to quietly kill via acquihire. Rewind/Limitless got bought by Meta and shut down their Mac app on December 19, 2025. Local-first tools die when their owners cash out. memex can't, because there's no central owner to buy.
+    </p>
   </div>
 </section>
 

@@ -2,7 +2,7 @@
 
 > **Claude забывает каждую сессию. Memex помнит навсегда.**
 
-Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 5 простых tool'ов.
+Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 6 простых tool'ов.
 
 Никакого облака. Никакого аккаунта. Только твой ноут.
 
@@ -20,12 +20,13 @@ SQLite + FTS5 (~/.memex/data/memex.db)
    ↓
 MCP server (stdio JSON-RPC)
    ↓
-любой клиент → 5 tool'ов:
-   • memex_search             — full-text поиск
-   • memex_recent             — последние N сообщений
-   • memex_list_conversations — список чатов по recency
-   • memex_get_conversation   — полный транскрипт чата
-   • memex_list_sources       — что импортировано
+любой клиент → 6 tool'ов:
+   • memex_search                — full-text поиск (с дедупом по чатам)
+   • memex_recent                — последние N сообщений
+   • memex_list_conversations    — список чатов по recency
+   • memex_get_conversation      — полный транскрипт чата
+   • memex_archive_conversation  — скрыть чат из выдачи (но не из поиска)
+   • memex_list_sources          — что импортировано
 ```
 
 Спроси своему агенту «помнишь как мы решили проблему с миграцией Postgres?» — он **сам** вызовет `memex_search`, найдёт релевантное и ответит с реальным контекстом.
@@ -139,22 +140,32 @@ Sources:
 
 ## MCP tools
 
-### `memex_search(query, limit?, source?, group_by_conversation?)`
+> **Все tool'ы поддерживают параметр `format: "markdown" | "json"`** (дефолт `"markdown"`).
+> Markdown — для глаз, JSON — для агентов: меньше токенов, можно парсить поля напрямую.
+
+### `memex_search(query, limit?, source?, group_by_conversation?, include_archived?, format?)`
 Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой. Опциональный фильтр по source.
 
 **По умолчанию `group_by_conversation: true`** — возвращает один лучший хит на каждый conversation_id плюс `match_count` (сколько всего совпадений в этом чате). Это убирает шум, когда один длинный диалог занимает всю выдачу одинаковыми кусками. Передай `false` чтобы получить классический список всех совпадений.
 
-### `memex_recent(limit?, source?)`
+Архивные чаты по умолчанию исключены из выдачи; передай `include_archived: true` чтобы искать везде.
+
+### `memex_recent(limit?, source?, include_archived?, format?)`
 Последние N сообщений по timestamp.
 
-### `memex_list_conversations(limit?, source?, since_ts?)`
+### `memex_list_conversations(limit?, source?, since_ts?, include_archived?, format?)`
 Список чатов отсортированных по последней активности (most recent first). Каждая запись — `conversation_id`, источник, заголовок, диапазон дат и кол-во сообщений. Удобно, когда хочется быстро увидеть какие у тебя вообще разговоры с конкретным ботом или внутри одного источника, прежде чем вытаскивать полный транскрипт.
 
-### `memex_get_conversation(conversation_id, limit?)`
+Архивные чаты скрыты по дефолту, помечены 🗄️ если включены через `include_archived: true`.
+
+### `memex_get_conversation(conversation_id, limit?, format?)`
 Полный transcript одного чата.
 
-### `memex_list_sources()`
-Метаданные: счётчики по источникам, последние импорты, путь к БД.
+### `memex_archive_conversation(conversation_id, archive?)`
+Заархивировать (или восстановить) чат. Архивный чат остаётся в индексе и доступен для поиска через `include_archived: true`, но не засоряет дефолтную выдачу `memex_list_conversations` / `memex_search`. Передай `archive: false` чтобы расколоть.
+
+### `memex_list_sources(format?)`
+Метаданные: счётчики по источникам, последние импорты, путь к БД, число архивных чатов.
 
 ---
 

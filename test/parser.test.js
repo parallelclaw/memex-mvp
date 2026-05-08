@@ -1,51 +1,9 @@
 // Standalone smoke test for extractMessageFromRecord.
 // Run: node test/parser.test.js
 //
-// Doesn't import server.js (which has side effects — opens SQLite,
-// starts MCP server). Inlines the function under test for isolation.
+// Imports lib/parse.js which has no side effects (no SQLite, no MCP boot).
 
-const CLAUDE_CODE_SKIP_TYPES = new Set(['queue-operation', 'ai-title', 'summary']);
-
-function extractMessageFromRecord(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  if (CLAUDE_CODE_SKIP_TYPES.has(obj.type)) return null;
-  if (obj.attachment && !obj.message) return null;
-
-  const nested = obj.message;
-  const fromNested = nested && typeof nested === 'object';
-  const role = fromNested ? nested.role : obj.role;
-  if (!role || typeof role !== 'string') return null;
-
-  let rawContent;
-  if (fromNested) {
-    rawContent = nested.content;
-  } else if (obj.content !== undefined) {
-    rawContent = obj.content;
-  } else {
-    rawContent = obj.text;
-  }
-
-  let text = '';
-  if (typeof rawContent === 'string') {
-    text = rawContent;
-  } else if (Array.isArray(rawContent)) {
-    const parts = [];
-    for (const block of rawContent) {
-      if (typeof block === 'string') { parts.push(block); continue; }
-      if (!block || typeof block !== 'object') continue;
-      if (block.type === 'text' && typeof block.text === 'string') {
-        parts.push(block.text);
-      }
-    }
-    text = parts.join('\n');
-  }
-
-  if (!text || !text.trim()) return null;
-
-  const id = (fromNested && nested.id) || obj.id || null;
-  const timestamp = obj.timestamp || (fromNested && nested.timestamp) || null;
-  return { role, text, id, timestamp };
-}
+import { extractMessageFromRecord } from '../lib/parse.js';
 
 // -----------------------------------------------------------------------------
 

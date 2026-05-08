@@ -96,6 +96,55 @@ claude-backup feed-memex
 # → готово
 ```
 
+### Auto-ingest daemon (live tail)
+
+Если хочешь **автоматический live-ingest** новых Claude Code/Cowork сессий — есть встроенный daemon:
+
+```bash
+npm run ingest
+# или: node ingest.js
+```
+
+Что он делает:
+- Watch'ит `~/.claude/projects/` (Code) и `~/Library/Application Support/Claude/local-agent-mode-sessions/` (Cowork) через FSEvents
+- На каждое изменение JSONL — атомарно эмитит dialogue-only snapshot в `~/.memex/inbox/`
+- Per-file state в `~/.memex/data/ingest-state.json` (sha1 first 256B + size + mtime) — повторный запуск ничего не пересоздаёт
+- Safety rescan каждые 30 минут — ловит пропущенные FSEvents после sleep/lid-close
+- Idempotent: новые сообщения идут через UNIQUE(msg_id), дубли отсекаются на уровне БД
+
+Daemon работает рядом с MCP-сервером, не вместо него. MCP-сервер по-прежнему отвечает на запросы агентов, daemon — отдельный процесс который кормит inbox.
+
+#### Запуск как LaunchAgent (macOS, опционально)
+
+Для постоянной работы в фоне (не зависимо от того, открыт ли Claude Code) — оформи как LaunchAgent. Минимальный plist:
+
+```xml
+<!-- ~/Library/LaunchAgents/com.parallelclaw.memex.ingest.plist -->
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.parallelclaw.memex.ingest</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/абсолютный/путь/до/memex-mvp/ingest.js</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/memex-ingest.err.log</string>
+  <key>StandardOutPath</key><string>/tmp/memex-ingest.out.log</string>
+</dict>
+</plist>
+```
+
+Загрузить:
+```bash
+launchctl load ~/Library/LaunchAgents/com.parallelclaw.memex.ingest.plist
+launchctl list | grep memex
+```
+
 Это самый ленивый workflow. Один раз — и забыл.
 
 ---
@@ -179,7 +228,9 @@ Full-text поиск через FTS5. Возвращает ranked сниппет
 
 ```
 memex-mvp/
-├── server.js            ← MCP-server + parsers + chokidar watcher (~600 строк)
+├── server.js            ← MCP-server + parsers + chokidar inbox watcher
+├── ingest.js            ← optional daemon: live-tail Code/Cowork → inbox
+├── lib/parse.js         ← shared dialogue parser (used by both)
 ├── package.json         ← 3 dependencies (mcp-sdk, better-sqlite3, chokidar)
 ├── install.sh           ← создаёт ~/.memex/, npm install, печатает config
 └── test/parser.test.js  ← unit-тесты парсера (13 кейсов)

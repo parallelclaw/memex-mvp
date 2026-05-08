@@ -5,11 +5,13 @@
   "type": "module",
   "main": "server.js",
   "bin": {
-    "memex-mvp": "./server.js"
+    "memex-mvp": "./server.js",
+    "memex-ingest": "./ingest.js"
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/smoke.js"
+    "ingest": "node ingest.js",
+    "test": "node test/parser.test.js"
   },
   "engines": {
     "node": ">=18.0.0"

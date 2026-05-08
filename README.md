@@ -2,7 +2,7 @@
 
 > **Claude забывает каждую сессию. Memex помнит навсегда.**
 
-Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 6 простых tool'ов.
+Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 7 простых tool'ов.
 
 Никакого облака. Никакого аккаунта. Только твой ноут.
 
@@ -20,7 +20,8 @@ SQLite + FTS5 (~/.memex/data/memex.db)
    ↓
 MCP server (stdio JSON-RPC)
    ↓
-любой клиент → 6 tool'ов:
+любой клиент → 7 tool'ов:
+   • memex_overview              — снэпшот корпуса (для ориентации в начале сессии)
    • memex_search                — full-text поиск (с дедупом по чатам)
    • memex_recent                — последние N сообщений
    • memex_list_conversations    — список чатов по recency
@@ -144,6 +145,9 @@ Sources:
 > Markdown — для глаз, JSON — для агентов: меньше токенов, можно парсить поля напрямую.
 
 > **Server-side instructions для агентов.** В MCP `initialize`-ответе сервер отдаёт ~3 КБ системного контекста: что хранится, какой tool когда выбирать, FTS5-синтаксис, известные ограничения. Любой подключающийся агент (Claude Code, Cursor, Cline, Continue) получает это автоматически — отдельную инструкцию писать не нужно. Текст в `SERVER_INSTRUCTIONS` в [server.js](server.js).
+
+### `memex_overview(recent_limit?, format?)`
+Снэпшот корпуса одним вызовом — для ориентации в начале сессии. Возвращает: общее число сообщений, breakdown по источникам (telegram / claude-code / claude-cowork), date range, и последние N разговоров с заголовками. Этот call даёт агенту mental map за ~500 токенов и резко повышает качество последующих `memex_search` запросов (т.к. агент уже знает что у пользователя в памяти есть, а чего нет). Server-side instructions явно рекомендуют вызывать его первым шагом в новой сессии.
 
 ### `memex_search(query, limit?, source?, group_by_conversation?, include_archived?, format?)`
 Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой. Опциональный фильтр по source.

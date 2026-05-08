@@ -491,7 +491,21 @@ context — search memex first. Multiple searches per turn are normal and
 expected. The cost of an unused query is tiny; the cost of answering
 without context the user spent months building is much larger.
 
+══ FIRST CONTACT IN A SESSION ══
+
+ON YOUR FIRST MEMEX CALL IN A NEW SESSION, START WITH memex_overview.
+It returns a single-page snapshot — sources breakdown, totals, date
+range, and the 10 most recent conversation titles. This gives you a
+mental map of what is and is not in memory, so subsequent searches
+are sharper than blind guessing. One overview call costs ~500 tokens
+and saves many wasted memex_search attempts. Skip it only if the user
+explicitly named a conversation_id you can fetch directly.
+
 ══ TOOL SELECTION ══
+
+memex_overview — corpus snapshot for orientation. Sources, totals, date
+  range, recent conversation titles. Call once at the start of a session
+  before reaching for memex_search.
 
 memex_search — primary entry point. Find past discussions by keyword.
   Default mode (group_by_conversation: true) returns one best hit per
@@ -523,12 +537,13 @@ memex_archive_conversation — hide a chat from default listing/search.
 
 ══ DEFAULT FLOW ══
 
-  1. Search aggressively. Multiple queries (synonyms, variants, broader
+  1. memex_overview on first contact in the session — get oriented.
+  2. Search aggressively. Multiple queries (synonyms, variants, broader
      and narrower) are encouraged — better than one and giving up.
-  2. Open the most relevant conversation_id when search snippets aren't
+  3. Open the most relevant conversation_id when search snippets aren't
      enough. Pulling several conversations is fine if they're all
      relevant.
-  3. Always cite conversation_id when referencing a specific past chat
+  4. Always cite conversation_id when referencing a specific past chat
      so the user can drill in.
 
 ══ FTS5 SEARCH SYNTAX ══
@@ -701,6 +716,33 @@ const TOOLS = [
           default: false,
           description:
             'If true, also include archived conversations in the listing. Default: false.',
+        },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown',
+        },
+      },
+    },
+  },
+  {
+    name: 'memex_overview',
+    description:
+      'One-shot snapshot of the entire memex corpus, designed for orienting at the start ' +
+      'of a session before any search. Returns total message count, breakdown by source ' +
+      '(telegram/claude-code/claude-cowork/...), date range, and the N most recent active ' +
+      'conversations with titles. Call this once on first memex use in a session — it gives ' +
+      'you a mental map of what is and is not in memory, so subsequent memex_search queries ' +
+      'are sharper than blind guessing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        recent_limit: {
+          type: 'integer',
+          default: 10,
+          minimum: 1,
+          maximum: 50,
+          description: 'How many most-recent conversations to include in the snapshot.',
         },
         format: {
           type: 'string',
@@ -1031,6 +1073,93 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           `- ${range} · **${r.source}**${archMark} · ${r.title || r.conversation_id} — ${r.message_count} msgs · \`${r.conversation_id}\``
         );
       }
+      return textResult(lines.join('\n'));
+    }
+
+    if (name === 'memex_overview') {
+      const recentLimit = Math.min(50, Math.max(1, args.recent_limit || 10));
+      const format = pickFormat(args);
+
+      const sources = db
+        .prepare(
+          `SELECT source, COUNT(*) AS msgs, COUNT(DISTINCT conversation_id) AS chats
+             FROM messages
+         GROUP BY source
+         ORDER BY msgs DESC`
+        )
+        .all();
+      const total = db.prepare(`SELECT COUNT(*) AS c FROM messages`).get().c;
+      const activeConv = db
+        .prepare(`SELECT COUNT(*) AS c FROM conversations WHERE archived_at IS NULL OR archived_at = 0`)
+        .get().c;
+      const archivedConv = db
+        .prepare(`SELECT COUNT(*) AS c FROM conversations WHERE archived_at IS NOT NULL AND archived_at != 0`)
+        .get().c;
+      const range = db
+        .prepare(`SELECT MIN(ts) AS first, MAX(ts) AS last FROM messages WHERE ts > 0`)
+        .get();
+      const recent = db
+        .prepare(
+          `SELECT conversation_id, source, title, last_ts, message_count
+             FROM conversations
+            WHERE archived_at IS NULL OR archived_at = 0
+         ORDER BY last_ts DESC
+            LIMIT ?`
+        )
+        .all(recentLimit);
+
+      if (format === 'json') {
+        return jsonResult({
+          total_messages: total,
+          active_conversations: activeConv,
+          archived_conversations: archivedConv,
+          date_range: {
+            first_ts: range.first || null,
+            last_ts: range.last || null,
+            first_date: fmtDate(range.first),
+            last_date: fmtDate(range.last),
+          },
+          sources: sources.map((s) => ({
+            source: s.source,
+            messages: s.msgs,
+            conversations: s.chats,
+          })),
+          recent_conversations: recent.map((r) => ({
+            conversation_id: r.conversation_id,
+            title: r.title || null,
+            source: r.source,
+            last_ts: r.last_ts || null,
+            last_date: fmtDate(r.last_ts),
+            message_count: r.message_count,
+          })),
+        });
+      }
+
+      const lines = [];
+      lines.push(`**Memex corpus snapshot**`, '');
+      lines.push(
+        `- **${total.toLocaleString()} messages** in **${activeConv} active conversations**` +
+          (archivedConv > 0 ? ` (${archivedConv} archived)` : '')
+      );
+      if (range.first) {
+        lines.push(`- Date range: ${fmtDate(range.first)} → ${fmtDate(range.last)}`);
+      }
+      lines.push('', '### Sources');
+      for (const s of sources) {
+        lines.push(
+          `- **${s.source}** — ${s.msgs.toLocaleString()} messages across ${s.chats} chat(s)`
+        );
+      }
+      lines.push('', `### ${recent.length} most recent conversations`);
+      for (const r of recent) {
+        const date = fmtDate(r.last_ts) || '?';
+        const t = r.title || r.conversation_id;
+        lines.push(`- ${date} · **${r.source}** · ${t} (${r.message_count} msgs)`);
+      }
+      lines.push(
+        '',
+        '_Use memex_search next to query specific topics, or memex_get_conversation with one of the conversation_ids above._'
+      );
       return textResult(lines.join('\n'));
     }
 

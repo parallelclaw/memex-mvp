@@ -302,6 +302,11 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
   let imported = 0;
   let first_ts = Infinity;
   let last_ts = 0;
+  // Anthropic writes a human-readable title into the JSONL as an ai-title
+  // record. We pick the latest one as the conversation title. If absent, we
+  // fall back to the first user message (truncated), then to the file stem.
+  let aiTitle = null;
+  let firstUserText = null;
 
   const tx = db.transaction((rows) => {
     for (const line of rows) {
@@ -309,6 +314,11 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
       try {
         obj = JSON.parse(line);
       } catch (_) {
+        continue;
+      }
+
+      if (obj && obj.type === 'ai-title' && typeof obj.aiTitle === 'string' && obj.aiTitle.trim()) {
+        aiTitle = obj.aiTitle.trim();
         continue;
       }
 
@@ -324,6 +334,9 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
       if (ts) {
         first_ts = Math.min(first_ts, ts);
         last_ts = Math.max(last_ts, ts);
+      }
+      if (msg.role === 'user' && !firstUserText) {
+        firstUserText = msg.text.trim().replace(/\s+/g, ' ').slice(0, 80);
       }
       insertMessage.run(
         source,
@@ -342,10 +355,13 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
   tx(lines);
 
   if (imported > 0) {
+    const title =
+      aiTitle ||
+      (firstUserText ? `${sourceLabel} · ${firstUserText}` : `${sourceLabel} · ${fileName}`);
     upsertConversation.run(
       conversationId,
       source,
-      `${sourceLabel} · ${fileName}`,
+      title,
       isFinite(first_ts) ? first_ts : null,
       last_ts || null,
       imported

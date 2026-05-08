@@ -117,6 +117,10 @@ const insertMessage = db.prepare(`
   INSERT OR IGNORE INTO messages (source, conversation_id, msg_id, role, sender, text, ts, metadata)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
+// On re-imports the additive counter would drift (it doubles every time the
+// same file gets reprocessed, because messages dedupe via UNIQUE(msg_id) but
+// the counter would still add). Recompute message_count from the source of
+// truth (the messages table) every time.
 const upsertConversation = db.prepare(`
   INSERT INTO conversations (conversation_id, source, title, first_ts, last_ts, message_count)
   VALUES (?, ?, ?, ?, ?, ?)
@@ -124,7 +128,10 @@ const upsertConversation = db.prepare(`
     title = excluded.title,
     first_ts = MIN(first_ts, excluded.first_ts),
     last_ts = MAX(last_ts, excluded.last_ts),
-    message_count = message_count + excluded.message_count
+    message_count = (
+      SELECT COUNT(*) FROM messages
+       WHERE messages.conversation_id = conversations.conversation_id
+    )
 `);
 const insertImport = db.prepare(`
   INSERT INTO imports (file_name, source, imported_at, message_count) VALUES (?, ?, ?, ?)

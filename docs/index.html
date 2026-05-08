@@ -198,6 +198,42 @@
   }
   .tool-desc { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
 
+  /* Quickstart steps */
+  .step {
+    border-left: 3px solid var(--accent);
+    padding: 0 0 0 18px;
+    margin: 26px 0;
+  }
+  .step-where {
+    display: inline-block;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-bg);
+    padding: 3px 10px; border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .step h4 {
+    font-size: 16.5px; font-weight: 700;
+    color: var(--text);
+    margin-bottom: 10px; letter-spacing: -0.01em;
+  }
+  .step p {
+    color: var(--text-soft);
+    font-size: 14.5px; line-height: 1.55;
+    margin-bottom: 10px;
+  }
+  .step pre {
+    background: var(--bg-soft);
+    padding: 12px 16px; border-radius: 8px;
+    font-size: 13px; color: var(--text);
+    overflow-x: auto; margin: 8px 0;
+  }
+  .step code { font-size: 13px; }
+  .step .hint {
+    font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+
   /* Companion */
   .companion {
     padding: 72px 24px;
@@ -413,28 +449,98 @@ on every topic the user references — no prompting needed</div>
 </section>
 
 <section class="companion" id="quickstart">
-  <div class="companion-card" style="text-align: left;">
-    <h3 style="text-align: center;" data-en="Quickstart" data-ru="Быстрый старт">Quickstart</h3>
-    <p style="color: var(--text-soft); font-size: 15.5px; margin-bottom: 18px; text-align: center;"
-       data-en="From clone to a self-updating AI memory in under 5 minutes."
-       data-ru="От clone до самообновляющейся AI-памяти за 5 минут.">
-      From clone to a self-updating AI memory in under 5 minutes.
+  <div class="companion-card" style="text-align: left; max-width: 760px;">
+    <h3 style="text-align: center;" data-en="Quickstart — 4 steps, ~5 minutes" data-ru="Быстрый старт — 4 шага, ~5 минут">Quickstart — 4 steps, ~5 minutes</h3>
+    <p style="color: var(--text-soft); font-size: 15px; margin-bottom: 8px; text-align: center;"
+       data-en="Each step shows where it happens. Do them in order. You only do this once."
+       data-ru="Каждый шаг помечен где он делается. По порядку. Делается один раз.">
+      Each step shows where it happens. Do them in order. You only do this once.
     </p>
-    <pre style="background: var(--bg-soft); padding: 16px 20px; border-radius: 8px; font-size: 13.5px; color: var(--text); margin-bottom: 16px; overflow-x: auto;"><code><span style="color: var(--text-muted);"># 1. Install</span>
-git clone https://github.com/parallelclaw/memex-mvp
-cd memex-mvp && npm install
 
-<span style="color: var(--text-muted);"># 2. Wire to your agent (Claude Code shown — same shape for Cursor/Cline/Continue/Zed)</span>
-<span style="color: var(--text-muted);"># Add to ~/.claude/config.json:</span>
-{ "mcpServers": { "memex": { "command": "node", "args": ["<span style="color: var(--accent-light);">$(pwd)/server.js</span>"] } } }
+    <div class="step">
+      <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+      <h4 data-en="1. Install memex on your machine" data-ru="1. Установи memex на свой ноут">1. Install memex on your machine</h4>
+      <p data-en="Open the Terminal app (Spotlight → type &quot;Terminal&quot; → Enter). Paste these three lines, press Enter after each:"
+         data-ru="Открой приложение Terminal (Spotlight → набери &quot;Terminal&quot; → Enter). Вставь эти три строки, после каждой жми Enter:">
+        Open the Terminal app (Spotlight → type "Terminal" → Enter). Paste these three lines, press Enter after each:
+      </p>
+<pre><code>git clone https://github.com/parallelclaw/memex-mvp
+cd memex-mvp
+npm install</code></pre>
+      <p class="hint" data-en="The third command prints a lot of text — that's normal, wait until it finishes."
+                       data-ru="Третья команда печатает много текста — это нормально, дождись завершения.">
+        The third command prints a lot of text — that's normal, wait until it finishes.
+      </p>
+    </div>
 
-<span style="color: var(--text-muted);"># 3. Enable live auto-capture (optional but recommended)</span>
-npx memex-sync install     <span style="color: var(--text-muted);"># macOS LaunchAgent · runs in background forever</span>
-npx memex-sync status      <span style="color: var(--text-muted);"># installed / running / watching N sessions</span></code></pre>
-    <p style="color: var(--text-soft); font-size: 14px; text-align: center;"
-       data-en="That's it. Open Claude Code (or any other MCP client). Ask: <code>покажи через memex_overview что у меня в памяти</code>. Done."
-       data-ru="Всё. Открывай Claude Code (или любой другой MCP-клиент). Скажи: <code>покажи через memex_overview что у меня в памяти</code>. Готово.">
-      That's it. Open Claude Code (or any other MCP client). Ask: <code>покажи через memex_overview что у меня в памяти</code>. Done.
+    <div class="step">
+      <span class="step-where" data-en="📝 Text editor" data-ru="📝 Текстовый редактор">📝 Text editor</span>
+      <h4 data-en="2. Tell Claude Code where memex lives" data-ru="2. Скажи Claude Code где лежит memex">2. Tell Claude Code where memex lives</h4>
+      <p data-en="Still in Terminal, find the full path to your memex folder:"
+         data-ru="В Terminal'е узнай полный путь к папке memex:">
+        Still in Terminal, find the full path to your memex folder:
+      </p>
+<pre><code>pwd</code></pre>
+      <p data-en="Copy what it prints — that's <em>your-memex-path</em>. Now open <code>~/.claude/config.json</code> in any text editor (TextEdit, VS Code, Sublime, vim — anything). If the file doesn't exist, create it. Paste this and replace <em>your-memex-path</em> with what you copied:"
+         data-ru="Скопируй что напечатало — это <em>твой-путь</em>. Теперь открой файл <code>~/.claude/config.json</code> в любом текстовом редакторе (TextEdit, VS Code, Sublime, vim — любом). Если файла нет — создай. Вставь это и подставь <em>твой-путь</em>:">
+        Copy what it prints — that's <em>your-memex-path</em>. Now open <code>~/.claude/config.json</code> in any text editor (TextEdit, VS Code, Sublime, vim — anything). If the file doesn't exist, create it. Paste this and replace <em>your-memex-path</em> with what you copied:
+      </p>
+<pre><code>{
+  "mcpServers": {
+    "memex": {
+      "command": "node",
+      "args": ["<em style="color: var(--accent-light); font-style: normal;">your-memex-path</em>/server.js"]
+    }
+  }
+}</code></pre>
+      <p class="hint" data-en="Save the file. (Cursor, Cline, Continue, Zed have similar config files — same JSON shape.)"
+                       data-ru="Сохрани файл. (У Cursor, Cline, Continue, Zed такие же config-файлы — одна и та же JSON-структура.)">
+        Save the file. (Cursor, Cline, Continue, Zed have similar config files — same JSON shape.)
+      </p>
+    </div>
+
+    <div class="step">
+      <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+      <h4 data-en="3. Turn on auto-capture (recommended)" data-ru="3. Включи авто-захват (рекомендуется)">3. Turn on auto-capture (recommended)</h4>
+      <p data-en="Back in Terminal, run:"
+         data-ru="Обратно в Terminal, выполни:">
+        Back in Terminal, run:
+      </p>
+<pre><code>npx memex-sync install</code></pre>
+      <p data-en="This sets up a tiny background process that catches every new Claude Code and Cowork session within ~1.5 seconds. It survives reboots, crashes, and lid-closes — install once, forget it."
+         data-ru="Это запускает маленький фоновый процесс, который ловит каждую новую сессию Claude Code и Cowork за ~1.5 секунды. Переживает перезагрузку, крэши, закрытие крышки — поставил и забыл.">
+        This sets up a tiny background process that catches every new Claude Code and Cowork session within ~1.5 seconds. It survives reboots, crashes, and lid-closes — install once, forget it.
+      </p>
+      <p data-en="Verify it's working:"
+         data-ru="Проверь что работает:">
+        Verify it's working:
+      </p>
+<pre><code>npx memex-sync status</code></pre>
+      <p class="hint" data-en="Should print: daemon installed · running (PID …) · watching N sessions."
+                       data-ru="Должно напечатать: daemon installed · running (PID …) · watching N sessions.">
+        Should print: daemon installed · running (PID …) · watching N sessions.
+      </p>
+    </div>
+
+    <div class="step">
+      <span class="step-where" data-en="💬 Claude Code" data-ru="💬 Claude Code">💬 Claude Code</span>
+      <h4 data-en="4. Open Claude Code, talk to memex" data-ru="4. Открой Claude Code и поговори с memex">4. Open Claude Code, talk to memex</h4>
+      <p data-en="Open a new Claude Code session. In the chat, ask in plain language:"
+         data-ru="Открой новую сессию Claude Code. В чате спроси простым языком:">
+        Open a new Claude Code session. In the chat, ask in plain language:
+      </p>
+<pre><code data-en="show me what memex has in memory"
+         data-ru="покажи через memex_overview что у меня в памяти">show me what memex has in memory</code></pre>
+      <p data-en="The agent will call <code>memex_overview</code> automatically. From this moment on, every conversation in Claude Code or Cowork is captured into memex within seconds — and the next time you open a session, the agent already knows what you've been working on."
+         data-ru="Агент сам вызовет <code>memex_overview</code>. С этого момента каждый разговор в Claude Code или Cowork попадает в memex за секунды — и в следующей сессии агент уже будет знать над чем ты работал.">
+        The agent will call <code>memex_overview</code> automatically. From this moment on, every conversation in Claude Code or Cowork is captured into memex within seconds — and the next time you open a session, the agent already knows what you've been working on.
+      </p>
+    </div>
+
+    <p style="color: var(--text-muted); font-size: 13.5px; text-align: center; margin-top: 28px;"
+       data-en="Stuck on any step? <a href='https://github.com/parallelclaw/memex-mvp/issues'>Open an issue</a> — we'll help."
+       data-ru="Застрял на каком-то шаге? <a href='https://github.com/parallelclaw/memex-mvp/issues'>Открой issue</a> — поможем.">
+      Stuck on any step? <a href="https://github.com/parallelclaw/memex-mvp/issues">Open an issue</a> — we'll help.
     </p>
   </div>
 </section>

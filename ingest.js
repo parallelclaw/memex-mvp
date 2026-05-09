@@ -292,11 +292,14 @@ function cmdStatus() {
     } catch (_) {}
   }
   const watchedCount = Object.keys(state).length;
-  let codeCount = 0, coworkCount = 0, cursorCount = 0, obsidianCount = 0;
+  let codeCount = 0, coworkCount = 0, cursorCount = 0, obsidianCount = 0, subagentCount = 0;
   for (const [p, v] of Object.entries(state)) {
     if (p.startsWith('cursor::')) { cursorCount++; continue; }
     if (v && v.isObsidian) { obsidianCount++; continue; }
     if (p.endsWith('.md')) { obsidianCount++; continue; }
+    // Subagent transcripts under .../subagents/ are tool-spawned helpers,
+    // not standalone main sessions — count separately for honest reporting.
+    if (p.includes('/subagents/')) { subagentCount++; continue; }
     // Cowork paths embed `.claude/projects/` too (inside Application Support);
     // check the cowork-specific marker first.
     if (p.includes('local-agent-mode-sessions')) coworkCount++;
@@ -324,7 +327,10 @@ function cmdStatus() {
     if (coworkCount > 0) parts.push(`${coworkCount} Cowork`);
     if (cursorCount > 0) parts.push(`${cursorCount} Cursor`);
     if (obsidianCount > 0) parts.push(`${obsidianCount} Obsidian`);
-    console.log(`  watching:  ${parts.join(' · ')} session(s) (${watchedCount} entries total)`);
+    const subagentSuffix = subagentCount > 0
+      ? ` (+ ${subagentCount} subagent transcript${subagentCount === 1 ? '' : 's'})`
+      : '';
+    console.log(`  watching:  ${parts.join(' · ')} main session(s)${subagentSuffix} · ${watchedCount} entries total`);
   } else {
     console.log(`  watching:  no sessions seen yet`);
   }

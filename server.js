@@ -1480,7 +1480,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (sp.cowork > 0) parts.push(`${sp.cowork} Cowork`);
         if (sp.cursor > 0) parts.push(`${sp.cursor} Cursor`);
         if (sp.obsidian > 0) parts.push(`${sp.obsidian} Obsidian`);
-        lines.push(`- watching: ${parts.join(' · ')} session(s)`);
+        const subagentSuffix = sp.subagents > 0
+          ? ` (+ ${sp.subagents} subagent transcript${sp.subagents === 1 ? '' : 's'})`
+          : '';
+        lines.push(`- watching: ${parts.join(' · ')} session(s)${subagentSuffix}`);
         lines.push(`- last capture: ${formatFreshness(s.freshnessMs)}`);
       }
       if (s.advice) {
@@ -1838,6 +1841,7 @@ function getSyncStatus() {
   let coworkCount = 0;
   let cursorCount = 0;
   let obsidianCount = 0;
+  let subagentCount = 0;
   if (existsSync(stateFile)) {
     try {
       const stat = statSync(stateFile);
@@ -1849,6 +1853,11 @@ function getSyncStatus() {
         if (p.startsWith('cursor::')) { cursorCount++; continue; }
         if (v && v.isObsidian) { obsidianCount++; continue; }
         if (p.endsWith('.md')) { obsidianCount++; continue; }
+        // Subagent transcripts (Cowork or Code) live under /subagents/
+        // — count them separately so the user isn't misled into
+        // thinking they had 24 main sessions when most are tool spawns.
+        const isSubagent = p.includes('/subagents/');
+        if (isSubagent) { subagentCount++; continue; }
         // Cowork paths embed `.claude/projects/` too — check the
         // cowork-specific marker first.
         if (p.includes('local-agent-mode-sessions')) coworkCount++;
@@ -1890,6 +1899,7 @@ function getSyncStatus() {
       cowork: coworkCount,
       cursor: cursorCount,
       obsidian: obsidianCount,
+      subagents: subagentCount,
     },
     advice,
   };

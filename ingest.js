@@ -72,6 +72,7 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     status: cmdStatus,
     logs: cmdLogs,
     serve: cmdServe, // explicit foreground; same as no-arg
+    'scan-cursor': cmdServe, // handled at end of file, skip watcher init
   };
   const handler = handlers[subcommand];
   if (!handler) {
@@ -90,6 +91,7 @@ usage:
   memex-sync uninstall          unload and remove LaunchAgent (data preserved)
   memex-sync status             show daemon health, watched files, last activity
   memex-sync logs               tail the daemon log
+  memex-sync scan-cursor        one-shot Cursor history import (no daemon needed)
 
 paths:
   state:   ${STATE_PATH}
@@ -267,6 +269,7 @@ function cmdLogs() {
 function cmdServe() {
   // Fall through to the daemon body below
 }
+
 
 const RESCAN_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const DEBOUNCE_MS = 1500;
@@ -481,8 +484,12 @@ function schedule(srcPath, source) {
 }
 
 // -------------------- Watchers --------------------
+// In `scan-cursor` mode the watchers and timers are skipped; we run scanCursor
+// once at the end of the file and exit. See the conditional block at EOF.
+const SCAN_CURSOR_MODE = subcommand === 'scan-cursor';
+
 const watchers = [];
-for (const source of SOURCES) {
+if (!SCAN_CURSOR_MODE) for (const source of SOURCES) {
   if (!existsSync(source.dir)) {
     log(`- skipping ${source.name}: directory not found at ${source.dir}`);
     continue;
@@ -530,7 +537,7 @@ function safetyRescan() {
   }
   log(`safety rescan done · ${triggered} file(s) re-scheduled`);
 }
-setInterval(safetyRescan, RESCAN_INTERVAL_MS);
+if (!SCAN_CURSOR_MODE) setInterval(safetyRescan, RESCAN_INTERVAL_MS);
 
 // -------------------- Cursor scanner --------------------
 // Cursor stores history in SQLite (state.vscdb), not flat files. We can't
@@ -634,8 +641,33 @@ function scanCursor() {
 }
 
 // Initial scan ~2s after start, then poll every 5 minutes.
-setTimeout(scanCursor, 2000);
-setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
+if (!SCAN_CURSOR_MODE) {
+  setTimeout(scanCursor, 2000);
+  setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
+}
+
+// -------------------- One-shot scan-cursor mode --------------------
+if (SCAN_CURSOR_MODE) {
+  if (!CURSOR_DB_PATH) {
+    console.error('Cursor not supported on this platform.');
+    process.exit(2);
+  }
+  if (!existsSync(CURSOR_DB_PATH)) {
+    console.error(`Cursor not detected — no state.vscdb at:\n  ${CURSOR_DB_PATH}`);
+    console.error(`Install Cursor and use it at least once before running this.`);
+    process.exit(2);
+  }
+  console.log(`scanning Cursor at ${CURSOR_DB_PATH} ...`);
+  try {
+    scanCursor();
+  } catch (e) {
+    console.error('cursor scan failed:', e.message);
+    process.exit(1);
+  }
+  console.log(`done. New inbox files (if any) are in: ${INBOX}`);
+  console.log(`memex MCP server will pick them up next time it starts.`);
+  process.exit(0);
+}
 
 // -------------------- Lifecycle --------------------
 log(`memex-ingest started`);

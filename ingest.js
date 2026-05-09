@@ -72,7 +72,11 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     status: cmdStatus,
     logs: cmdLogs,
     serve: cmdServe, // explicit foreground; same as no-arg
-    'scan-cursor': cmdServe, // handled at end of file, skip watcher init
+    // All scan modes fall through to module-level scan logic at EOF.
+    // cmdServe is a no-op marker so the dispatch doesn't error.
+    scan: cmdServe,
+    'scan-claude': cmdServe,
+    'scan-cursor': cmdServe,
   };
   const handler = handlers[subcommand];
   if (!handler) {
@@ -85,13 +89,17 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
 } else if (subcommand === '--help' || subcommand === '-h') {
   console.log(`memex-sync — auto-capture daemon for memex memory
 
-usage:
+daemon mode:
   memex-sync                    run in foreground (default; same as 'serve')
   memex-sync install            register macOS LaunchAgent (autostart on login)
   memex-sync uninstall          unload and remove LaunchAgent (data preserved)
   memex-sync status             show daemon health, watched files, last activity
   memex-sync logs               tail the daemon log
-  memex-sync scan-cursor        one-shot Cursor history import (no daemon needed)
+
+one-shot scans (no daemon needed — handy for cron / manual import):
+  memex-sync scan               import everything once: Claude Code + Cowork + Cursor
+  memex-sync scan-claude        Claude Code + Cowork only (~/.claude/projects + Cowork sessions)
+  memex-sync scan-cursor        Cursor IDE history only (state.vscdb)
 
 paths:
   state:   ${STATE_PATH}
@@ -484,12 +492,15 @@ function schedule(srcPath, source) {
 }
 
 // -------------------- Watchers --------------------
-// In `scan-cursor` mode the watchers and timers are skipped; we run scanCursor
-// once at the end of the file and exit. See the conditional block at EOF.
+// In any one-shot scan mode the watchers and timers are skipped; the scan
+// runs at the end of the file and exits. See the conditional block at EOF.
 const SCAN_CURSOR_MODE = subcommand === 'scan-cursor';
+const SCAN_CLAUDE_MODE = subcommand === 'scan-claude';
+const SCAN_ALL_MODE    = subcommand === 'scan';
+const ANY_SCAN_MODE = SCAN_CURSOR_MODE || SCAN_CLAUDE_MODE || SCAN_ALL_MODE;
 
 const watchers = [];
-if (!SCAN_CURSOR_MODE) for (const source of SOURCES) {
+if (!ANY_SCAN_MODE) for (const source of SOURCES) {
   if (!existsSync(source.dir)) {
     log(`- skipping ${source.name}: directory not found at ${source.dir}`);
     continue;
@@ -537,7 +548,7 @@ function safetyRescan() {
   }
   log(`safety rescan done · ${triggered} file(s) re-scheduled`);
 }
-if (!SCAN_CURSOR_MODE) setInterval(safetyRescan, RESCAN_INTERVAL_MS);
+if (!ANY_SCAN_MODE) setInterval(safetyRescan, RESCAN_INTERVAL_MS);
 
 // -------------------- Cursor scanner --------------------
 // Cursor stores history in SQLite (state.vscdb), not flat files. We can't
@@ -641,31 +652,78 @@ function scanCursor() {
 }
 
 // Initial scan ~2s after start, then poll every 5 minutes.
-if (!SCAN_CURSOR_MODE) {
+if (!ANY_SCAN_MODE) {
   setTimeout(scanCursor, 2000);
   setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
 }
 
-// -------------------- One-shot scan-cursor mode --------------------
-if (SCAN_CURSOR_MODE) {
+// -------------------- One-shot scan modes --------------------
+// Synchronous walk-and-emit for Claude Code / Cowork directories. Bypasses
+// the debounce queue (we want eager processing in one-shot mode).
+function scanClaudeSync() {
+  let scanned = 0;
+  let emitted = 0;
+  for (const source of SOURCES) {
+    if (!existsSync(source.dir)) {
+      console.log(`- skipping ${source.name}: directory not found at ${source.dir}`);
+      continue;
+    }
+    console.log(`scanning ${source.name}: ${source.dir}`);
+    walkDir(source.dir, (p) => {
+      if (!shouldIngest(p)) return;
+      scanned++;
+      const r = emitToInbox(p, source);
+      if (r.error) {
+        console.error(`! ${basename(p)} (${source.name}): ${r.error}`);
+      } else if (r.changed) {
+        emitted++;
+        const inboxName = inboxNameFor(p, source) || basename(p);
+        const isSubagent = inboxName.includes('-sub-');
+        console.log(`+ ${inboxName} ← ${r.msgCount} msgs from ${source.name}` +
+                    (isSubagent ? ' [subagent]' : '') +
+                    (r.hadTitle ? ' (with ai-title)' : ''));
+      }
+    });
+  }
+  console.log(`scanned ${scanned} files · ${emitted} updated`);
+}
+
+if (SCAN_CLAUDE_MODE || SCAN_ALL_MODE) {
+  console.log(`=== Claude Code + Cowork ===`);
+  scanClaudeSync();
+}
+
+if (SCAN_CURSOR_MODE || SCAN_ALL_MODE) {
+  if (SCAN_ALL_MODE || SCAN_CURSOR_MODE) console.log(`=== Cursor ===`);
   if (!CURSOR_DB_PATH) {
-    console.error('Cursor not supported on this platform.');
-    process.exit(2);
+    if (SCAN_CURSOR_MODE) {
+      console.error('Cursor not supported on this platform.');
+      process.exit(2);
+    } else {
+      console.log('Cursor not supported on this platform — skipping.');
+    }
+  } else if (!existsSync(CURSOR_DB_PATH)) {
+    if (SCAN_CURSOR_MODE) {
+      console.error(`Cursor not detected — no state.vscdb at:\n  ${CURSOR_DB_PATH}`);
+      console.error(`Install Cursor and use it at least once before running this.`);
+      process.exit(2);
+    } else {
+      console.log('Cursor not detected — skipping.');
+    }
+  } else {
+    console.log(`scanning Cursor at ${CURSOR_DB_PATH} ...`);
+    try {
+      scanCursor();
+    } catch (e) {
+      console.error('cursor scan failed:', e.message);
+      if (SCAN_CURSOR_MODE) process.exit(1);
+    }
   }
-  if (!existsSync(CURSOR_DB_PATH)) {
-    console.error(`Cursor not detected — no state.vscdb at:\n  ${CURSOR_DB_PATH}`);
-    console.error(`Install Cursor and use it at least once before running this.`);
-    process.exit(2);
-  }
-  console.log(`scanning Cursor at ${CURSOR_DB_PATH} ...`);
-  try {
-    scanCursor();
-  } catch (e) {
-    console.error('cursor scan failed:', e.message);
-    process.exit(1);
-  }
+}
+
+if (ANY_SCAN_MODE) {
   console.log(`done. New inbox files (if any) are in: ${INBOX}`);
-  console.log(`memex MCP server will pick them up next time it starts.`);
+  console.log(`memex MCP server will pick them up next time it starts (or now, if running).`);
   process.exit(0);
 }
 

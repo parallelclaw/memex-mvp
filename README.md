@@ -95,16 +95,17 @@ Cursor хранит историю в SQLite (`state.vscdb`), не в JSONL-фа
 
 Поддерживаемые ОС для Cursor: macOS, Linux, Windows (пути в `lib/parse-cursor.js`).
 
-### Совместимый feeder
+### Bulk import за одну команду
 
-[claude-backup](https://github.com/parallelclaw/claude-backup) — Python-CLI который автоматически находит ВСЕ твои Code+Cowork сессии и кидает чистые dialogue-only JSONL'ы прямо в memex inbox:
+memex полностью самодостаточен — не нужен Python, не нужны внешние CLI:
 
 ```bash
-claude-backup feed-memex
-# → симлинки/файлы появляются в ~/.memex/inbox/
-# → memex chokidar подхватывает за ~1 секунду
-# → готово
+npx memex-sync scan          # Claude Code + Cowork + Cursor сразу
+npx memex-sync scan-claude   # только Claude Code + Cowork
+npx memex-sync scan-cursor   # только Cursor
 ```
+
+Сканирует все источники один раз, эмитит JSONL в inbox, выходит. Идемпотентен — повторный запуск пропускает неизменённые файлы через state-cache. Удобно для cron, manual-первого-импорта, или дебага без daemon'а.
 
 ### Two pieces
 
@@ -266,7 +267,7 @@ memex-mvp/
 - 🟡 Manual import (кладёшь файл в inbox) — нет автоматического pull
 - 🟡 Single-device — нет cross-machine sync
 - 🟡 Plaintext SQLite — нет encryption-at-rest
-- 🟡 ID-based dedupe только если у сообщений есть стабильный `id` (наш [claude-backup feed-memex](https://github.com/parallelclaw/claude-backup) генерирует sha1 hash)
+- 🟡 ID-based dedupe требует стабильного `id` у сообщений; memex-sync (и claude-backup feed-memex для совместимости) генерируют sha1-hash из `role|timestamp|text[:200]` для гарантии
 
 Всё лечится в следующих версиях.
 
@@ -284,7 +285,7 @@ memex-mvp/
 
 ## Companion projects
 
-- **[claude-backup](https://github.com/parallelclaw/claude-backup)** — Python-CLI для экспорта Claude Code/Cowork сессий в Markdown, с командой `feed-memex` для интеграции
+- **[claude-backup](https://github.com/parallelclaw/claude-backup)** — отдельный Python-CLI для экспорта Claude Code/Cowork сессий **в Markdown** (для backup'а, чтения вне memex, sharing). **Не нужен для memex** — `npx memex-sync scan-claude` импортирует ту же историю напрямую без Python. Используй claude-backup если хочется именно Markdown-файлы как side-effect.
 
 ---
 

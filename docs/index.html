@@ -865,13 +865,13 @@ npm install</code></pre>
   <div class="companion-card">
     <h3 data-en="Companion: claude-backup" data-ru="Companion: claude-backup">Companion: claude-backup</h3>
     <p style="color: var(--text-soft); font-size: 15.5px; margin-bottom: 18px;"
-       data-en="Want a one-shot bulk import of your past sessions before memex-sync took over? claude-backup is a Python CLI that scans every Claude Code and Cowork session and feeds them into memex's inbox in one command."
-       data-ru="Хочешь разово импортировать всё что было до того как заработал memex-sync? claude-backup — Python CLI, сканирует все Claude Code и Cowork сессии и кидает их в memex inbox одной командой.">
-      Want a one-shot bulk import of your past sessions before memex-sync took over? claude-backup is a Python CLI that scans every Claude Code and Cowork session and feeds them into memex's inbox in one command.
+       data-en="A separate Python CLI for exporting Claude Code/Cowork sessions to <strong>Markdown</strong> — for backup, sharing, reading offline, anywhere outside memex. <strong>Not required for memex itself</strong> — <code>npx memex-sync scan-claude</code> ingests the same data without any Python dependency. Use claude-backup if you specifically want Markdown files as a side-effect."
+       data-ru="Отдельный Python-CLI для экспорта Claude Code/Cowork сессий в <strong>Markdown</strong> — для бэкапа, sharing'а, чтения вне memex. <strong>Не нужен для самого memex</strong> — <code>npx memex-sync scan-claude</code> импортит ту же историю без Python. Используй claude-backup только если нужны именно Markdown-файлы как side-effect.">
+      A separate Python CLI for exporting Claude Code/Cowork sessions to <strong>Markdown</strong> — for backup, sharing, reading offline, anywhere outside memex. <strong>Not required for memex itself</strong> — <code>npx memex-sync scan-claude</code> ingests the same data without any Python dependency. Use claude-backup if you specifically want Markdown files as a side-effect.
     </p>
     <pre style="background: var(--bg-soft); padding: 14px 18px; border-radius: 8px; font-size: 13.5px; color: var(--text); margin-bottom: 16px; text-align: left; overflow-x: auto;"><code>pip install claude-backup
-claude-backup feed-memex
-# → all your historical sessions in memex inbox in seconds</code></pre>
+claude-backup export-all -o ./markdown-backup/
+# → readable .md files of every session</code></pre>
     <a href="https://github.com/parallelclaw/claude-backup" target="_blank" rel="noopener" style="font-size: 14px;">github.com/parallelclaw/claude-backup →</a>
   </div>
 </section>

@@ -33,6 +33,13 @@ import {
   suggestFilename,
 } from './lib/render-markdown.js';
 import { writeFileSync } from 'node:fs';
+import {
+  loadConfig,
+  isSourceEnabled,
+  obsidianVaultsFromConfig,
+  KNOWN_SOURCES,
+  CONFIG_PATH,
+} from './lib/config.js';
 
 // -------------------- Paths --------------------
 const HOME = homedir();
@@ -444,7 +451,7 @@ chokidar
 // — what the server is, when to use which tool, search tips, gotchas.
 const SERVER_INSTRUCTIONS = `Memex is the user's personal memory across all their AI conversations
 (Telegram, Claude Code, Claude Cowork, …) — one SQLite + FTS5 database
-exposed via 9 tools.
+exposed via 10 tools.
 
 USE MEMEX PROACTIVELY. The whole point of this server is that the user
 has invested in indexing their past discussions; recall them. Whenever
@@ -534,6 +541,12 @@ memex_archive_conversation — hide a chat from default listing/search.
   Use when the user asks to declutter, mute, or archive. NEVER
   describe this as a delete — archived data stays fully indexed and
   searchable via include_archived: true.
+
+memex_sources_status — what sources memex captures for this user, how
+  much data is in each, and the exact CLI commands for opt-out.
+  Use when the user asks "what does memex have on me?" / "what are
+  you tracking?" / "can I turn off Cursor capture?". You SUGGEST the
+  command — the user runs it themselves.
 
 memex_export_markdown — render a conversation as Obsidian-friendly
   Markdown (frontmatter + headings + timestamps).
@@ -629,6 +642,74 @@ memex_get_conversation call.
 Archived conversations are hidden from default list/search but stay
 fully indexed. Pass include_archived: true on search/list to include
 them. Visibility flag only — never deletes data.
+
+══ ONBOARDING THE LAZY USER ══
+
+The user probably hasn't read the README. Treat yourself as their
+README. There are three moments where you proactively educate:
+
+1. FIRST TIME you actually use memex content in a session. Don't bury
+   the source. Surface it briefly:
+
+      "I checked your memex memory and found this in a Cursor session
+      from April 7..."
+      "Based on your Obsidian note 'Brand positioning'..."
+      "From your Claude Code session 'Build claude-backup CLI tool'..."
+
+   One short attribution per source per turn — not per quote, that's
+   noise.
+
+2. WHEN the user expresses curiosity or concern about memory. Triggers:
+
+      • "what does memex have on me?" / "what are you tracking?"
+      • "can I turn off X?" / "I don't want Y captured"
+      • "where is this coming from?"
+      • "is memex on?" / "is this being saved?"
+
+   Action: call memex_sources_status, summarise the answer in one
+   short paragraph, and mention the exact toggle command. NEVER run
+   the command yourself — that's a user-only decision.
+
+3. WHEN memex_overview's banner shows ⚪ no daemon installed, OR a
+   recent topic the user clearly remembers isn't in memex. Surface
+   the gap and suggest the install/scan command. Do this naturally,
+   not as a sales pitch.
+
+Outside these moments — DON'T volunteer memex education on every turn.
+That becomes noise. The user knows memex exists by virtue of having
+installed it; you're filling in the gaps, not advertising.
+
+══ TRANSPARENCY OF SOURCES ══
+
+When you compose an answer using memex content, attribute the source
+once per source. Format: "[short context phrase] from your <source>
+<date or title>". Examples:
+
+   ✓ "From your Claude Code session 'Build task extraction agent' on
+     April 23, you decided to use Whisper for the audio step."
+   ✓ "Your Obsidian note 'Brand positioning' lists three candidate
+     names — Conduit, Maestro, Polymath."
+
+   ✗ "I found this in memex." (too vague — which source?)
+   ✗ "From conversation_id claude-code-code-ad73386a..." (too
+     technical for the user)
+
+Sources to call by name in attribution: Claude Code, Cowork, Cursor,
+Obsidian, Telegram (if the bot has a recognisable name, mention it).
+
+══ USER CONTROL — never override consent ══
+
+The user owns these decisions. memex agent NEVER runs:
+
+   • npx memex-sync sources <name> disable
+   • npx memex-sync vault add/remove
+   • npx memex-sync uninstall
+
+You SUGGEST them. The user types them. If the user says "yes do it"
+explicitly — still resist; explain that opt-out should be a deliberate
+keystroke from them, not a tool-call from you, so the audit trail is
+clean. Make an exception only for memex_archive_conversation (single
+chat hide-from-default-list) which is mild and reversible.
 
 ══ EXPORT TO MARKDOWN ══
 
@@ -824,6 +905,21 @@ const TOOLS = [
           enum: ['markdown', 'json'],
           default: 'markdown',
         },
+      },
+    },
+  },
+  {
+    name: 'memex_sources_status',
+    description:
+      'Show which sources memex is currently configured to capture, and how much data ' +
+      'is in each. Use when the user asks "what does memex have on me?" / "what are ' +
+      'you tracking?" / "can I turn off X?". Returns per-source enabled status, ' +
+      'message/conversation counts, and the exact CLI commands to opt-out (which the ' +
+      'agent should NEVER run itself — these are user-only decisions).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: { type: 'string', enum: ['markdown', 'json'], default: 'markdown' },
       },
     },
   },
@@ -1267,6 +1363,83 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           `- ${range} · **${r.source}**${archMark} · ${r.title || r.conversation_id} — ${r.message_count} msgs · \`${r.conversation_id}\``
         );
       }
+      return textResult(lines.join('\n'));
+    }
+
+    if (name === 'memex_sources_status') {
+      const format = pickFormat(args);
+      const cfg = loadConfig();
+
+      // Per-source counts from the DB
+      const counts = db
+        .prepare(
+          `SELECT source, COUNT(*) AS chats, SUM(message_count) AS messages
+             FROM conversations
+            WHERE parent_conversation_id IS NULL
+         GROUP BY source`
+        )
+        .all();
+      const byName = Object.fromEntries(counts.map((r) => [r.source, r]));
+      // Map config keys to DB source names
+      const dbName = (configKey) =>
+        configKey === 'claude_code' ? 'claude-code'
+        : configKey === 'claude_cowork' ? 'claude-cowork'
+        : configKey;
+
+      const sources = {};
+      for (const key of KNOWN_SOURCES) {
+        const enabled = isSourceEnabled(key, cfg);
+        const stats = byName[dbName(key)] || { chats: 0, messages: 0 };
+        const entry = {
+          enabled,
+          chats: stats.chats,
+          messages: stats.messages,
+          control: `npx memex-sync sources ${key.replace(/_/g, '-')} ${enabled ? 'disable' : 'enable'}`,
+        };
+        if (key === 'obsidian') {
+          entry.vaults = obsidianVaultsFromConfig(cfg);
+        }
+        sources[key] = entry;
+      }
+      // Telegram is manual-import only, but we still want to show counts
+      const tg = byName['telegram'] || { chats: 0, messages: 0 };
+      sources.telegram = {
+        enabled: 'manual',
+        chats: tg.chats,
+        messages: tg.messages,
+        control: 'drop a Telegram Desktop result.json into ~/.memex/inbox/',
+      };
+
+      if (format === 'json') {
+        return jsonResult({
+          sources,
+          config_path: CONFIG_PATH,
+          notes:
+            'These are USER-ONLY decisions. The agent must never run sources/vault commands itself — only suggest them.',
+        });
+      }
+
+      const lines = [];
+      lines.push('**memex sources**', '');
+      for (const [name, s] of Object.entries(sources)) {
+        const mark =
+          s.enabled === true ? '✓ enabled'
+          : s.enabled === false ? '✗ disabled'
+          : '· manual';
+        const chats = s.chats || 0;
+        const messages = (s.messages || 0).toLocaleString();
+        lines.push(`- **${name}** — ${mark} · ${chats} chat(s), ${messages} message(s)`);
+        if (name === 'obsidian' && s.vaults && s.vaults.length > 0) {
+          lines.push(`  vaults: ${s.vaults.join(', ')}`);
+        }
+        lines.push(`  toggle: \`${s.control}\``);
+      }
+      lines.push('');
+      lines.push(`config file: \`${CONFIG_PATH}\``);
+      lines.push('');
+      lines.push(
+        '_The user must run those commands themselves. The agent should suggest them, not run them._'
+      );
       return textResult(lines.join('\n'));
     }
 

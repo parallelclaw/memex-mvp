@@ -56,6 +56,18 @@ import {
   vaultSlug,
   shouldSkipPath,
 } from './lib/parse-obsidian.js';
+import {
+  CONFIG_PATH,
+  KNOWN_SOURCES,
+  loadConfig,
+  saveConfig,
+  isSourceEnabled,
+  setSourceEnabled,
+  obsidianVaultsFromConfig,
+  addObsidianVault,
+  removeObsidianVault,
+  normalizeSourceName,
+} from './lib/config.js';
 
 // -------------------- Paths & config --------------------
 const HOME = homedir();
@@ -80,6 +92,9 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     uninstall: cmdUninstall,
     status: cmdStatus,
     logs: cmdLogs,
+    restart: cmdRestart,
+    sources: cmdSources,
+    vault: cmdVault,
     serve: cmdServe, // explicit foreground; same as no-arg
     // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.
@@ -104,14 +119,25 @@ daemon mode:
   memex-sync                    run in foreground (default; same as 'serve')
   memex-sync install            register macOS LaunchAgent (autostart on login)
   memex-sync uninstall          unload and remove LaunchAgent (data preserved)
+  memex-sync restart            restart the LaunchAgent (after config changes)
   memex-sync status             show daemon health, watched files, last activity
   memex-sync logs               tail the daemon log
 
+source control:
+  memex-sync sources            list which sources are enabled / disabled
+  memex-sync sources <name> enable
+  memex-sync sources <name> disable
+                                turn on/off a source (claude_code, claude_cowork,
+                                cursor, obsidian). 'code' / 'cowork' aliases work.
+  memex-sync vault              list configured Obsidian vaults
+  memex-sync vault add <path>   add an Obsidian vault to the watched list
+  memex-sync vault remove <p>   remove a vault
+
 one-shot scans (no daemon needed — handy for cron / manual import):
-  memex-sync scan               import everything once: Claude Code + Cowork + Cursor + Obsidian
-  memex-sync scan-claude        Claude Code + Cowork only (~/.claude/projects + Cowork sessions)
-  memex-sync scan-cursor        Cursor IDE history only (state.vscdb)
-  memex-sync scan-obsidian      Obsidian vaults only (.md files, frontmatter parsed)
+  memex-sync scan               import everything once
+  memex-sync scan-claude        Claude Code + Cowork only
+  memex-sync scan-cursor        Cursor IDE history only
+  memex-sync scan-obsidian      Obsidian vaults only
 
 export to Obsidian / file system:
   memex-sync export-markdown --output <dir> [--source <s>] [--since <date>]
@@ -120,6 +146,7 @@ export to Obsidian / file system:
 paths:
   state:   ${STATE_PATH}
   log:     ${LOG_PATH}
+  config:  ${CONFIG_PATH}
   plist:   ${PLIST_PATH}`);
   process.exit(0);
 }
@@ -182,8 +209,39 @@ function cmdInstall() {
   console.log(`✓ memex-sync installed and running`);
   console.log(`  plist: ${PLIST_PATH}`);
   console.log(`  log:   ${LOG_PATH}`);
-  console.log(`\nIt will autostart on login. To check status: memex-sync status`);
-  console.log(`To stop and remove: memex-sync uninstall`);
+  console.log('');
+
+  // Show what daemon will actually capture, based on current config.
+  const cfg = loadConfig();
+  console.log('memex-sync will capture from these sources:');
+  for (const name of KNOWN_SOURCES) {
+    const enabled = isSourceEnabled(name, cfg);
+    const mark = enabled ? '✓' : '✗';
+    let detail = '';
+    if (name === 'claude_code') {
+      const dir = join(HOME, '.claude', 'projects');
+      detail = existsSync(dir) ? `(${dir})` : '(not found — won\'t capture)';
+    } else if (name === 'claude_cowork') {
+      const dir = join(HOME, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions');
+      detail = existsSync(dir) ? '(Cowork sessions found)' : '(not found — won\'t capture)';
+    } else if (name === 'cursor') {
+      const dbPath = defaultCursorDbPath();
+      detail = dbPath && existsSync(dbPath) ? '(Cursor detected)' : '(not found — won\'t capture)';
+    } else if (name === 'obsidian') {
+      const vaults = obsidianVaultsFromConfig(cfg);
+      const auto = vaults.length === 0 ? autodetectObsidianVaults() : vaults;
+      detail = auto.length > 0 ? `(${auto.length} vault${auto.length > 1 ? 's' : ''}: ${auto.map((v) => v.replace(HOME, '~')).join(', ')})` : '(no vaults detected)';
+    }
+    console.log(`  ${mark} ${name.padEnd(15)} ${detail}`);
+  }
+  console.log('');
+  console.log(`To opt out of any source:`);
+  console.log(`  npx memex-sync sources <name> disable`);
+  console.log(`  npx memex-sync vault remove <path>     (for Obsidian)`);
+  console.log(`Then: npx memex-sync restart`);
+  console.log('');
+  console.log(`config: ${CONFIG_PATH} (auto-created on first edit)`);
+  console.log(`status: npx memex-sync status`);
   process.exit(0);
 }
 
@@ -297,6 +355,135 @@ function cmdServe() {
   // Fall through to the daemon body below
 }
 
+function cmdRestart() {
+  if (platform() !== 'darwin') {
+    console.error('restart: macOS-only for now.');
+    process.exit(1);
+  }
+  if (!existsSync(PLIST_PATH)) {
+    console.error('memex-sync is not installed (no LaunchAgent plist found).');
+    console.error('Run: npx memex-sync install');
+    process.exit(1);
+  }
+  try { execSync(`launchctl unload ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' }); } catch (_) {}
+  try {
+    execSync(`launchctl load ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' });
+  } catch (e) {
+    console.error('launchctl load failed:', e.message);
+    process.exit(1);
+  }
+  console.log(`✓ memex-sync restarted`);
+  process.exit(0);
+}
+
+function cmdSources() {
+  const action = process.argv[3];
+  const target = process.argv[4];
+  const cfg = loadConfig();
+
+  if (!action || action === 'list' || action === '--list') {
+    // Pretty status table
+    console.log(`memex-sync sources (config: ${CONFIG_PATH})\n`);
+    for (const name of KNOWN_SOURCES) {
+      const enabled = isSourceEnabled(name, cfg);
+      const mark = enabled ? '✓' : '✗';
+      const label = name.padEnd(15);
+      let extra = '';
+      if (name === 'obsidian') {
+        const vaults = obsidianVaultsFromConfig(cfg);
+        if (vaults.length > 0) extra = `· vaults: ${vaults.join(', ')}`;
+        else if (enabled) extra = '· vaults: (autodetect)';
+      }
+      console.log(`  ${mark} ${label} ${enabled ? 'enabled' : 'disabled'}  ${extra}`);
+    }
+    console.log(`\n  · telegram      manual-import only (drop result.json into ~/.memex/inbox/)`);
+    console.log('\nuse: memex-sync sources <name> <enable|disable>');
+    process.exit(0);
+  }
+
+  // memex-sync sources <name> <enable|disable>
+  const sourceName = normalizeSourceName(action);
+  const verb = target;
+  if (!sourceName) {
+    console.error(`unknown source: "${action}". Known: ${KNOWN_SOURCES.join(', ')} (or aliases code/cowork).`);
+    process.exit(2);
+  }
+  if (verb !== 'enable' && verb !== 'disable') {
+    console.error(`expected 'enable' or 'disable' as third arg.`);
+    console.error(`usage: memex-sync sources ${sourceName} <enable|disable>`);
+    process.exit(2);
+  }
+  setSourceEnabled(sourceName, verb === 'enable', cfg);
+  saveConfig(cfg);
+  console.log(`✓ ${sourceName} ${verb}d (saved to ${CONFIG_PATH})`);
+  // Hint for restart if daemon installed
+  if (existsSync(PLIST_PATH)) {
+    console.log(`\nrestart the daemon to apply: npx memex-sync restart`);
+  }
+  process.exit(0);
+}
+
+function cmdVault() {
+  const action = process.argv[3];
+  const target = process.argv[4];
+  const cfg = loadConfig();
+
+  if (!action || action === 'list' || action === '--list') {
+    const vaults = obsidianVaultsFromConfig(cfg);
+    if (vaults.length === 0) {
+      console.log('no Obsidian vaults configured.');
+      console.log('Without explicit configuration, autodetect runs against standard');
+      console.log('locations (~/Documents, ~/Obsidian, ~/Library/Mobile Documents/');
+      console.log('iCloud~md~obsidian/Documents) when the daemon starts.');
+      console.log('\nadd one with: memex-sync vault add <path>');
+    } else {
+      console.log('configured Obsidian vaults:');
+      for (const v of vaults) console.log(`  · ${v}`);
+    }
+    process.exit(0);
+  }
+
+  if (action === 'add') {
+    if (!target) {
+      console.error('expected a path: memex-sync vault add /path/to/vault');
+      process.exit(2);
+    }
+    const abs = addObsidianVault(target, cfg);
+    if (!existsSync(abs)) {
+      console.error(`warning: ${abs} doesn't exist yet — config saved anyway.`);
+    } else if (!existsSync(join(abs, '.obsidian'))) {
+      console.error(`warning: ${abs} doesn't look like an Obsidian vault (no .obsidian/ subfolder).`);
+    }
+    saveConfig(cfg);
+    console.log(`✓ added ${abs}`);
+    if (existsSync(PLIST_PATH)) {
+      console.log(`\nrestart the daemon to apply: npx memex-sync restart`);
+    }
+    process.exit(0);
+  }
+
+  if (action === 'remove' || action === 'rm') {
+    if (!target) {
+      console.error('expected a path: memex-sync vault remove /path/to/vault');
+      process.exit(2);
+    }
+    const removed = removeObsidianVault(target, cfg);
+    if (!removed) {
+      console.log(`no vault matching "${target}" was configured.`);
+      process.exit(1);
+    }
+    saveConfig(cfg);
+    console.log(`✓ removed ${target}`);
+    if (existsSync(PLIST_PATH)) {
+      console.log(`\nrestart the daemon to apply: npx memex-sync restart`);
+    }
+    process.exit(0);
+  }
+
+  console.error(`unknown action: "${action}". Use list / add / remove.`);
+  process.exit(2);
+}
+
 
 const RESCAN_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const DEBOUNCE_MS = 1500;
@@ -315,6 +502,11 @@ const SOURCES = [
 ];
 
 [INBOX, DATA].forEach((d) => mkdirSync(d, { recursive: true }));
+
+// -------------------- Config --------------------
+// Loaded once at module init; CLI subcommands that mutate config exit immediately
+// before the daemon body runs, so the daemon always uses the latest on-disk state.
+const CONFIG = loadConfig();
 
 // -------------------- State --------------------
 let state = {};
@@ -522,7 +714,18 @@ const ANY_SCAN_MODE = SCAN_CURSOR_MODE || SCAN_CLAUDE_MODE || SCAN_OBSIDIAN_MODE
 const ANY_ONESHOT_MODE = ANY_SCAN_MODE || EXPORT_MD_MODE;
 
 const watchers = [];
+// Per-source enablement check. SOURCES is the FSEvents-watched JSONL set
+// (Claude Code + Cowork); each maps to a config key.
+const SOURCE_TO_CONFIG_KEY = {
+  'claude-code': 'claude_code',
+  'claude-cowork': 'claude_cowork',
+};
+function isJsonlSourceEnabled(source) {
+  const key = SOURCE_TO_CONFIG_KEY[source.name] || source.name;
+  return isSourceEnabled(key, CONFIG);
+}
 if (!ANY_ONESHOT_MODE) for (const source of SOURCES) {
+  if (!isJsonlSourceEnabled(source)) { log(`- ${source.name} disabled by config — skipping`); continue; }
   if (!existsSync(source.dir)) {
     log(`- skipping ${source.name}: directory not found at ${source.dir}`);
     continue;
@@ -674,7 +877,8 @@ function scanCursor() {
 }
 
 // Initial scan ~2s after start, then poll every 5 minutes.
-if (!ANY_ONESHOT_MODE) {
+const CURSOR_ENABLED = isSourceEnabled('cursor', CONFIG);
+if (!ANY_ONESHOT_MODE && CURSOR_ENABLED) {
   setTimeout(scanCursor, 2000);
   setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
 }
@@ -684,15 +888,14 @@ if (!ANY_ONESHOT_MODE) {
 // of standard macOS locations. User opt-in via path discovery — we don't
 // recurse into ~/Documents wholesale, only confirmed vaults (folders
 // with a .obsidian/ subdir, found at depths 0-3).
+const OBSIDIAN_ENABLED = isSourceEnabled('obsidian', CONFIG);
 const OBSIDIAN_VAULTS = (() => {
-  const fromEnv = (process.env.MEMEX_OBSIDIAN_VAULTS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const detected = autodetectObsidianVaults();
-  // Dedupe, preserve env order (env wins for explicit setups)
-  const all = [...fromEnv, ...detected];
-  return [...new Set(all)].filter((v) => existsSync(v));
+  if (!OBSIDIAN_ENABLED) return [];
+  // Priority: config.sources.obsidian.vaults + MEMEX_OBSIDIAN_VAULTS env.
+  // If both are empty, fall back to autodetect (preserves zero-config UX).
+  const explicit = obsidianVaultsFromConfig(CONFIG);
+  if (explicit.length > 0) return explicit.filter((v) => existsSync(v));
+  return autodetectObsidianVaults();
 })();
 
 function emitObsidianNote(notePath, vaultRoot) {
@@ -761,7 +964,7 @@ function scheduleObsidian(notePath, vaultRoot) {
   }, DEBOUNCE_MS));
 }
 
-if (!ANY_ONESHOT_MODE) {
+if (!ANY_ONESHOT_MODE && OBSIDIAN_ENABLED) {
   for (const vault of OBSIDIAN_VAULTS) {
     log(`watching obsidian: ${vault}`);
     const w = chokidar

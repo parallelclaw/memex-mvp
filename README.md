@@ -168,6 +168,23 @@ npx memex-sync             # = serve, в foreground
 
 memex MCP server и memex-sync — два независимых процесса. MCP server отвечает агентам, memex-sync кормит inbox. Связи нет, кроме общей файловой системы.
 
+### Управление источниками
+
+По умолчанию memex-sync **собирает всё что находит** на машине: Claude Code, Cowork, Cursor, Obsidian (auto-detect). Это удобно для quick-start, но любой источник можно отключить через CLI без удаления daemon'а:
+
+```bash
+npx memex-sync sources                       # показать что сейчас включено
+npx memex-sync sources cursor disable        # выключить cursor
+npx memex-sync sources cursor enable         # вернуть
+npx memex-sync vault add /path/to/MyVault    # явный список Obsidian-vault'ов
+npx memex-sync vault remove /path            # убрать
+npx memex-sync restart                       # применить изменения
+```
+
+Конфиг живёт в `~/.memex/config.json`. Файла нет → сборка по дефолту. Как только что-то изменено через CLI — файл создаётся, daemon его уважает.
+
+Privacy: agent через `memex_sources_status` сам показывает что именно отслеживается, и **никогда не выключает источники сам** — это всегда команда от пользователя.
+
 ### Подсказка для агента
 
 Если ты подключил memex к Claude Code/Cursor/Cline и каждый раз когда вызываешь `memex_overview` видишь сверху ⚪ или 🔴 — это значит auto-capture не включён. Агент сам это увидит и предложит юзеру команду `npx memex-sync install`. Это та самая «один раз и забыл» механика — без README-чтения.

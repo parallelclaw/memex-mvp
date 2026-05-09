@@ -292,9 +292,16 @@ function cmdStatus() {
     } catch (_) {}
   }
   const watchedCount = Object.keys(state).length;
-  let codeCount = 0, coworkCount = 0, cursorCount = 0, obsidianCount = 0, subagentCount = 0;
+  let codeCount = 0, coworkCount = 0, cursorCount = 0, cursorEmptyCount = 0,
+      obsidianCount = 0, subagentCount = 0;
   for (const [p, v] of Object.entries(state)) {
-    if (p.startsWith('cursor::')) { cursorCount++; continue; }
+    if (p.startsWith('cursor::')) {
+      // Cursor creates an empty placeholder composer per "new tab" click.
+      // Distinguish those from real sessions with content.
+      if (v && v.bubbleCount > 0) cursorCount++;
+      else cursorEmptyCount++;
+      continue;
+    }
     if (v && v.isObsidian) { obsidianCount++; continue; }
     if (p.endsWith('.md')) { obsidianCount++; continue; }
     // Subagent transcripts under .../subagents/ are tool-spawned helpers,
@@ -327,10 +334,11 @@ function cmdStatus() {
     if (coworkCount > 0) parts.push(`${coworkCount} Cowork`);
     if (cursorCount > 0) parts.push(`${cursorCount} Cursor`);
     if (obsidianCount > 0) parts.push(`${obsidianCount} Obsidian`);
-    const subagentSuffix = subagentCount > 0
-      ? ` (+ ${subagentCount} subagent transcript${subagentCount === 1 ? '' : 's'})`
-      : '';
-    console.log(`  watching:  ${parts.join(' · ')} main session(s)${subagentSuffix} · ${watchedCount} entries total`);
+    const extras = [];
+    if (subagentCount > 0) extras.push(`${subagentCount} subagent transcript${subagentCount === 1 ? '' : 's'}`);
+    if (cursorEmptyCount > 0) extras.push(`${cursorEmptyCount} empty Cursor placeholder${cursorEmptyCount === 1 ? '' : 's'}`);
+    const extrasSuffix = extras.length > 0 ? ` (+ ${extras.join(', ')})` : '';
+    console.log(`  watching:  ${parts.join(' · ')} main session(s)${extrasSuffix} · ${watchedCount} entries total`);
   } else {
     console.log(`  watching:  no sessions seen yet`);
   }

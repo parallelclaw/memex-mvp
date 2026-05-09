@@ -1480,10 +1480,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (sp.cowork > 0) parts.push(`${sp.cowork} Cowork`);
         if (sp.cursor > 0) parts.push(`${sp.cursor} Cursor`);
         if (sp.obsidian > 0) parts.push(`${sp.obsidian} Obsidian`);
-        const subagentSuffix = sp.subagents > 0
-          ? ` (+ ${sp.subagents} subagent transcript${sp.subagents === 1 ? '' : 's'})`
-          : '';
-        lines.push(`- watching: ${parts.join(' · ')} session(s)${subagentSuffix}`);
+        const extras = [];
+        if (sp.subagents > 0) extras.push(`${sp.subagents} subagent transcript${sp.subagents === 1 ? '' : 's'}`);
+        if (sp.cursorEmpty > 0) extras.push(`${sp.cursorEmpty} empty Cursor placeholder${sp.cursorEmpty === 1 ? '' : 's'}`);
+        const suffix = extras.length > 0 ? ` (+ ${extras.join(', ')})` : '';
+        lines.push(`- watching: ${parts.join(' · ')} session(s)${suffix}`);
         lines.push(`- last capture: ${formatFreshness(s.freshnessMs)}`);
       }
       if (s.advice) {
@@ -1840,6 +1841,7 @@ function getSyncStatus() {
   let codeCount = 0;
   let coworkCount = 0;
   let cursorCount = 0;
+  let cursorEmptyCount = 0;
   let obsidianCount = 0;
   let subagentCount = 0;
   if (existsSync(stateFile)) {
@@ -1850,7 +1852,15 @@ function getSyncStatus() {
       const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
       watchedFiles = Object.keys(state).length;
       for (const [p, v] of Object.entries(state)) {
-        if (p.startsWith('cursor::')) { cursorCount++; continue; }
+        if (p.startsWith('cursor::')) {
+          // Cursor creates a placeholder composer every time the user
+          // opens a new tab. If the tab was closed without sending a
+          // message, bubbleCount is 0 — count separately so the status
+          // doesn't claim 40+ "sessions" when only a handful had content.
+          if (v && v.bubbleCount > 0) cursorCount++;
+          else cursorEmptyCount++;
+          continue;
+        }
         if (v && v.isObsidian) { obsidianCount++; continue; }
         if (p.endsWith('.md')) { obsidianCount++; continue; }
         // Subagent transcripts (Cowork or Code) live under /subagents/
@@ -1898,6 +1908,7 @@ function getSyncStatus() {
       code: codeCount,
       cowork: coworkCount,
       cursor: cursorCount,
+      cursorEmpty: cursorEmptyCount,
       obsidian: obsidianCount,
       subagents: subagentCount,
     },

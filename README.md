@@ -72,19 +72,28 @@ bash install.sh
 
 | Источник | Формат | Статус |
 |----------|--------|--------|
-| **Claude Code** | `*.jsonl` сессии | ✅ работает (nested + flat форматы) |
-| **Claude Cowork** | `cowork-*.jsonl` (через filename prefix) | ✅ работает |
+| **Claude Code** | `*.jsonl` сессии в `~/.claude/projects/` | ✅ работает (nested + flat форматы) |
+| **Claude Cowork** | `cowork-*.jsonl` (через filename prefix), включая subagents | ✅ работает |
+| **Cursor IDE** (Composer + Chat) | SQLite `state.vscdb` в `~/Library/Application Support/Cursor/` | ✅ работает (poll каждые 5 мин) |
 | **Telegram** | `result.json` из Desktop export | ✅ работает |
+| Claude.ai web export | будет в v0.2 | — |
 | ChatGPT export | будет в v0.2 | — |
 | Obsidian vault | будет в v0.2 | — |
 
-### Filename convention для Claude Code и Cowork
+### Filename convention для inbox-файлов
 
-Парсер различает источники по префиксу:
+Парсер различает источники по префиксу имени файла в inbox:
 - `code-*.jsonl` или произвольное имя → tagged как `claude-code`
 - `cowork-*.jsonl` → tagged как `claude-cowork`
+- `cursor-*.jsonl` → tagged как `cursor`
 
-Это позволяет фильтровать `memex_search` по конкретной экосистеме.
+Это позволяет фильтровать `memex_search` по конкретной экосистеме (`source: "cursor"` и т.д.).
+
+### Cursor IDE source — особый случай
+
+Cursor хранит историю в SQLite (`state.vscdb`), не в JSONL-файлах. memex-sync daemon **поллит** эту БД каждые 5 минут (FSEvents бессмысленно — Cursor пишет в WAL практически на каждый keystroke). При обнаружении composer'а с обновлённым `lastUpdatedAt` daemon экспортит его dialogue (без thinking-bubbles и tool-call'ов) в inbox как `cursor-<short>.jsonl`. Заголовок берётся из `composerData.name` напрямую.
+
+Поддерживаемые ОС для Cursor: macOS, Linux, Windows (пути в `lib/parse-cursor.js`).
 
 ### Совместимый feeder
 

@@ -40,6 +40,13 @@ import { createHash } from 'node:crypto';
 import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { extractMessageFromRecord, extractAiTitle } from './lib/parse.js';
+import {
+  defaultCursorDbPath,
+  openCursorDB,
+  iterComposers,
+  extractDialogue,
+  composerToInboxRecords,
+} from './lib/parse-cursor.js';
 
 // -------------------- Paths & config --------------------
 const HOME = homedir();
@@ -201,8 +208,9 @@ function cmdStatus() {
     } catch (_) {}
   }
   const watchedCount = Object.keys(state).length;
-  let codeCount = 0, coworkCount = 0;
+  let codeCount = 0, coworkCount = 0, cursorCount = 0;
   for (const p of Object.keys(state)) {
+    if (p.startsWith('cursor::')) { cursorCount++; continue; }
     // Cowork paths embed `.claude/projects/` too (inside Application Support);
     // check the cowork-specific marker first.
     if (p.includes('local-agent-mode-sessions')) coworkCount++;
@@ -225,7 +233,11 @@ function cmdStatus() {
     console.log(`  process:   not running`);
   }
   if (watchedCount > 0) {
-    console.log(`  watching:  ${codeCount} Claude Code · ${coworkCount} Cowork session(s) (${watchedCount} files total)`);
+    const parts = [];
+    if (codeCount > 0) parts.push(`${codeCount} Claude Code`);
+    if (coworkCount > 0) parts.push(`${coworkCount} Cowork`);
+    if (cursorCount > 0) parts.push(`${cursorCount} Cursor`);
+    console.log(`  watching:  ${parts.join(' · ')} session(s) (${watchedCount} entries total)`);
   } else {
     console.log(`  watching:  no sessions seen yet`);
   }
@@ -520,6 +532,111 @@ function safetyRescan() {
 }
 setInterval(safetyRescan, RESCAN_INTERVAL_MS);
 
+// -------------------- Cursor scanner --------------------
+// Cursor stores history in SQLite (state.vscdb), not flat files. We can't
+// usefully chokidar-watch it because the WAL journal flips on every keystroke
+// and the main file mtime is unreliable. So instead: poll the DB every few
+// minutes, compare each composer's lastUpdatedAt against state, and re-emit
+// inbox JSONL only for composers that actually changed.
+//
+// Initial scan runs ~2s after startup (lets the inbox watchers settle first).
+
+const CURSOR_DB_PATH = defaultCursorDbPath();
+const CURSOR_POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+function cursorStateKey(composerId) {
+  return `cursor::${composerId}`;
+}
+
+function emitCursorComposer(db, composer) {
+  const dialogue = extractDialogue(db, composer);
+  const stateKey = cursorStateKey(composer.composerId);
+
+  if (dialogue.length === 0) {
+    // Empty / thinking-only / tool-only session — record state so we don't
+    // re-process every tick, but don't write to inbox.
+    state[stateKey] = {
+      lastUpdatedAt: composer.lastUpdatedAt,
+      bubbleCount: 0,
+      composerName: composer.name,
+    };
+    saveState();
+    return { changed: false };
+  }
+
+  const shortId = composer.composerId.slice(0, 8);
+  const targetPath = join(INBOX, `cursor-${shortId}.jsonl`);
+  const tmpPath = targetPath + '.tmp';
+
+  const records = composerToInboxRecords(
+    composer,
+    dialogue,
+    'cursor',
+    shortId,
+    (seed) => createHash('sha1').update(seed).digest('hex').slice(0, 16)
+  );
+
+  try {
+    writeFileSync(tmpPath, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    renameSync(tmpPath, targetPath);
+  } catch (e) {
+    try { unlinkSync(tmpPath); } catch (_) {}
+    return { error: 'write: ' + e.message };
+  }
+
+  state[stateKey] = {
+    lastUpdatedAt: composer.lastUpdatedAt,
+    bubbleCount: dialogue.length,
+    composerName: composer.name,
+  };
+  saveState();
+
+  return { changed: true, msgCount: dialogue.length, name: composer.name };
+}
+
+function scanCursor() {
+  if (!CURSOR_DB_PATH) return; // unsupported platform
+  if (!existsSync(CURSOR_DB_PATH)) return; // Cursor not installed
+
+  let db;
+  try {
+    db = openCursorDB(CURSOR_DB_PATH);
+  } catch (e) {
+    log(`! cursor db open failed: ${e.message}`);
+    return;
+  }
+  if (!db) return;
+
+  let scanned = 0;
+  let emitted = 0;
+  try {
+    for (const composer of iterComposers(db)) {
+      scanned++;
+      const prev = state[cursorStateKey(composer.composerId)];
+      if (prev && prev.lastUpdatedAt === composer.lastUpdatedAt) continue;
+
+      const r = emitCursorComposer(db, composer);
+      if (r.error) {
+        log(`! cursor ${composer.composerId.slice(0, 8)}: ${r.error}`);
+      } else if (r.changed) {
+        emitted++;
+        const tag = r.name ? ` "${r.name.slice(0, 50)}"` : '';
+        log(`+ cursor-${composer.composerId.slice(0, 8)}.jsonl ← ${r.msgCount} msgs${tag}`);
+      }
+    }
+  } finally {
+    db.close();
+  }
+
+  if (emitted > 0) {
+    log(`cursor scan · ${scanned} composers, ${emitted} updated`);
+  }
+}
+
+// Initial scan ~2s after start, then poll every 5 minutes.
+setTimeout(scanCursor, 2000);
+setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
+
 // -------------------- Lifecycle --------------------
 log(`memex-ingest started`);
 log(`  inbox:        ${INBOX}`);
@@ -527,6 +644,11 @@ log(`  state:        ${STATE_PATH}`);
 log(`  log:          ${LOG_PATH}`);
 log(`  debounce:     ${DEBOUNCE_MS}ms`);
 log(`  rescan every: ${RESCAN_INTERVAL_MS / 60000} min`);
+if (CURSOR_DB_PATH && existsSync(CURSOR_DB_PATH)) {
+  log(`  cursor poll:  ${CURSOR_POLL_INTERVAL_MS / 60000} min · ${CURSOR_DB_PATH}`);
+} else {
+  log(`  cursor poll:  skipped (Cursor not detected on this machine)`);
+}
 
 function shutdown(sig) {
   log(`received ${sig}, shutting down`);

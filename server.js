@@ -265,7 +265,10 @@ function importTelegram(filePath) {
 function importClaudeCodeJsonl(filePath, source = 'claude-code') {
   const fileName = basename(filePath, '.jsonl');
   const conversationId = `${source}-${fileName}`;
-  const sourceLabel = source === 'claude-cowork' ? 'Claude Cowork' : 'Claude Code';
+  const sourceLabel =
+    source === 'claude-cowork' ? 'Claude Cowork'
+    : source === 'cursor' ? 'Cursor'
+    : 'Claude Code';
   const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
   let imported = 0;
   let first_ts = Infinity;
@@ -381,9 +384,13 @@ function importFile(filePath) {
         source = 'telegram';
       }
     } else if (lower.endsWith('.jsonl')) {
-      // Filename prefix lets feed-memex (or the user) tell us which
-      // Anthropic product the session came from. Defaults to claude-code.
-      source = baseName.startsWith('cowork-') ? 'claude-cowork' : 'claude-code';
+      // Filename prefix tells us which product the session came from.
+      // cowork- → Claude Cowork (incl. its subagents)
+      // cursor- → Cursor IDE Composer/Chat (sourced from state.vscdb)
+      // anything else → Claude Code (default)
+      if (baseName.startsWith('cowork-')) source = 'claude-cowork';
+      else if (baseName.startsWith('cursor-')) source = 'cursor';
+      else source = 'claude-code';
       imported = importClaudeCodeJsonl(filePath, source);
     }
   } catch (err) {

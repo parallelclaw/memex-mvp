@@ -28,6 +28,11 @@ import {
   isContinuationBoilerplate,
   extractAiTitle,
 } from './lib/parse.js';
+import {
+  renderConversationMarkdown,
+  suggestFilename,
+} from './lib/render-markdown.js';
+import { writeFileSync } from 'node:fs';
 
 // -------------------- Paths --------------------
 const HOME = homedir();
@@ -436,7 +441,7 @@ chokidar
 // — what the server is, when to use which tool, search tips, gotchas.
 const SERVER_INSTRUCTIONS = `Memex is the user's personal memory across all their AI conversations
 (Telegram, Claude Code, Claude Cowork, …) — one SQLite + FTS5 database
-exposed via 8 tools.
+exposed via 9 tools.
 
 USE MEMEX PROACTIVELY. The whole point of this server is that the user
 has invested in indexing their past discussions; recall them. Whenever
@@ -527,6 +532,14 @@ memex_archive_conversation — hide a chat from default listing/search.
   describe this as a delete — archived data stays fully indexed and
   searchable via include_archived: true.
 
+memex_export_markdown — render a conversation as Obsidian-friendly
+  Markdown (frontmatter + headings + timestamps).
+  Use when: "save this to my notes", "export to Obsidian", "make a
+  note from this discussion", "save the SberBusiness chat to a file".
+  Pass output_path to write a file; without it, you get the markdown
+  text inline. For Cowork sessions where the user wants the full story,
+  also pass include_subagents: true.
+
 memex_status — health check for the memex-sync auto-capture daemon.
   Returns daemon installed/running state, PID, last capture freshness,
   per-platform watched count, and an actionable advice string.
@@ -613,6 +626,30 @@ memex_get_conversation call.
 Archived conversations are hidden from default list/search but stay
 fully indexed. Pass include_archived: true on search/list to include
 them. Visibility flag only — never deletes data.
+
+══ EXPORT TO MARKDOWN ══
+
+memex_export_markdown turns a conversation into a clean Markdown
+document with YAML frontmatter — perfect for dropping into Obsidian,
+Apple Notes (paste), GitHub gists, or a notes git repo.
+
+Default flow when the user asks for an export:
+
+  1. memex_search or memex_list_conversations to identify the right
+     conversation_id (if not already known).
+  2. ASK THE USER WHERE TO SAVE before writing — propose
+     ~/Obsidian/memex/ or ~/Documents/notes/ as defaults but confirm.
+     Don't write to arbitrary paths without consent.
+  3. memex_export_markdown({ conversation_id, output_path }).
+  4. Confirm with the resulting file path.
+
+Filename is auto-generated as "YYYY-MM-DD title.md" when output_path
+is a directory. Frontmatter includes source, conversation_id, dates,
+and tags so the user's Obsidian Dataview queries pick it up.
+
+If the user wants the markdown text without writing a file (e.g. for
+copying into another app), call memex_export_markdown WITHOUT
+output_path — you'll get the rendered markdown inline and can show it.
 
 ══ COWORK SUBAGENTS ══
 
@@ -831,6 +868,46 @@ const TOOLS = [
           default: 'markdown',
         },
       },
+    },
+  },
+  {
+    name: 'memex_export_markdown',
+    description:
+      'Render a conversation as Obsidian-friendly Markdown (YAML frontmatter + ' +
+      'headings + per-message timestamps). Use when the user asks to "save this ' +
+      'to my notes / Obsidian", "export to Markdown", "make a note out of this", etc. ' +
+      'Pass output_path to write a file (with auto-suggested filename if path is a ' +
+      'directory). Without output_path, returns the rendered Markdown text inline. ' +
+      'Frontmatter includes source, conversation_id, dates, and tags so Obsidian ' +
+      'Dataview / Bases can query memex-derived notes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        conversation_id: {
+          type: 'string',
+          description: 'The id from memex_search / memex_list_conversations.',
+        },
+        output_path: {
+          type: 'string',
+          description:
+            'Optional: filesystem path. If a directory (ends with / or exists as dir), ' +
+            'a filename is auto-suggested in the form "YYYY-MM-DD title.md". If a file ' +
+            'path, written there. Tilde expansion is supported (~/Obsidian/...).',
+        },
+        include_subagents: {
+          type: 'boolean',
+          default: false,
+          description:
+            'If true, fold in all spawned subagent transcripts. Useful for Cowork ' +
+            'sessions to get the complete picture in one document.',
+        },
+        include_frontmatter: {
+          type: 'boolean',
+          default: true,
+          description: 'YAML frontmatter for Obsidian / Dataview queries. Leave on unless the user wants pure-text export.',
+        },
+      },
+      required: ['conversation_id'],
     },
   },
   {
@@ -1357,6 +1434,91 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         '_Use memex_search next to query specific topics, or memex_get_conversation with one of the conversation_ids above._'
       );
       return textResult(lines.join('\n'));
+    }
+
+    if (name === 'memex_export_markdown') {
+      const convId = String(args.conversation_id || '').trim();
+      if (!convId) return textResult('conversation_id is required.');
+      const includeSubagents = args.include_subagents === true;
+      const includeFrontmatter = args.include_frontmatter !== false;
+
+      // Fetch conversation metadata
+      const conv = db
+        .prepare(
+          `SELECT conversation_id, source, title, first_ts, last_ts, message_count
+             FROM conversations WHERE conversation_id = ?`
+        )
+        .get(convId);
+      if (!conv) return textResult(`Conversation not found: ${convId}`);
+
+      // Fetch messages, optionally folding in subagent transcripts.
+      const ids = [convId];
+      if (includeSubagents) {
+        const subs = db
+          .prepare(`SELECT conversation_id FROM conversations WHERE parent_conversation_id = ?`)
+          .all(convId);
+        for (const s of subs) ids.push(s.conversation_id);
+      }
+      const placeholders = ids.map(() => '?').join(',');
+      const messages = db
+        .prepare(
+          `SELECT conversation_id, role, sender, text, ts
+             FROM messages
+            WHERE conversation_id IN (${placeholders})
+         ORDER BY ts ASC`
+        )
+        .all(...ids);
+      if (messages.length === 0) {
+        return textResult(`Conversation ${convId} exists but has no messages — nothing to export.`);
+      }
+      // Mark subagent-origin messages so the renderer can tag them.
+      for (const m of messages) {
+        if (m.conversation_id !== convId) m.from_subagent = m.conversation_id;
+      }
+
+      // Render
+      const md = renderConversationMarkdown(conv, messages, {
+        includeFrontmatter,
+        includeSubagentTag: includeSubagents,
+      });
+
+      if (!args.output_path) {
+        // Inline return — agent gets content to do whatever it wants with
+        return textResult(md);
+      }
+
+      // Resolve output path with ~ expansion
+      let outPath = String(args.output_path);
+      if (outPath === '~' || outPath === '~/') outPath = HOME;
+      else if (outPath.startsWith('~/')) outPath = join(HOME, outPath.slice(2));
+
+      // If path is a directory (or ends with /), auto-suggest filename
+      let target = outPath;
+      let isDir = outPath.endsWith('/');
+      if (!isDir) {
+        try { isDir = statSync(outPath).isDirectory(); } catch (_) {}
+      }
+      if (isDir) {
+        target = join(outPath, suggestFilename(conv));
+      }
+
+      // Ensure parent dir exists
+      try { mkdirSync(dirname(target), { recursive: true }); } catch (_) {}
+
+      // Atomic write
+      const tmp = target + '.tmp';
+      try {
+        writeFileSync(tmp, md);
+        renameSync(tmp, target);
+      } catch (e) {
+        return textResult(`Export failed: ${e.message}`);
+      }
+
+      return textResult(
+        `✓ Exported to \`${target}\`\n\n` +
+          `${messages.length} message(s) · ${md.length.toLocaleString()} chars · ${conv.source}\n` +
+          `Title: ${conv.title || conv.conversation_id}`
+      );
     }
 
     if (name === 'memex_archive_conversation') {

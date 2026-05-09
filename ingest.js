@@ -47,6 +47,7 @@ import {
   extractDialogue,
   composerToInboxRecords,
 } from './lib/parse-cursor.js';
+import { renderConversationMarkdown, suggestFilename } from './lib/render-markdown.js';
 
 // -------------------- Paths & config --------------------
 const HOME = homedir();
@@ -72,11 +73,12 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     status: cmdStatus,
     logs: cmdLogs,
     serve: cmdServe, // explicit foreground; same as no-arg
-    // All scan modes fall through to module-level scan logic at EOF.
+    // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.
     scan: cmdServe,
     'scan-claude': cmdServe,
     'scan-cursor': cmdServe,
+    'export-markdown': cmdServe,
   };
   const handler = handlers[subcommand];
   if (!handler) {
@@ -100,6 +102,10 @@ one-shot scans (no daemon needed — handy for cron / manual import):
   memex-sync scan               import everything once: Claude Code + Cowork + Cursor
   memex-sync scan-claude        Claude Code + Cowork only (~/.claude/projects + Cowork sessions)
   memex-sync scan-cursor        Cursor IDE history only (state.vscdb)
+
+export to Obsidian / file system:
+  memex-sync export-markdown --output <dir> [--source <s>] [--since <date>]
+                                bulk-render conversations as Markdown files
 
 paths:
   state:   ${STATE_PATH}
@@ -497,10 +503,12 @@ function schedule(srcPath, source) {
 const SCAN_CURSOR_MODE = subcommand === 'scan-cursor';
 const SCAN_CLAUDE_MODE = subcommand === 'scan-claude';
 const SCAN_ALL_MODE    = subcommand === 'scan';
+const EXPORT_MD_MODE   = subcommand === 'export-markdown';
 const ANY_SCAN_MODE = SCAN_CURSOR_MODE || SCAN_CLAUDE_MODE || SCAN_ALL_MODE;
+const ANY_ONESHOT_MODE = ANY_SCAN_MODE || EXPORT_MD_MODE;
 
 const watchers = [];
-if (!ANY_SCAN_MODE) for (const source of SOURCES) {
+if (!ANY_ONESHOT_MODE) for (const source of SOURCES) {
   if (!existsSync(source.dir)) {
     log(`- skipping ${source.name}: directory not found at ${source.dir}`);
     continue;
@@ -548,7 +556,7 @@ function safetyRescan() {
   }
   log(`safety rescan done · ${triggered} file(s) re-scheduled`);
 }
-if (!ANY_SCAN_MODE) setInterval(safetyRescan, RESCAN_INTERVAL_MS);
+if (!ANY_ONESHOT_MODE) setInterval(safetyRescan, RESCAN_INTERVAL_MS);
 
 // -------------------- Cursor scanner --------------------
 // Cursor stores history in SQLite (state.vscdb), not flat files. We can't
@@ -652,7 +660,7 @@ function scanCursor() {
 }
 
 // Initial scan ~2s after start, then poll every 5 minutes.
-if (!ANY_SCAN_MODE) {
+if (!ANY_ONESHOT_MODE) {
   setTimeout(scanCursor, 2000);
   setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
 }
@@ -727,17 +735,139 @@ if (ANY_SCAN_MODE) {
   process.exit(0);
 }
 
+// -------------------- One-shot export-markdown mode --------------------
+// `memex-sync export-markdown --output <dir> [--source S] [--since DATE]
+//                              [--include-subagents]`
+async function runExportMarkdown() {
+  // Parse argv
+  const argv = process.argv.slice(3);
+  const opts = { output: null, source: null, since: null, includeSubagents: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--output' || a === '-o') opts.output = argv[++i];
+    else if (a === '--source' || a === '-s') opts.source = argv[++i];
+    else if (a === '--since') opts.since = argv[++i];
+    else if (a === '--include-subagents') opts.includeSubagents = true;
+  }
+  if (!opts.output) {
+    console.error('error: --output <dir> is required');
+    console.error('example: memex-sync export-markdown --output ~/Obsidian/memex/');
+    process.exit(2);
+  }
+  // Tilde expansion + ensure dir exists
+  let outDir = opts.output;
+  if (outDir === '~') outDir = HOME;
+  else if (outDir.startsWith('~/')) outDir = join(HOME, outDir.slice(2));
+  mkdirSync(outDir, { recursive: true });
+
+  // Open memex.db readonly
+  const dbPath = join(MEMEX_DIR, 'data', 'memex.db');
+  if (!existsSync(dbPath)) {
+    console.error(`error: memex.db not found at ${dbPath}`);
+    console.error('Has memex ever ingested anything? Run a scan first.');
+    process.exit(2);
+  }
+  const Database = (await import('better-sqlite3')).default;
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+
+  // Build conversation query
+  const where = ['(archived_at IS NULL OR archived_at = 0)', 'parent_conversation_id IS NULL'];
+  const params = [];
+  if (opts.source) { where.push('source = ?'); params.push(opts.source); }
+  if (opts.since) {
+    const ts = Math.floor(new Date(opts.since).getTime() / 1000);
+    if (Number.isFinite(ts) && ts > 0) {
+      where.push('last_ts >= ?');
+      params.push(ts);
+    } else {
+      console.error(`warning: --since "${opts.since}" not parseable, ignoring`);
+    }
+  }
+  const convs = db
+    .prepare(
+      `SELECT conversation_id, source, title, first_ts, last_ts, message_count
+         FROM conversations
+        WHERE ${where.join(' AND ')}
+     ORDER BY last_ts DESC`
+    )
+    .all(...params);
+
+  if (convs.length === 0) {
+    console.log('no conversations match the filter.');
+    db.close();
+    process.exit(0);
+  }
+  console.log(`exporting ${convs.length} conversation(s) to ${outDir}`);
+  console.log('');
+
+  let written = 0;
+  for (const conv of convs) {
+    // Fetch messages (with subagents if requested)
+    const ids = [conv.conversation_id];
+    if (opts.includeSubagents) {
+      const subs = db
+        .prepare(`SELECT conversation_id FROM conversations WHERE parent_conversation_id = ?`)
+        .all(conv.conversation_id);
+      for (const s of subs) ids.push(s.conversation_id);
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    const messages = db
+      .prepare(
+        `SELECT conversation_id, role, sender, text, ts
+           FROM messages
+          WHERE conversation_id IN (${placeholders})
+       ORDER BY ts ASC`
+      )
+      .all(...ids);
+    if (messages.length === 0) continue;
+    for (const m of messages) {
+      if (m.conversation_id !== conv.conversation_id) m.from_subagent = m.conversation_id;
+    }
+
+    const md = renderConversationMarkdown(conv, messages, {
+      includeFrontmatter: true,
+      includeSubagentTag: opts.includeSubagents,
+    });
+    const filename = suggestFilename(conv);
+    const target = join(outDir, filename);
+    const tmp = target + '.tmp';
+    try {
+      writeFileSync(tmp, md);
+      renameSync(tmp, target);
+      written++;
+      console.log(`  ✓ ${filename} (${messages.length} msgs)`);
+    } catch (e) {
+      console.error(`  ✗ ${filename}: ${e.message}`);
+    }
+  }
+  db.close();
+
+  console.log('');
+  console.log(`done. ${written} file(s) written to ${outDir}`);
+  console.log(`tip: drop the directory into your Obsidian vault to get full Dataview support.`);
+}
+
+if (EXPORT_MD_MODE) {
+  // Need writeFileSync — already imported above.
+  runExportMarkdown().catch((e) => {
+    console.error('export failed:', e.message);
+    process.exit(1);
+  });
+}
+
 // -------------------- Lifecycle --------------------
-log(`memex-ingest started`);
-log(`  inbox:        ${INBOX}`);
-log(`  state:        ${STATE_PATH}`);
-log(`  log:          ${LOG_PATH}`);
-log(`  debounce:     ${DEBOUNCE_MS}ms`);
-log(`  rescan every: ${RESCAN_INTERVAL_MS / 60000} min`);
-if (CURSOR_DB_PATH && existsSync(CURSOR_DB_PATH)) {
-  log(`  cursor poll:  ${CURSOR_POLL_INTERVAL_MS / 60000} min · ${CURSOR_DB_PATH}`);
-} else {
-  log(`  cursor poll:  skipped (Cursor not detected on this machine)`);
+if (!ANY_ONESHOT_MODE) {
+  log(`memex-ingest started`);
+  log(`  inbox:        ${INBOX}`);
+  log(`  state:        ${STATE_PATH}`);
+  log(`  log:          ${LOG_PATH}`);
+  log(`  debounce:     ${DEBOUNCE_MS}ms`);
+  log(`  rescan every: ${RESCAN_INTERVAL_MS / 60000} min`);
+  if (CURSOR_DB_PATH && existsSync(CURSOR_DB_PATH)) {
+    log(`  cursor poll:  ${CURSOR_POLL_INTERVAL_MS / 60000} min · ${CURSOR_DB_PATH}`);
+  } else {
+    log(`  cursor poll:  skipped (Cursor not detected on this machine)`);
+  }
 }
 
 function shutdown(sig) {

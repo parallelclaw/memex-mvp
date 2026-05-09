@@ -31,7 +31,7 @@
 
 import chokidar from 'chokidar';
 import { homedir, platform } from 'node:os';
-import { join, basename, sep, resolve } from 'node:path';
+import { join, basename, sep, resolve, relative } from 'node:path';
 import {
   existsSync, statSync, readFileSync, writeFileSync, renameSync,
   mkdirSync, openSync, readSync, closeSync, unlinkSync, readdirSync,
@@ -48,6 +48,14 @@ import {
   composerToInboxRecords,
 } from './lib/parse-cursor.js';
 import { renderConversationMarkdown, suggestFilename } from './lib/render-markdown.js';
+import {
+  autodetectObsidianVaults,
+  walkVault,
+  parseNote,
+  noteShortId,
+  vaultSlug,
+  shouldSkipPath,
+} from './lib/parse-obsidian.js';
 
 // -------------------- Paths & config --------------------
 const HOME = homedir();
@@ -78,6 +86,7 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     scan: cmdServe,
     'scan-claude': cmdServe,
     'scan-cursor': cmdServe,
+    'scan-obsidian': cmdServe,
     'export-markdown': cmdServe,
   };
   const handler = handlers[subcommand];
@@ -99,9 +108,10 @@ daemon mode:
   memex-sync logs               tail the daemon log
 
 one-shot scans (no daemon needed — handy for cron / manual import):
-  memex-sync scan               import everything once: Claude Code + Cowork + Cursor
+  memex-sync scan               import everything once: Claude Code + Cowork + Cursor + Obsidian
   memex-sync scan-claude        Claude Code + Cowork only (~/.claude/projects + Cowork sessions)
   memex-sync scan-cursor        Cursor IDE history only (state.vscdb)
+  memex-sync scan-obsidian      Obsidian vaults only (.md files, frontmatter parsed)
 
 export to Obsidian / file system:
   memex-sync export-markdown --output <dir> [--source <s>] [--since <date>]
@@ -224,9 +234,11 @@ function cmdStatus() {
     } catch (_) {}
   }
   const watchedCount = Object.keys(state).length;
-  let codeCount = 0, coworkCount = 0, cursorCount = 0;
-  for (const p of Object.keys(state)) {
+  let codeCount = 0, coworkCount = 0, cursorCount = 0, obsidianCount = 0;
+  for (const [p, v] of Object.entries(state)) {
     if (p.startsWith('cursor::')) { cursorCount++; continue; }
+    if (v && v.isObsidian) { obsidianCount++; continue; }
+    if (p.endsWith('.md')) { obsidianCount++; continue; }
     // Cowork paths embed `.claude/projects/` too (inside Application Support);
     // check the cowork-specific marker first.
     if (p.includes('local-agent-mode-sessions')) coworkCount++;
@@ -253,6 +265,7 @@ function cmdStatus() {
     if (codeCount > 0) parts.push(`${codeCount} Claude Code`);
     if (coworkCount > 0) parts.push(`${coworkCount} Cowork`);
     if (cursorCount > 0) parts.push(`${cursorCount} Cursor`);
+    if (obsidianCount > 0) parts.push(`${obsidianCount} Obsidian`);
     console.log(`  watching:  ${parts.join(' · ')} session(s) (${watchedCount} entries total)`);
   } else {
     console.log(`  watching:  no sessions seen yet`);
@@ -500,11 +513,12 @@ function schedule(srcPath, source) {
 // -------------------- Watchers --------------------
 // In any one-shot scan mode the watchers and timers are skipped; the scan
 // runs at the end of the file and exits. See the conditional block at EOF.
-const SCAN_CURSOR_MODE = subcommand === 'scan-cursor';
-const SCAN_CLAUDE_MODE = subcommand === 'scan-claude';
-const SCAN_ALL_MODE    = subcommand === 'scan';
-const EXPORT_MD_MODE   = subcommand === 'export-markdown';
-const ANY_SCAN_MODE = SCAN_CURSOR_MODE || SCAN_CLAUDE_MODE || SCAN_ALL_MODE;
+const SCAN_CURSOR_MODE   = subcommand === 'scan-cursor';
+const SCAN_CLAUDE_MODE   = subcommand === 'scan-claude';
+const SCAN_OBSIDIAN_MODE = subcommand === 'scan-obsidian';
+const SCAN_ALL_MODE      = subcommand === 'scan';
+const EXPORT_MD_MODE     = subcommand === 'export-markdown';
+const ANY_SCAN_MODE = SCAN_CURSOR_MODE || SCAN_CLAUDE_MODE || SCAN_OBSIDIAN_MODE || SCAN_ALL_MODE;
 const ANY_ONESHOT_MODE = ANY_SCAN_MODE || EXPORT_MD_MODE;
 
 const watchers = [];
@@ -665,6 +679,136 @@ if (!ANY_ONESHOT_MODE) {
   setInterval(scanCursor, CURSOR_POLL_INTERVAL_MS);
 }
 
+// -------------------- Obsidian watcher --------------------
+// Vault paths: explicit env var first (comma-separated), then auto-detect
+// of standard macOS locations. User opt-in via path discovery — we don't
+// recurse into ~/Documents wholesale, only confirmed vaults (folders
+// with a .obsidian/ subdir, found at depths 0-3).
+const OBSIDIAN_VAULTS = (() => {
+  const fromEnv = (process.env.MEMEX_OBSIDIAN_VAULTS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const detected = autodetectObsidianVaults();
+  // Dedupe, preserve env order (env wins for explicit setups)
+  const all = [...fromEnv, ...detected];
+  return [...new Set(all)].filter((v) => existsSync(v));
+})();
+
+function emitObsidianNote(notePath, vaultRoot) {
+  // Defensive — chokidar's ignored may not catch every case
+  const rel = relative(vaultRoot, notePath);
+  if (shouldSkipPath(rel)) return { changed: false };
+
+  const note = parseNote(notePath, vaultRoot);
+  if (!note) return { changed: false };
+
+  // Hash-based dedupe — body content, not file mtime, decides
+  const prev = state[notePath];
+  if (prev && prev.hash === note.hash) return { changed: false };
+
+  const slug = vaultSlug(vaultRoot);
+  const short = noteShortId(vaultRoot, note.relativePath);
+  const inboxName = `obsidian-${slug}-${short}.jsonl`;
+  const targetPath = join(INBOX, inboxName);
+  const tmpPath = targetPath + '.tmp';
+
+  const updatedIso = new Date(note.updated).toISOString();
+  const seedText = slicePy(note.body, 200);
+  const msgId = createHash('sha1').update(`user|${updatedIso}|${seedText}`).digest('hex').slice(0, 16);
+
+  const records = [
+    { type: 'ai-title', aiTitle: note.title },
+    {
+      role: 'user',
+      content: note.body,
+      timestamp: updatedIso,
+      id: `obsidian-${slug}-${short}-${msgId}`,
+    },
+  ];
+
+  try {
+    writeFileSync(tmpPath, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    renameSync(tmpPath, targetPath);
+  } catch (e) {
+    try { unlinkSync(tmpPath); } catch (_) {}
+    return { error: 'write: ' + e.message };
+  }
+
+  state[notePath] = {
+    hash: note.hash,
+    updated: note.updated,
+    title: note.title,
+    vault: vaultRoot,
+    isObsidian: true,
+  };
+  saveState();
+
+  return { changed: true, title: note.title, bodyChars: note.body.length };
+}
+
+const obsidianPending = new Map();
+function scheduleObsidian(notePath, vaultRoot) {
+  if (obsidianPending.has(notePath)) clearTimeout(obsidianPending.get(notePath));
+  obsidianPending.set(notePath, setTimeout(() => {
+    obsidianPending.delete(notePath);
+    const r = emitObsidianNote(notePath, vaultRoot);
+    if (r.error) {
+      log(`! obsidian ${basename(notePath)}: ${r.error}`);
+    } else if (r.changed) {
+      log(`+ obsidian "${r.title}" (${r.bodyChars} chars)`);
+    }
+  }, DEBOUNCE_MS));
+}
+
+if (!ANY_ONESHOT_MODE) {
+  for (const vault of OBSIDIAN_VAULTS) {
+    log(`watching obsidian: ${vault}`);
+    const w = chokidar
+      .watch(vault, {
+        ignoreInitial: false,
+        awaitWriteFinish: { stabilityThreshold: 800, pollInterval: 200 },
+        ignored: [
+          '**/.obsidian/**',
+          '**/.trash/**',
+          '**/.git/**',
+          '**/.DS_Store',
+          '**/*.sync-conflict-*',
+        ],
+        depth: 12,
+      })
+      .on('add', (p) => p.endsWith('.md') && scheduleObsidian(p, vault))
+      .on('change', (p) => p.endsWith('.md') && scheduleObsidian(p, vault))
+      .on('error', (e) => log(`watcher error (obsidian): ${e.message}`));
+    watchers.push(w);
+  }
+}
+
+// Synchronous one-shot walk for scan-obsidian / scan modes.
+function scanObsidian() {
+  if (OBSIDIAN_VAULTS.length === 0) {
+    console.log('no Obsidian vaults configured/detected — skipping');
+    return;
+  }
+  let scanned = 0;
+  let emitted = 0;
+  for (const vault of OBSIDIAN_VAULTS) {
+    if (!existsSync(vault)) continue;
+    console.log(`scanning obsidian: ${vault}`);
+    for (const f of walkVault(vault)) {
+      scanned++;
+      const r = emitObsidianNote(f.absolute, vault);
+      if (r.error) {
+        console.error(`  ! ${f.relative}: ${r.error}`);
+      } else if (r.changed) {
+        emitted++;
+        console.log(`  + "${r.title}" (${r.bodyChars} chars)`);
+      }
+    }
+  }
+  console.log(`scanned ${scanned} notes · ${emitted} updated`);
+}
+
 // -------------------- One-shot scan modes --------------------
 // Synchronous walk-and-emit for Claude Code / Cowork directories. Bypasses
 // the debounce queue (we want eager processing in one-shot mode).
@@ -699,6 +843,11 @@ function scanClaudeSync() {
 if (SCAN_CLAUDE_MODE || SCAN_ALL_MODE) {
   console.log(`=== Claude Code + Cowork ===`);
   scanClaudeSync();
+}
+
+if (SCAN_OBSIDIAN_MODE || SCAN_ALL_MODE) {
+  console.log(`=== Obsidian ===`);
+  scanObsidian();
 }
 
 if (SCAN_CURSOR_MODE || SCAN_ALL_MODE) {
@@ -867,6 +1016,11 @@ if (!ANY_ONESHOT_MODE) {
     log(`  cursor poll:  ${CURSOR_POLL_INTERVAL_MS / 60000} min · ${CURSOR_DB_PATH}`);
   } else {
     log(`  cursor poll:  skipped (Cursor not detected on this machine)`);
+  }
+  if (OBSIDIAN_VAULTS.length > 0) {
+    log(`  obsidian:     ${OBSIDIAN_VAULTS.length} vault(s) — ${OBSIDIAN_VAULTS.join(', ')}`);
+  } else {
+    log(`  obsidian:     skipped (no vaults detected, set MEMEX_OBSIDIAN_VAULTS to override)`);
   }
 }
 

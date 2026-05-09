@@ -75,10 +75,11 @@ bash install.sh
 | **Claude Code** | `*.jsonl` сессии в `~/.claude/projects/` | ✅ работает (nested + flat форматы) |
 | **Claude Cowork** | `cowork-*.jsonl` (через filename prefix), включая subagents | ✅ работает |
 | **Cursor IDE** (Composer + Chat) | SQLite `state.vscdb` в `~/Library/Application Support/Cursor/` | ✅ работает (poll каждые 5 мин) |
+| **Obsidian** vault notes | `.md` файлы + YAML frontmatter | ✅ работает (FSEvents, hash-based dedupe) |
 | **Telegram** | `result.json` из Desktop export | ✅ работает |
-| Claude.ai web export | будет в v0.2 | — |
-| ChatGPT export | будет в v0.2 | — |
-| Obsidian vault | будет в v0.2 | — |
+| Claude.ai web export | будет в v0.3 | — |
+| ChatGPT export | будет в v0.3 | — |
+| Apple Notes | будет в v0.3 | — |
 
 ### Filename convention для inbox-файлов
 
@@ -86,8 +87,9 @@ bash install.sh
 - `code-*.jsonl` или произвольное имя → tagged как `claude-code`
 - `cowork-*.jsonl` → tagged как `claude-cowork`
 - `cursor-*.jsonl` → tagged как `cursor`
+- `obsidian-*.jsonl` → tagged как `obsidian`
 
-Это позволяет фильтровать `memex_search` по конкретной экосистеме (`source: "cursor"` и т.д.).
+Это позволяет фильтровать `memex_search` по конкретной экосистеме (`source: "cursor"`, `source: "obsidian"` и т.д.).
 
 ### Cursor IDE source — особый случай
 
@@ -95,14 +97,31 @@ Cursor хранит историю в SQLite (`state.vscdb`), не в JSONL-фа
 
 Поддерживаемые ОС для Cursor: macOS, Linux, Windows (пути в `lib/parse-cursor.js`).
 
+### Obsidian source — заметки как первоклассные сущности
+
+memex автоматически находит Obsidian-vault'ы в стандартных местах (`~/Documents/`, `~/Obsidian/`, `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/` для iCloud-синка). Vault — это любая папка с `.obsidian/` подпапкой внутри. Можно явно указать пути через env-переменную:
+
+```bash
+export MEMEX_OBSIDIAN_VAULTS=/path/to/vault1,/path/to/vault2
+```
+
+Каждая `.md` нота → одна conversation в memex. Title берётся из `title:` frontmatter → первого `# H1` → имени файла. YAML frontmatter парсится для метаданных (дат, тегов). Body индексируется в FTS5 как один user-сообщение.
+
+**Privacy**:
+- Обнаружение vault'ов opt-in (только стандартные пути; кастомные через env var)
+- Игнорируются: `.obsidian/`, `.trash/`, `.git/`, `.DS_Store`, `*.sync-conflict-*`
+- Per-note opt-out через frontmatter `memex: false`
+- Hash-based dedupe — пишем в inbox только когда содержание реально изменилось, не на каждый mtime-touch
+
 ### Bulk import за одну команду
 
 memex полностью самодостаточен — не нужен Python, не нужны внешние CLI:
 
 ```bash
-npx memex-sync scan          # Claude Code + Cowork + Cursor сразу
-npx memex-sync scan-claude   # только Claude Code + Cowork
-npx memex-sync scan-cursor   # только Cursor
+npx memex-sync scan            # Claude Code + Cowork + Cursor + Obsidian сразу
+npx memex-sync scan-claude     # только Claude Code + Cowork
+npx memex-sync scan-cursor     # только Cursor
+npx memex-sync scan-obsidian   # только Obsidian vault(s)
 ```
 
 Сканирует все источники один раз, эмитит JSONL в inbox, выходит. Идемпотентен — повторный запуск пропускает неизменённые файлы через state-cache. Удобно для cron, manual-первого-импорта, или дебага без daemon'а.

@@ -273,6 +273,7 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
   const sourceLabel =
     source === 'claude-cowork' ? 'Claude Cowork'
     : source === 'cursor' ? 'Cursor'
+    : source === 'obsidian' ? 'Obsidian'
     : 'Claude Code';
   const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
   let imported = 0;
@@ -390,11 +391,13 @@ function importFile(filePath) {
       }
     } else if (lower.endsWith('.jsonl')) {
       // Filename prefix tells us which product the session came from.
-      // cowork- → Claude Cowork (incl. its subagents)
-      // cursor- → Cursor IDE Composer/Chat (sourced from state.vscdb)
+      // cowork-   → Claude Cowork (incl. its subagents)
+      // cursor-   → Cursor IDE Composer/Chat (sourced from state.vscdb)
+      // obsidian- → Obsidian vault note (sourced from .md file)
       // anything else → Claude Code (default)
       if (baseName.startsWith('cowork-')) source = 'claude-cowork';
       else if (baseName.startsWith('cursor-')) source = 'cursor';
+      else if (baseName.startsWith('obsidian-')) source = 'obsidian';
       else source = 'claude-code';
       imported = importClaudeCodeJsonl(filePath, source);
     }

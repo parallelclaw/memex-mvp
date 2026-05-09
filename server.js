@@ -1474,9 +1474,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         lines.push('- memex-sync daemon: ⚪ not installed');
       }
       if (s.watchedFiles > 0) {
-        lines.push(
-          `- watching: ${s.sessionsByPlatform.code} Claude Code · ${s.sessionsByPlatform.cowork} Cowork session(s)`
-        );
+        const parts = [];
+        const sp = s.sessionsByPlatform;
+        if (sp.code > 0) parts.push(`${sp.code} Claude Code`);
+        if (sp.cowork > 0) parts.push(`${sp.cowork} Cowork`);
+        if (sp.cursor > 0) parts.push(`${sp.cursor} Cursor`);
+        if (sp.obsidian > 0) parts.push(`${sp.obsidian} Obsidian`);
+        lines.push(`- watching: ${parts.join(' · ')} session(s)`);
         lines.push(`- last capture: ${formatFreshness(s.freshnessMs)}`);
       }
       if (s.advice) {
@@ -1832,6 +1836,8 @@ function getSyncStatus() {
   let watchedFiles = 0;
   let codeCount = 0;
   let coworkCount = 0;
+  let cursorCount = 0;
+  let obsidianCount = 0;
   if (existsSync(stateFile)) {
     try {
       const stat = statSync(stateFile);
@@ -1839,7 +1845,12 @@ function getSyncStatus() {
       freshnessMs = Date.now() - stat.mtimeMs;
       const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
       watchedFiles = Object.keys(state).length;
-      for (const p of Object.keys(state)) {
+      for (const [p, v] of Object.entries(state)) {
+        if (p.startsWith('cursor::')) { cursorCount++; continue; }
+        if (v && v.isObsidian) { obsidianCount++; continue; }
+        if (p.endsWith('.md')) { obsidianCount++; continue; }
+        // Cowork paths embed `.claude/projects/` too — check the
+        // cowork-specific marker first.
         if (p.includes('local-agent-mode-sessions')) coworkCount++;
         else if (p.includes('/.claude/projects/')) codeCount++;
       }
@@ -1874,7 +1885,12 @@ function getSyncStatus() {
     lastIngestAt,
     freshnessMs,
     watchedFiles,
-    sessionsByPlatform: { code: codeCount, cowork: coworkCount },
+    sessionsByPlatform: {
+      code: codeCount,
+      cowork: coworkCount,
+      cursor: cursorCount,
+      obsidian: obsidianCount,
+    },
     advice,
   };
 }

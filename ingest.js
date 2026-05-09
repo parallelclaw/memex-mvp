@@ -855,6 +855,23 @@ function scanCursor() {
   if (!CURSOR_DB_PATH) return; // unsupported platform
   if (!existsSync(CURSOR_DB_PATH)) return; // Cursor not installed
 
+  // Cleanup: drop any stale empty-placeholder entries we may have
+  // tracked under earlier daemon versions. Cursor opens a new
+  // composerData row every "+ new tab" click; tracking them in state
+  // bloats it without value. We now skip those at scan time (below);
+  // this cleans up entries left over from before the change.
+  let cleanedEmpty = 0;
+  for (const [k, v] of Object.entries(state)) {
+    if (k.startsWith('cursor::') && v && (!v.bubbleCount || v.bubbleCount === 0)) {
+      delete state[k];
+      cleanedEmpty++;
+    }
+  }
+  if (cleanedEmpty > 0) {
+    saveState();
+    log(`cursor: cleaned ${cleanedEmpty} empty placeholder entries from state`);
+  }
+
   let db;
   try {
     db = openCursorDB(CURSOR_DB_PATH);
@@ -865,10 +882,20 @@ function scanCursor() {
   if (!db) return;
 
   let scanned = 0;
+  let skippedEmpty = 0;
   let emitted = 0;
   try {
     for (const composer of iterComposers(db)) {
       scanned++;
+
+      // Skip empty placeholders entirely — composers with no headers are
+      // tabs the user opened and closed without sending a message.
+      // No content to capture; tracking them in state is pointless.
+      if (!composer.headers || composer.headers.length === 0) {
+        skippedEmpty++;
+        continue;
+      }
+
       const prev = state[cursorStateKey(composer.composerId)];
       if (prev && prev.lastUpdatedAt === composer.lastUpdatedAt) continue;
 
@@ -886,7 +913,8 @@ function scanCursor() {
   }
 
   if (emitted > 0) {
-    log(`cursor scan · ${scanned} composers, ${emitted} updated`);
+    const skippedNote = skippedEmpty > 0 ? `, ${skippedEmpty} empty placeholders skipped` : '';
+    log(`cursor scan · ${scanned - skippedEmpty} active composers, ${emitted} updated${skippedNote}`);
   }
 }
 

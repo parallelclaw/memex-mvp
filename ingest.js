@@ -73,6 +73,11 @@ import {
 const HOME = homedir();
 const MEMEX_DIR = process.env.MEMEX_DIR || join(HOME, '.memex');
 const INBOX = join(MEMEX_DIR, 'inbox');
+// Staging area for in-flight inbox snapshots. We write the .tmp here and then
+// cross-directory rename into INBOX so server.js's chokidar watcher never sees
+// a partially-written .tmp and races us by importing it (and worse, moving it
+// to archive before our rename completes — the source of the ENOENT noise).
+const STAGING = join(MEMEX_DIR, 'staging');
 const DATA = join(MEMEX_DIR, 'data');
 const STATE_PATH = join(DATA, 'ingest-state.json');
 const LOG_PATH = join(DATA, 'ingest.log');
@@ -515,7 +520,7 @@ const SOURCES = [
   },
 ];
 
-[INBOX, DATA].forEach((d) => mkdirSync(d, { recursive: true }));
+[INBOX, STAGING, DATA].forEach((d) => mkdirSync(d, { recursive: true }));
 
 // -------------------- Config --------------------
 // Loaded once at module init; CLI subcommands that mutate config exit immediately
@@ -648,7 +653,9 @@ function emitToInbox(srcPath, source) {
   const inboxName = inboxNameFor(srcPath, source);
   if (!inboxName) return { error: 'cannot-name' };
   const targetPath = join(INBOX, inboxName);
-  const tmpPath = targetPath + '.tmp';
+  // Write tmp into STAGING (sibling dir on the same filesystem) so the inbox
+  // watcher in server.js never sees it. Cross-dir rename stays atomic.
+  const tmpPath = join(STAGING, inboxName + '.tmp');
   // Reuse first 8 chars of the inbox stem for record-id seeding.
   const shortId = inboxName.replace(new RegExp(`^${source.prefix}-`), '').replace(/\.jsonl$/, '');
 
@@ -823,7 +830,9 @@ function emitCursorComposer(db, composer) {
 
   const shortId = composer.composerId.slice(0, 8);
   const targetPath = join(INBOX, `cursor-${shortId}.jsonl`);
-  const tmpPath = targetPath + '.tmp';
+  // Write tmp into STAGING so the inbox watcher doesn't race us. See the
+  // matching note in emitToInbox above for the full rationale.
+  const tmpPath = join(STAGING, `cursor-${shortId}.jsonl.tmp`);
 
   const records = composerToInboxRecords(
     composer,
@@ -956,7 +965,8 @@ function emitObsidianNote(notePath, vaultRoot) {
   const short = noteShortId(vaultRoot, note.relativePath);
   const inboxName = `obsidian-${slug}-${short}.jsonl`;
   const targetPath = join(INBOX, inboxName);
-  const tmpPath = targetPath + '.tmp';
+  // Tmp goes to STAGING; see emitToInbox for the race-condition rationale.
+  const tmpPath = join(STAGING, inboxName + '.tmp');
 
   const updatedIso = new Date(note.updated).toISOString();
   const seedText = slicePy(note.body, 200);

@@ -438,8 +438,18 @@ function importFile(filePath) {
 }
 
 // -------------------- Watch inbox --------------------
+// `ignored: ...tmp$` is defense-in-depth: the ingest daemon now writes its
+// snapshots into ~/.memex/staging/ and cross-dir-renames into INBOX (atomic),
+// so a .tmp file should never appear here. If one ever does — e.g. a user
+// dropping a partial file by hand — the watcher must not race the writer and
+// move the unfinished tmp into archive, which used to spam ENOENT into the
+// daemon's rename and corrupt the import accounting.
 chokidar
-  .watch(INBOX, { ignoreInitial: false, awaitWriteFinish: { stabilityThreshold: 800 } })
+  .watch(INBOX, {
+    ignoreInitial: false,
+    ignored: /\.tmp$/,
+    awaitWriteFinish: { stabilityThreshold: 800 },
+  })
   .on('add', (filePath) => {
     log('inbox detected:', basename(filePath));
     importFile(filePath);

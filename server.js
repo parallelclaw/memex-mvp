@@ -37,6 +37,7 @@ import {
   loadConfig,
   isSourceEnabled,
   obsidianVaultsFromConfig,
+  getSearchHalfLifeDays,
   KNOWN_SOURCES,
   CONFIG_PATH,
 } from './lib/config.js';
@@ -812,6 +813,11 @@ const TOOLS = [
           description:
             'If true, return the full untruncated text of each matching message (instead of the 360-char preview). Use when the snippet was cut off before the actual answer. Costs more tokens but saves a follow-up memex_get_conversation call when the answer fits in one message.',
         },
+        half_life_days: {
+          type: 'number',
+          description:
+            'Optional override of the temporal recency boost. Score = bm25 * exp(-age_days / half_life_days), so recent hits float above old ones for the same lexical relevance. Defaults to the value in ~/.memex/config.json (search.half_life_days, default 30). Use 7 for "what did we discuss this week", 90 for long-term recall, 0 to disable the boost entirely (pure BM25).',
+        },
         format: {
           type: 'string',
           enum: ['markdown', 'json'],
@@ -1084,6 +1090,22 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       // When grouping, fetch wider so we have enough unique conversations after dedup.
       const fetchLimit = groupByConv ? Math.min(500, limit * 10) : limit;
 
+      // Recency boost: score = bm25 * exp(-age_days / half_life). BM25 is negative
+      // (smaller = more relevant), and the multiplier ∈ (0, 1] is < 1 for older
+      // rows — so old hits become less negative and drop below recent ones with
+      // similar lexical relevance. Messages with ts = 0 or NULL (rare in old TG
+      // exports) are treated as "now" to avoid penalising them to oblivion.
+      //
+      // Config is re-read per call so edits to ~/.memex/config.json take effect
+      // on the next query — no server restart required. The disk read is cheap
+      // (small JSON, OS-cached) and memex_search isn't a hot path.
+      const halfLifeArg = typeof args.half_life_days === 'number' ? args.half_life_days : null;
+      const halfLife = halfLifeArg !== null ? halfLifeArg : getSearchHalfLifeDays(loadConfig());
+      const useBoost = halfLife > 0 && isFinite(halfLife);
+      const orderBy = useBoost
+        ? `bm25(messages_fts) * exp(-(CAST(strftime('%s','now') AS REAL) - COALESCE(NULLIF(m.ts, 0), CAST(strftime('%s','now') AS REAL))) / 86400.0 / ?)`
+        : 'rank';
+
       const sql = `
         SELECT m.id, m.source, m.conversation_id, m.sender, m.role,
                m.text, m.ts,
@@ -1095,10 +1117,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
      LEFT JOIN conversations c ON c.conversation_id = m.conversation_id
          WHERE messages_fts MATCH ?
            ${filterClause}
-      ORDER BY rank
+      ORDER BY ${orderBy}
          LIMIT ?
       `;
-      let rows = db.prepare(sql).all(...matchParams, fetchLimit);
+      const queryParams = useBoost
+        ? [...matchParams, halfLife, fetchLimit]
+        : [...matchParams, fetchLimit];
+      let rows = db.prepare(sql).all(...queryParams);
       if (rows.length === 0) {
         return format === 'json'
           ? jsonResult({ query: args.query, count: 0, results: [] })

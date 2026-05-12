@@ -719,6 +719,120 @@ on every topic the user references — no prompting needed</span></div>
       </details>
 
       <details class="faq-item">
+        <summary data-en="How does memex compare to Mem0 / claude-mem / Supermemory?"
+                 data-ru="А чем memex отличается от Mem0 / claude-mem / Supermemory?">How does memex compare to Mem0 / claude-mem / Supermemory?</summary>
+        <div class="faq-body">
+          <p data-en="The memory market in 2026 is large and divided. Each product is good at its own thing — memex is intentionally not competing on the same axes."
+             data-ru="Memory-рынок 2026 — большой и разделённый. Каждый продукт хорош в своём — memex намеренно играет в другую нишу.">
+            Memory-рынок 2026 — большой и разделённый. Каждый продукт хорош в своём — memex намеренно играет в другую нишу.
+          </p>
+
+          <div class="comparison-wrap">
+            <table class="comparison">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th class="memex-col" data-en="memex" data-ru="memex">memex</th>
+                  <th data-en="Mem0" data-ru="Mem0">Mem0</th>
+                  <th data-en="claude-mem" data-ru="claude-mem">claude-mem</th>
+                  <th data-en="ChatGPT Memory" data-ru="ChatGPT Memory">ChatGPT Memory</th>
+                  <th data-en="Anthropic Memory" data-ru="Anthropic Memory">Anthropic Memory</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-en="Audience" data-ru="Для кого">Audience</td>
+                  <td class="memex-col" data-en="AI power user, own archive" data-ru="AI-power user, свой архив">AI power user, own archive</td>
+                  <td data-en="Devs building AI agents" data-ru="Разработчики AI-агентов">Devs building AI agents</td>
+                  <td data-en="Solo dev in Claude Code" data-ru="Solo dev в Claude Code">Solo dev in Claude Code</td>
+                  <td data-en="Every ChatGPT user" data-ru="Каждый юзер ChatGPT">Every ChatGPT user</td>
+                  <td data-en="Every Claude user" data-ru="Каждый юзер Claude">Every Claude user</td>
+                </tr>
+                <tr>
+                  <td data-en="What's stored" data-ru="Что хранят">What's stored</td>
+                  <td class="memex-col" data-en="Verbatim (raw)" data-ru="Дословно (raw)">Verbatim (raw)</td>
+                  <td data-en="Extracted facts" data-ru="Извлечённые факты">Extracted facts</td>
+                  <td data-en="AI-compressed obs" data-ru="AI-сжатые observations">AI-compressed obs</td>
+                  <td data-en="Vendor-controlled" data-ru="Vendor-controlled">Vendor-controlled</td>
+                  <td data-en="Filesystem" data-ru="Filesystem">Filesystem</td>
+                </tr>
+                <tr>
+                  <td data-en="Where" data-ru="Где">Where</td>
+                  <td class="memex-col" data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
+                  <td data-en="Cloud / complex self-host" data-ru="Cloud / сложный self-host">Cloud / complex self-host</td>
+                  <td data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
+                  <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
+                  <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
+                </tr>
+                <tr>
+                  <td data-en="Sources" data-ru="Источники">Sources</td>
+                  <td class="memex-col" data-en="5 (incl. Telegram)" data-ru="5 (incl. Telegram)">5 (incl. Telegram)</td>
+                  <td data-en="AI chats only" data-ru="AI-чаты only">AI chats only</td>
+                  <td data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</td>
+                  <td data-en="ChatGPT only" data-ru="ChatGPT only">ChatGPT only</td>
+                  <td data-en="Claude only" data-ru="Claude only">Claude only</td>
+                </tr>
+                <tr>
+                  <td data-en="API key needed" data-ru="API-ключ">API key needed</td>
+                  <td class="memex-col"><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+                  <td><span class="y">✓</span> <span data-en="+ billing" data-ru="+ биллинг">+ billing</span></td>
+                  <td><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+                  <td data-en="bundled" data-ru="bundled">bundled</td>
+                  <td data-en="bundled" data-ru="bundled">bundled</td>
+                </tr>
+                <tr>
+                  <td data-en="Recovery after ban" data-ru="После бана">Recovery after ban</td>
+                  <td class="memex-col"><span class="y">✓</span> <span data-en="Reads from disk" data-ru="читает с диска">Reads from disk</span></td>
+                  <td><span class="n">✗</span> <span data-en="if cloud" data-ru="если cloud">if cloud</span></td>
+                  <td><span class="partial">~</span> <span data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</span></td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span></td>
+                </tr>
+                <tr>
+                  <td data-en="Cost" data-ru="Стоимость">Cost</td>
+                  <td class="memex-col" data-en="$0 forever" data-ru="$0 forever">$0 forever</td>
+                  <td data-en="$19–249/mo" data-ru="$19–249/мес">$19–249/mo</td>
+                  <td data-en="$0" data-ru="$0">$0</td>
+                  <td data-en="bundled" data-ru="bundled">bundled</td>
+                  <td data-en="bundled" data-ru="bundled">bundled</td>
+                </tr>
+                <tr>
+                  <td data-en="Open source" data-ru="Open source">Open source</td>
+                  <td class="memex-col"><span class="y">✓</span> MIT</td>
+                  <td><span class="y">✓</span> Apache 2.0</td>
+                  <td><span class="y">✓</span> MIT</td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="comp-summary" style="margin-top: 24px;">
+            <h4 data-en="When to choose what:" data-ru="Когда выбирать что:">When to choose what:</h4>
+            <ul>
+              <li data-en="<strong>Mem0</strong> — if you're building an AI agent for your users and need memory infrastructure"
+                  data-ru="<strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure">
+                <strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure
+              </li>
+              <li data-en="<strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions"
+                  data-ru="<strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями">
+                <strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями
+              </li>
+              <li data-en="<strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud"
+                  data-ru="<strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку">
+                <strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку
+              </li>
+              <li data-en="<strong>memex</strong> — if you're at the intersection: multiple AI tools, no cloud, no subscription, archive must <strong>survive any scenario</strong>"
+                  data-ru="<strong>memex</strong> — если ты в пересечении: несколько AI-инструментов, не хочешь облако, не хочешь подписку, хочешь чтобы архив <strong>выжил при любом сценарии</strong>">
+                <strong>memex</strong> — если ты в пересечении: несколько AI-инструментов, не хочешь облако, не хочешь подписку, хочешь чтобы архив <strong>выжил при любом сценарии</strong>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq-item">
         <summary data-en="Across multiple devices — does memex work?"
                  data-ru="Несколько устройств — как memex там работает?">Across multiple devices — does memex work?</summary>
         <div class="faq-body">

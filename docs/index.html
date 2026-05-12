@@ -411,6 +411,12 @@
     margin-bottom: 12px; flex-wrap: wrap;
   }
   .copy-meta { font-size: 13px; color: var(--text-muted); }
+  /* Language-specific prompt blocks. The active one is shown based on
+     <html lang="..."> set by the lang toggle. */
+  .prompt-block[data-lang="en"] { display: none; }
+  .prompt-block[data-lang="ru"] { display: block; }
+  html[lang="en"] .prompt-block[data-lang="en"] { display: block; }
+  html[lang="en"] .prompt-block[data-lang="ru"] { display: none; }
   .prompt-block {
     background: var(--bg-soft);
     padding: 16px 20px; border-radius: 8px;
@@ -951,7 +957,7 @@ on every topic the user references — no prompting needed</span></div>
           Then paste into your AI agent's chat.
         </span>
       </div>
-      <pre id="install-prompt" class="prompt-block">Install memex on this machine. Memex is a local-first AI memory tool — it captures my AI conversations across Claude Code, Cowork (including subagents), Cursor, Obsidian, and Telegram exports into a searchable SQLite index that any MCP-compatible agent can query through 11 standard tools. Repo: https://github.com/parallelclaw/memex-mvp
+      <pre id="install-prompt-en" class="prompt-block" data-lang="en">Install memex on this machine. Memex is a local-first AI memory tool — it captures my AI conversations across Claude Code, Cowork (including subagents), Cursor, Obsidian, and Telegram exports into a searchable SQLite index that any MCP-compatible agent can query through 11 standard tools. Repo: https://github.com/parallelclaw/memex-mvp
 
 ⚠ Prerequisite: this prompt only works if you are running INSIDE an AI agent that has direct access to my laptop's shell (terminal) — i.e. one of: Claude Code (CLI), Cursor, Cline, Continue, or Zed. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute git/npm/file operations on my machine — for those, point me to the manual install at https://memex.parallelclaw.ai/#quickstart instead. If you are NOT a CLI-based agent with shell access, stop now and tell me to use the manual install path.
 
@@ -1017,6 +1023,72 @@ Safety rules — read these before starting:
 - When editing my MCP config, always preserve existing entries. If you can't merge cleanly, abort and tell me.
 
 Begin by greeting me, asking which directory to clone into, and confirming which MCP client I'm using.</pre>
+      <pre id="install-prompt-ru" class="prompt-block" data-lang="ru">Установи memex на этой машине. Memex — это local-first AI memory tool: захватывает мои разговоры с AI в Claude Code, Cowork (включая субагентов), Cursor, Obsidian и Telegram-экспорты в поисковый SQLite-индекс, доступный любому MCP-совместимому агенту через 11 стандартных тулзов. Репо: https://github.com/parallelclaw/memex-mvp
+
+⚠ Условие: этот промпт работает только если ты запущен ВНУТРИ AI-агента с прямым доступом к терминалу моего ноутбука — то есть Claude Code (CLI), Cursor, Cline, Continue или Zed. Web-агенты (ChatGPT в браузере, Claude.ai web, Claude Desktop без тулзов и т.п.) не могут выполнять git/npm/файловые операции на моей машине — для них направь меня к ручной установке на https://memex.parallelclaw.ai/#quickstart. Если ты НЕ CLI-агент с доступом к shell — остановись прямо сейчас и скажи мне использовать manual install.
+
+Сделай эти пять шагов по порядку. Показывай каждую команду перед запуском. Останавливайся и спрашивай если что-то падает или выглядит не так.
+
+1. Клонирование и установка
+   - Предложи parent-директорию (по умолчанию: ~/Documents). Подтверди со мной.
+   - cd в эту директорию
+   - git clone https://github.com/parallelclaw/memex-mvp
+   - cd memex-mvp
+   - npm install
+   Проверь: server.js существует; npm install прошёл без фатальных ошибок.
+
+2. Подключи memex к моему MCP-клиенту
+   - Ты запущен в одном из: Claude Code, Cursor, Cline, Continue, Zed.
+     Скажи в каком ты и какой config-файл будешь править.
+     Стандартные локации:
+       Claude Code  → ~/.claude/config.json (или platform-specific эквивалент)
+       Cursor       → ~/.cursor/mcp.json
+       Cline        → VS Code settings.json (cline.mcpServers)
+       Continue     → ~/.continue/config.json
+       Zed          → ~/.config/zed/settings.json (context_servers)
+     Если неясно — спроси меня.
+   - Прочитай существующий config (если есть). Покажи мне diff перед сохранением.
+   - СМЕРДЖИ эту запись в mcpServers — никогда не перетирай другие серверы которые у меня есть:
+     {
+       "mcpServers": {
+         "memex": {
+           "command": "node",
+           "args": ["&lt;абсолютный путь к memex-mvp/server.js&gt;"]
+         }
+       }
+     }
+     Используй абсолютный путь из шага 1 (запусти pwd внутри memex-mvp).
+   - Если config-файла нет — создай parent-директорию и запиши минимальный валидный файл только с memex.
+   Проверь: перечитай файл после сохранения; убедись что memex-запись на месте и путь абсолютный.
+
+3. Включи live auto-capture (рекомендуется)
+   - Из директории memex-mvp: npx memex-sync install
+   - Потом npx memex-sync status — должен напечатать "daemon installed", "running (PID …)", "watching N sessions".
+   Проверь: status показывает не-нулевой PID.
+
+4. Backfill существующей истории (рекомендуется при первой установке)
+   - Daemon ловит только НОВЫЕ сессии. Чтобы проиндексировать всё что уже на диске:
+     npx memex-sync scan
+   - Это один раз обходит ~/.claude/projects/, Cowork-сессии, Cursor state.vscdb, и любые сконфигурированные Obsidian-vaults, ингестируя что есть.
+   - Опционально также: npx memex-sync backfill-projects — простит project_path старым conversation'ам чтобы memex_list_projects работал и на них.
+   Проверь: после scan npx memex-sync status показывает не-нулевой "ingested" счётчик.
+
+5. Скажи мне что делать дальше
+   - Скажи мне полностью закрыть и переоткрыть MCP-клиент (Cmd+Q на macOS) чтобы он подхватил новые memex-тулзы.
+   - После рестарта предложи попробовать любое из:
+     • «покажи что memex видит в моей истории» — вызовет memex_overview
+     • «какие проекты memex захватил» — вызовет memex_list_projects
+     • «найди в memex [недавняя тема]» — вызовет memex_search
+   Это подтверждает что всё работает end-to-end.
+
+Правила безопасности — прочитай перед началом:
+- Если `node` или `npm` не установлены — остановись и скажи мне поставить Node.js (рекомендую nvm.sh). Не пытайся ставить Node сам.
+- Никогда не запускай rm, sudo или что-либо деструктивное без явного подтверждения от меня.
+- Показывай каждую команду перед запуском. Если я говорю «нет» или «стоп» — останавливайся и объясняй.
+- Если шаг падает — НЕ авто-ретрай, НЕ авто-фикс. Скажи что упало и спроси как продолжать.
+- При редактировании моего MCP-config'a всегда сохраняй существующие записи. Если не можешь смерджить чисто — прерывайся и говори мне.
+
+Начни с приветствия, спроси в какую директорию клонировать, и подтверди в каком MCP-клиенте я тебя запустил.</pre>
     </div>
 
     <div class="or-divider"
@@ -1141,9 +1213,9 @@ npm install</code></pre>
     else setLang('ru');
   } catch(e) { setLang('ru'); }
 
-  // Copy install prompt to clipboard — works for any button with the same prompt
+  // Copy install prompt to clipboard — picks RU or EN version based on current lang
   function copyInstallPrompt(btnId) {
-    const pre = document.getElementById('install-prompt');
+    const pre = document.getElementById('install-prompt-' + currentLang);
     const text = pre.textContent;
     const btn = document.getElementById(btnId);
     const label = btn.querySelector('.btn-label');

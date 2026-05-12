@@ -936,9 +936,9 @@ on every topic the user references — no prompting needed</span></div>
       <h4 data-en="Let your AI install memex for you"
           data-ru="Пусть твой AI установит memex сам">Let your AI install memex for you</h4>
       <p class="lede2"
-         data-en="Already chatting with Claude Code, Cursor, Cline, Continue, or Zed? Any of them can do the whole install in 2 minutes — clone, wire the MCP config, turn on auto-capture. Just paste this prompt into the agent. It will show you each command before running, ask for confirmation on anything risky, and tell you when to restart."
-         data-ru="Уже общаешься с Claude Code, Cursor, Cline, Continue или Zed? Любой из них поставит memex за 2 минуты — клонирует, пропишет MCP-конфиг, включит авто-захват. Просто вставь этот промпт в агента. Он покажет каждую команду перед запуском, спросит подтверждение на рискованные действия, и скажет когда нужно перезапустить.">
-        Already chatting with Claude Code, Cursor, Cline, Continue, or Zed? Any of them can do the whole install in 2 minutes — clone, wire the MCP config, turn on auto-capture. Just paste this prompt into the agent. It will show you each command before running, ask for confirmation on anything risky, and tell you when to restart.
+         data-en="Already running a CLI-based AI agent on your laptop — Claude Code, Cursor, Cline, Continue, or Zed? Any of them can install memex in 2 minutes: clone the repo, wire the MCP config, turn on auto-capture. Paste this prompt and the agent will show every command before running, ask for confirmation on risky steps, and tell you when to restart. Web-only agents (ChatGPT in browser, Claude.ai web) can't execute shell commands on your machine — use the manual install below instead."
+         data-ru="Уже общаешься с CLI-агентом на своём ноуте — Claude Code, Cursor, Cline, Continue или Zed? Любой из них поставит memex за 2 минуты: клонирует репозиторий, пропишет MCP-конфиг, включит авто-захват. Вставь промпт — агент покажет каждую команду перед запуском, спросит подтверждение на рискованных шагах, скажет когда перезапустить. Web-агенты (ChatGPT в браузере, Claude.ai web) не могут выполнять shell-команды на твоём компьютере — для них используй установку вручную ниже.">
+        Already running a CLI-based AI agent on your laptop — Claude Code, Cursor, Cline, Continue, or Zed? Any of them can install memex in 2 minutes: clone the repo, wire the MCP config, turn on auto-capture. Paste this prompt and the agent will show every command before running, ask for confirmation on risky steps, and tell you when to restart. Web-only agents (ChatGPT in browser, Claude.ai web) can't execute shell commands on your machine — use the manual install below instead.
       </p>
       <div class="copy-row">
         <button class="btn-primary" id="quickstart-copy-btn" onclick="copyInstallPrompt('quickstart-copy-btn')">
@@ -951,9 +951,11 @@ on every topic the user references — no prompting needed</span></div>
           Then paste into your AI agent's chat.
         </span>
       </div>
-      <pre id="install-prompt" class="prompt-block">Install memex on this machine. Memex is a local-first AI memory tool — it captures my Claude Code and Cowork conversations into a searchable SQLite index that any MCP-compatible agent can query. Repo: https://github.com/parallelclaw/memex-mvp
+      <pre id="install-prompt" class="prompt-block">Install memex on this machine. Memex is a local-first AI memory tool — it captures my AI conversations across Claude Code, Cowork (including subagents), Cursor, Obsidian, and Telegram exports into a searchable SQLite index that any MCP-compatible agent can query through 11 standard tools. Repo: https://github.com/parallelclaw/memex-mvp
 
-Do these four steps in order. Show each command before you run it. Stop and ask if anything fails or looks wrong.
+⚠ Prerequisite: this prompt only works if you are running INSIDE an AI agent that has direct access to my laptop's shell (terminal) — i.e. one of: Claude Code (CLI), Cursor, Cline, Continue, or Zed. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute git/npm/file operations on my machine — for those, point me to the manual install at https://memex.parallelclaw.ai/#quickstart instead. If you are NOT a CLI-based agent with shell access, stop now and tell me to use the manual install path.
+
+Do these five steps in order. Show each command before you run it. Stop and ask if anything fails or looks wrong.
 
 1. Clone and install
    - Suggest a parent directory (default: ~/Documents). Confirm with me.
@@ -992,10 +994,20 @@ Do these four steps in order. Show each command before you run it. Stop and ask 
    - Then npx memex-sync status — should print "daemon installed", "running (PID …)", "watching N sessions".
    Verify: status output shows a non-zero PID.
 
-4. Tell me what to do next
+4. Backfill existing history (recommended on first install)
+   - The daemon only catches NEW sessions going forward. To index everything already on disk, run:
+     npx memex-sync scan
+   - This walks ~/.claude/projects/, Cowork sessions, Cursor state.vscdb, and any configured Obsidian vaults once, ingesting whatever exists.
+   - Optionally also: npx memex-sync backfill-projects — tags older conversations with their project_path so memex_list_projects works on them.
+   Verify: after scan, npx memex-sync status shows a non-zero "ingested" count.
+
+5. Tell me what to do next
    - Tell me to fully quit and reopen the MCP client (Cmd+Q on macOS) so it picks up the new memex tools.
-   - After restart, suggest I ask: "show me what memex has in memory"
-     — that triggers memex_overview and confirms everything works end-to-end.
+   - After restart, suggest I try any of these:
+     • "show me what memex has in memory" — triggers memex_overview
+     • "what projects has memex captured" — triggers memex_list_projects
+     • "search memex for [recent topic I worked on]" — triggers memex_search
+   These confirm everything works end-to-end.
 
 Safety rules — read these before starting:
 - If `node` or `npm` aren't installed, stop and tell me to install Node.js (recommend nvm.sh). Don't try to install Node yourself.

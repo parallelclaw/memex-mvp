@@ -244,6 +244,94 @@ For 3 detailed patterns with Syncthing/rsync examples — see [MULTI_MACHINE.md]
 
 ---
 
+## Миграция между устройствами / One-time migration
+
+> **Не то же самое что sync.** Это **разовый перенос** всей истории со старого ноута на новый — например при покупке нового мака. Sync — это паттерн в секции «Между устройствами» выше, когда два ноута постоянно делят одну БД через iCloud / Syncthing.
+
+### По-русски
+
+memex.db — обычный SQLite-файл, переезжает как любой документ.
+
+**На старом ноуте:**
+
+```bash
+# 1. Останови daemon чтобы не было активной записи
+launchctl unload ~/Library/LaunchAgents/com.parallelclaw.memex.sync.plist 2>/dev/null
+
+# 2. Сверни WAL в основной файл (чтобы не потерять свежие записи)
+sqlite3 ~/.memex/data/memex.db "PRAGMA wal_checkpoint(TRUNCATE)"
+
+# 3. Скопируй ОДИН файл (AirDrop / scp / iCloud / external USB)
+cp ~/.memex/data/memex.db ~/Desktop/memex-backup.db
+```
+
+⚠ Копируй **только `memex.db`** — НЕ копируй `memex.db-wal`, `memex.db-shm` (временные, после checkpoint'a не нужны) и НЕ копируй `~/.memex/data/ingest-state.json` (machine-specific — там пути и fingerprint'ы старого ноута).
+
+**На новом ноуте:**
+
+```bash
+# 1. Установи memex как при первой установке
+git clone https://github.com/parallelclaw/memex-mvp
+cd memex-mvp && npm install
+
+# 2. Положи DB-файл
+mkdir -p ~/.memex/data
+cp /path/to/memex-backup.db ~/.memex/data/memex.db
+
+# 3. Пропиши MCP-конфиг с абсолютным путём к node (см. секцию "Подключение к Claude Code")
+
+# 4. Перезапусти Cursor / Claude Code и вызови memex_overview
+```
+
+**Что переедет:** все разговоры, FTS5-индекс, Telegram-экспорты, conversation IDs. Поиск работает сразу.
+
+**Что НЕ переедет автоматически:**
+- Новые Claude Code / Cursor сессии нового ноута — это уже файлы нового ноута. Решение: `npx memex-sync install` на новом — daemon начнёт ловить новые сессии и добавлять их в ту же БД.
+- `project_path` в существующих записях содержит **старые пути** (`/Users/oldname/...`). Memex не сломается, но `memex_list_projects` покажет старые пути. При необходимости — `UPDATE conversations SET project_path = REPLACE(...)` руками.
+
+### In English
+
+memex.db is a regular SQLite file — moves like any document.
+
+**On the old laptop:**
+
+```bash
+# 1. Stop the daemon to prevent active writes
+launchctl unload ~/Library/LaunchAgents/com.parallelclaw.memex.sync.plist 2>/dev/null
+
+# 2. Checkpoint the WAL into the main file (don't lose recent writes)
+sqlite3 ~/.memex/data/memex.db "PRAGMA wal_checkpoint(TRUNCATE)"
+
+# 3. Copy ONE file (AirDrop / scp / iCloud / external USB)
+cp ~/.memex/data/memex.db ~/Desktop/memex-backup.db
+```
+
+⚠ Copy **only `memex.db`** — do NOT copy `memex.db-wal`, `memex.db-shm` (transient, unneeded after checkpoint), and do NOT copy `~/.memex/data/ingest-state.json` (machine-specific — it contains paths and fingerprints from the old laptop).
+
+**On the new laptop:**
+
+```bash
+# 1. Install memex like a first-time install
+git clone https://github.com/parallelclaw/memex-mvp
+cd memex-mvp && npm install
+
+# 2. Place the DB file
+mkdir -p ~/.memex/data
+cp /path/to/memex-backup.db ~/.memex/data/memex.db
+
+# 3. Wire MCP config with absolute path to node (see "Connecting to Claude Code" above)
+
+# 4. Restart Cursor / Claude Code and call memex_overview
+```
+
+**What transfers:** all conversations, FTS5 index, Telegram exports, conversation IDs. Search works immediately.
+
+**What does NOT auto-transfer:**
+- New Claude Code / Cursor sessions on the new laptop — those are new files on the new machine. Solution: run `npx memex-sync install` on the new laptop — the daemon will start catching new sessions and adding them to the same DB.
+- `project_path` in existing rows still contains **old paths** (`/Users/oldname/...`). Memex won't break, but `memex_list_projects` will show old paths. If needed — `UPDATE conversations SET project_path = REPLACE(...)` manually.
+
+---
+
 ## Приватность и безопасность / Privacy & Security
 
 ### По-русски

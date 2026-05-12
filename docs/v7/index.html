@@ -368,41 +368,6 @@
   }
   .comp-summary li strong { color: var(--text); font-weight: 700; }
 
-  /* FAQ collapsibles */
-  .faq-list { max-width: 760px; margin: 0 auto; }
-  .faq-item {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-bottom: 12px;
-    overflow: hidden;
-  }
-  .faq-item > summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 18px 22px;
-    font-size: 16px; font-weight: 700;
-    color: var(--text);
-    display: flex; justify-content: space-between; align-items: center;
-    transition: background 0.15s;
-  }
-  .faq-item > summary::-webkit-details-marker { display: none; }
-  .faq-item > summary::after {
-    content: '+'; font-size: 22px; color: var(--accent);
-    font-weight: 400; transition: transform 0.2s;
-  }
-  .faq-item[open] > summary::after { content: '−'; }
-  .faq-item > summary:hover { background: rgba(95,182,205,0.04); }
-  .faq-body { padding: 0 22px 22px; color: var(--text-soft); font-size: 14.5px; line-height: 1.6; }
-  .faq-body p { margin-bottom: 10px; }
-  .faq-body p:last-child { margin-bottom: 0; }
-  .faq-body ul { padding-left: 18px; margin-bottom: 10px; }
-  .faq-body li { margin-bottom: 6px; }
-  .faq-body pre {
-    background: var(--bg-soft); padding: 12px 16px; border-radius: 8px;
-    font-size: 13px; overflow-x: auto; margin: 8px 0;
-  }
-
   /* Manifesto */
   .manifesto {
     max-width: 720px; margin: 0 auto;
@@ -607,30 +572,40 @@
 
 <section class="section">
   <div class="section-inner">
-    <h2 class="section-title" data-en="The problem" data-ru="Проблема">The problem</h2>
+    <h2 class="section-title" data-en="We solve two problems at once" data-ru="Решаем две проблемы одновременно">We solve two problems at once</h2>
     <div class="pain-grid">
       <div class="pain-card fragmentation">
         <h3 data-en="Context is scattered" data-ru="Контекст разбросан">Context is scattered</h3>
-        <p data-en="You discuss something important in one AI, continue in another, and a month later it just disappears. Even without bans, AI forgets every session."
-           data-ru="Ты обсуждаешь что-то важное в одном AI, продолжаешь в другом, а через месяц это просто исчезает. И даже без банов AI забывает каждую сессию.">
-           You discuss something important in one AI, continue in another, and a month later it just disappears. Even without bans, AI forgets every session.
+        <p data-en="You discuss something important in one AI, continue in another, and a month later it just disappears."
+           data-ru="Ты обсуждаешь что-то важное в одном AI, продолжаешь в другом, а через месяц это просто исчезает.">
+           You discuss something important in one AI, continue in another, and a month later it just disappears.
         </p>
       </div>
       <div class="pain-card ban">
         <h3 data-en="Access is fragile" data-ru="Доступ хрупок">Access is fragile</h3>
-        <p data-en="In February 2026 Anthropic disabled <a href='https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost' target='_blank' rel='noopener'>all OpenClaw users</a> overnight. In May — <a href='https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e' target='_blank' rel='noopener'>entire companies overnight</a>. <a href='https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/' target='_blank' rel='noopener'>Country policy</a> blocks companies with &gt;50% RU/CN/IR/KP ownership. IP checked every request — VPN doesn't save you."
+        <p data-en="In February 2026 Anthropic disabled <a href='https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost' target='_blank' rel='noopener'>all OpenClaw users</a> overnight. In May — <a href='https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e' target='_blank' rel='noopener'>entire companies overnight</a>. <a href='https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/' target='_blank' rel='noopener'>Country policy</a> blocks companies with &gt;50% RU/CN/IR/KP ownership. IP is checked on every request — VPN does not save you."
            data-ru="В феврале 2026 Anthropic одним указом отключил <a href='https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost' target='_blank' rel='noopener'>всех юзеров OpenClaw</a>. В мае — <a href='https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e' target='_blank' rel='noopener'>целые компании overnight</a>. <a href='https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/' target='_blank' rel='noopener'>Country policy</a> блокирует компании с &gt;50% владения RU/CN/IR/KP. IP проверяется на каждый запрос — VPN не спасает.">
            В феврале 2026 Anthropic одним указом отключил <a href="https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost" target="_blank" rel="noopener">всех юзеров OpenClaw</a>. В мае — <a href="https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e" target="_blank" rel="noopener">целые компании overnight</a>. <a href="https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/" target="_blank" rel="noopener">Country policy</a> блокирует компании с &gt;50% владения RU/CN/IR/KP. IP проверяется на каждый запрос — VPN не спасает.
         </p>
       </div>
     </div>
+    <p class="pain-tail"
+       data-en="And even without bans, AI forgets every session."
+       data-ru="И даже без банов AI забывает каждую сессию.">
+       And even without bans, AI forgets every session.
+    </p>
+  </div>
+</section>
 
-    <div class="recovery-card" style="margin-top: 28px;">
+<section class="section recovery">
+  <div class="section-inner">
+    <div class="recovery-card">
       <span class="recovery-tag" data-en="Already banned?" data-ru="Уже заблокирован?">Already banned?</span>
-      <p style="color: var(--text); font-size: 16px; line-height: 1.6; margin-bottom: 10px;"
-         data-en="Claude Code wrote every session to your disk in <code>~/.claude/projects/</code>. When the API gets cut off — <strong>the files stay</strong>. Memex reads them, indexes them, and serves them through MCP to any locally available AI."
-         data-ru="Claude Code писал каждую сессию на твой диск в <code>~/.claude/projects/</code>. Когда отключают API — <strong>файлы остаются</strong>. Memex вытащит их и отдаст через MCP любому локально доступному AI.">
-         Claude Code писал каждую сессию на твой диск в <code>~/.claude/projects/</code>. Когда отключают API — <strong>файлы остаются</strong>. Memex вытащит их и отдаст через MCP любому локально доступному AI.
+      <h2 data-en="Memex pulls your history back from local files."
+          data-ru="Memex вытащит твою историю из локальных файлов.">Memex pulls your history back from local files.</h2>
+      <p data-en="Claude Code wrote every session to your disk in <code>~/.claude/projects/</code>. When the API gets cut off — <strong>the files stay</strong>. Memex reads them, indexes them, and serves them through MCP to any locally available AI — Llama, Qwen, or Claude through a different account."
+         data-ru="Claude Code писал каждую сессию на твой диск в <code>~/.claude/projects/</code>. Когда отключают API — <strong>файлы остаются</strong>. Memex вытащит их обратно и отдаст через MCP любому локально доступному AI — Llama, Qwen, или Claude через другой аккаунт.">
+         Claude Code писал каждую сессию на твой диск в <code>~/.claude/projects/</code>. Когда отключают API — <strong>файлы остаются</strong>. Memex вытащит их обратно и отдаст через MCP любому локально доступному AI — Llama, Qwen, или Claude через другой аккаунт.
       </p>
       <p class="punchline"
          data-en="Your year of work isn't lost. Just the access channel."
@@ -672,265 +647,392 @@ on every topic the user references — no prompting needed</span></div>
 
 <section class="section">
   <div class="section-inner">
-    <h2 class="section-title" data-en="FAQ" data-ru="FAQ">FAQ</h2>
+    <h2 class="section-title" data-en="Five gaps in native AI memory" data-ru="Пять дыр в нативной AI-памяти">Five gaps in native AI memory</h2>
     <p class="section-sub"
-       data-en="Common questions about scope, devices, and privacy."
-       data-ru="Частые вопросы — про охват, устройства и приватность.">
-      Common questions about scope, devices, and privacy.
+       data-en="Even ChatGPT Memory, Claude Memory (Pro/Max) and CLAUDE.md leave structural holes. memex closes all five."
+       data-ru="Даже ChatGPT Memory, Claude Memory (Pro/Max) и CLAUDE.md оставляют структурные дыры. Memex закрывает все пять.">
+      Even ChatGPT Memory, Claude Memory (Pro/Max) and CLAUDE.md leave structural holes. memex closes all five.
     </p>
 
-    <div class="faq-list">
-      <details class="faq-item">
-        <summary data-en="How is memex different from native Claude / ChatGPT memory?"
-                 data-ru="Чем memex отличается от Claude Memory / ChatGPT Memory?">How is memex different from native Claude / ChatGPT memory?</summary>
-        <div class="faq-body">
-          <p data-en="Native AI memory has five structural gaps. Memex closes all five:"
-             data-ru="У нативной AI-памяти пять структурных дыр. Memex закрывает все пять:">
-            У нативной AI-памяти пять структурных дыр. Memex закрывает все пять:
-          </p>
-          <ul>
-            <li data-en="<strong>Hard-walled per-project silos</strong> (Claude Memory locks projects shut — no recall across them) → memex is <strong>project-aware, not siloed</strong>: optional <code>project</code> filter in search, default is wide. Boundary on every query is your choice."
-                data-ru="<strong>Жёстко изолированные per-project silos</strong> (Claude Memory закрывает границы намертво) → memex <strong>project-aware, не siloed</strong>: опциональный <code>project</code>-фильтр в поиске, default — широкий. Граница на каждый запрос — твой выбор.">
-              <strong>Жёстко изолированные per-project silos</strong> (Claude Memory закрывает границы намертво) → memex <strong>project-aware, не siloed</strong>: опциональный <code>project</code>-фильтр в поиске, default — широкий. Граница на каждый запрос — твой выбор.
-            </li>
-            <li data-en="<strong>No bridge between Anthropic's own products</strong> (Web Claude doesn't see Code; Code doesn't see Cowork) → all Anthropic products + Cowork subagents in one searchable index."
-                data-ru="<strong>Между продуктами Anthropic нет мостов</strong> (Web Claude не видит Code; Code не видит Cowork) → все продукты Anthropic + субагенты Cowork в одном поисковом индексе.">
-              <strong>Между продуктами Anthropic нет мостов</strong> (Web Claude не видит Code; Code не видит Cowork) → все продукты Anthropic + субагенты Cowork в одном поисковом индексе.
-            </li>
-            <li data-en="<strong>No cross-AI memory by design</strong> (ChatGPT, Cursor, Cline, Zed, Telegram bots — each keeps its own silo) → any MCP-compatible client reads the same memex memory through 11 standard tools."
-                data-ru="<strong>Cross-AI памяти не существует by design</strong> (ChatGPT, Cursor, Cline, Zed, Telegram-боты — каждый держит свой silo) → любой MCP-клиент читает одну и ту же память через 11 стандартных тулзов.">
-              <strong>Cross-AI памяти не существует by design</strong> (ChatGPT, Cursor, Cline, Zed, Telegram-боты — каждый держит свой silo) → любой MCP-клиент читает одну и ту же память через 11 стандартных тулзов.
-            </li>
-            <li data-en="<strong>Tied to one machine</strong> (Claude Code history lives in <code>~/.claude/projects/</code> on a specific laptop) → memex is a plain SQLite file — sync via iCloud / Syncthing / rsync — your choice."
-                data-ru="<strong>Привязка к одной машине</strong> (история Claude Code на конкретном ноуте) → memex — обычный SQLite-файл, синк через iCloud / Syncthing / rsync на твой вкус.">
-              <strong>Привязка к одной машине</strong> (история Claude Code на конкретном ноуте) → memex — обычный SQLite-файл, синк через iCloud / Syncthing / rsync на твой вкус.
-            </li>
-            <li data-en="<strong>Account dies → memory dies</strong> (Anthropic banned multiple orgs without warning; country policy blocks RU/CN/IR/KP-owned companies) → the SQLite file on your laptop doesn't depend on any provider. Yours by architecture — not policy."
-                data-ru="<strong>Аккаунт умирает — память умирает</strong> (Anthropic блокирует без предупреждения; country policy режет RU/CN/IR/KP) → SQLite-файл на твоём ноуте не зависит от провайдера. Твоё by architecture, не по policy.">
-              <strong>Аккаунт умирает — память умирает</strong> (Anthropic блокирует без предупреждения; country policy режет RU/CN/IR/KP) → SQLite-файл на твоём ноуте не зависит от провайдера. Твоё by architecture, не по policy.
-            </li>
-          </ul>
-          <p style="color: var(--text-muted); font-size: 13px; margin-top: 8px;"
-             data-en="Sources: anthropics/claude-code <a href='https://github.com/anthropics/claude-code/issues/36561' target='_blank' rel='noopener'>#36561</a>, <a href='https://github.com/anthropics/claude-code/issues/39195' target='_blank' rel='noopener'>#39195</a>, <a href='https://github.com/anthropics/claude-code/issues/25739' target='_blank' rel='noopener'>#25739</a>; HN #47853021 (April 2026 ban thread)."
-             data-ru="Источники: anthropics/claude-code <a href='https://github.com/anthropics/claude-code/issues/36561' target='_blank' rel='noopener'>#36561</a>, <a href='https://github.com/anthropics/claude-code/issues/39195' target='_blank' rel='noopener'>#39195</a>, <a href='https://github.com/anthropics/claude-code/issues/25739' target='_blank' rel='noopener'>#25739</a>; HN #47853021 (тред про апрельские баны 2026).">
-            Источники: anthropics/claude-code <a href="https://github.com/anthropics/claude-code/issues/36561" target="_blank" rel="noopener">#36561</a>, <a href="https://github.com/anthropics/claude-code/issues/39195" target="_blank" rel="noopener">#39195</a>, <a href="https://github.com/anthropics/claude-code/issues/25739" target="_blank" rel="noopener">#25739</a>; HN #47853021 (тред про апрельские баны 2026).
-          </p>
-        </div>
-      </details>
+    <div class="gaps-grid">
+      <div class="gap-cell gap-cell-header" data-en="Native AI memory" data-ru="Нативная AI-память">Native AI memory</div>
+      <div class="gap-cell gap-cell-header memex" data-en="memex" data-ru="memex">memex</div>
 
-      <details class="faq-item">
-        <summary data-en="How does memex compare to Mem0 / claude-mem / Supermemory?"
-                 data-ru="А чем memex отличается от Mem0 / claude-mem / Supermemory?">How does memex compare to Mem0 / claude-mem / Supermemory?</summary>
-        <div class="faq-body">
-          <p data-en="The memory market in 2026 is large and divided. Each product is good at its own thing — memex is intentionally not competing on the same axes."
-             data-ru="Memory-рынок 2026 — большой и разделённый. Каждый продукт хорош в своём — memex намеренно играет в другую нишу.">
-            Memory-рынок 2026 — большой и разделённый. Каждый продукт хорош в своём — memex намеренно играет в другую нишу.
-          </p>
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="Hard-walled per-project silos." data-ru="Жёстко изолированные per-project silos.">Hard-walled per-project silos.</strong>
+        <span data-en=" Silos are useful by default — but Claude Memory locks them shut. When you actually need to recall a decision from a neighbouring project, there's no escape hatch."
+              data-ru=" Изоляция по умолчанию — полезно. Но Claude Memory закрывает границы намертво: когда нужно вспомнить решение из соседнего проекта, выйти за silos невозможно."> Silos are useful by default — but Claude Memory locks them shut. When you actually need to recall a decision from a neighbouring project, there's no escape hatch.</span>
+        <span class="gap-source">anthropics/claude-code #36561, #39195</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="Project-aware, not siloed. <code>memex_search</code> takes an optional <code>project</code> filter — by default it can search wide, when you scope it, it stays inside. The boundary is your choice on every query."
+              data-ru="Project-aware, но не siloed. У <code>memex_search</code> есть опциональный фильтр <code>project</code> — по умолчанию ищет по всем, с фильтром — только в нужном. Граница на твоё усмотрение на каждый запрос.">
+          Project-aware, not siloed. <code>memex_search</code> takes an optional <code>project</code> filter — by default it can search wide, when you scope it, it stays inside. The boundary is your choice on every query.
+        </span>
+      </div>
 
-          <div class="comparison-wrap">
-            <table class="comparison">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th class="memex-col" data-en="memex" data-ru="memex">memex</th>
-                  <th data-en="Mem0" data-ru="Mem0">Mem0</th>
-                  <th data-en="claude-mem" data-ru="claude-mem">claude-mem</th>
-                  <th data-en="ChatGPT Memory" data-ru="ChatGPT Memory">ChatGPT Memory</th>
-                  <th data-en="Anthropic Memory" data-ru="Anthropic Memory">Anthropic Memory</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td data-en="Audience" data-ru="Для кого">Audience</td>
-                  <td class="memex-col" data-en="AI power user, own archive" data-ru="AI-power user, свой архив">AI power user, own archive</td>
-                  <td data-en="Devs building AI agents" data-ru="Разработчики AI-агентов">Devs building AI agents</td>
-                  <td data-en="Solo dev in Claude Code" data-ru="Solo dev в Claude Code">Solo dev in Claude Code</td>
-                  <td data-en="Every ChatGPT user" data-ru="Каждый юзер ChatGPT">Every ChatGPT user</td>
-                  <td data-en="Every Claude user" data-ru="Каждый юзер Claude">Every Claude user</td>
-                </tr>
-                <tr>
-                  <td data-en="What's stored" data-ru="Что хранят">What's stored</td>
-                  <td class="memex-col" data-en="Verbatim (raw)" data-ru="Дословно (raw)">Verbatim (raw)</td>
-                  <td data-en="Extracted facts" data-ru="Извлечённые факты">Extracted facts</td>
-                  <td data-en="AI-compressed obs" data-ru="AI-сжатые observations">AI-compressed obs</td>
-                  <td data-en="Vendor-controlled" data-ru="Vendor-controlled">Vendor-controlled</td>
-                  <td data-en="Filesystem" data-ru="Filesystem">Filesystem</td>
-                </tr>
-                <tr>
-                  <td data-en="Where" data-ru="Где">Where</td>
-                  <td class="memex-col" data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
-                  <td data-en="Cloud / complex self-host" data-ru="Cloud / сложный self-host">Cloud / complex self-host</td>
-                  <td data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
-                  <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
-                  <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
-                </tr>
-                <tr>
-                  <td data-en="Sources" data-ru="Источники">Sources</td>
-                  <td class="memex-col" data-en="5 (incl. Telegram)" data-ru="5 (incl. Telegram)">5 (incl. Telegram)</td>
-                  <td data-en="AI chats only" data-ru="AI-чаты only">AI chats only</td>
-                  <td data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</td>
-                  <td data-en="ChatGPT only" data-ru="ChatGPT only">ChatGPT only</td>
-                  <td data-en="Claude only" data-ru="Claude only">Claude only</td>
-                </tr>
-                <tr>
-                  <td data-en="API key needed" data-ru="API-ключ">API key needed</td>
-                  <td class="memex-col"><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
-                  <td><span class="y">✓</span> <span data-en="+ billing" data-ru="+ биллинг">+ billing</span></td>
-                  <td><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
-                  <td data-en="bundled" data-ru="bundled">bundled</td>
-                  <td data-en="bundled" data-ru="bundled">bundled</td>
-                </tr>
-                <tr>
-                  <td data-en="Recovery after ban" data-ru="После бана">Recovery after ban</td>
-                  <td class="memex-col"><span class="y">✓</span> <span data-en="Reads from disk" data-ru="читает с диска">Reads from disk</span></td>
-                  <td><span class="n">✗</span> <span data-en="if cloud" data-ru="если cloud">if cloud</span></td>
-                  <td><span class="partial">~</span> <span data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</span></td>
-                  <td><span class="n">✗</span></td>
-                  <td><span class="n">✗</span></td>
-                </tr>
-                <tr>
-                  <td data-en="Cost" data-ru="Стоимость">Cost</td>
-                  <td class="memex-col" data-en="$0 forever" data-ru="$0 forever">$0 forever</td>
-                  <td data-en="$19–249/mo" data-ru="$19–249/мес">$19–249/mo</td>
-                  <td data-en="$0" data-ru="$0">$0</td>
-                  <td data-en="bundled" data-ru="bundled">bundled</td>
-                  <td data-en="bundled" data-ru="bundled">bundled</td>
-                </tr>
-                <tr>
-                  <td data-en="Open source" data-ru="Open source">Open source</td>
-                  <td class="memex-col"><span class="y">✓</span> MIT</td>
-                  <td><span class="y">✓</span> Apache 2.0</td>
-                  <td><span class="y">✓</span> MIT</td>
-                  <td><span class="n">✗</span></td>
-                  <td><span class="n">✗</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="No bridge between Anthropic's own products."
+                data-ru="Нет мостов между продуктами Anthropic.">No bridge between Anthropic's own products.</strong>
+        <span data-en=" Web Claude can't see your Code sessions. Code can't see Cowork."
+              data-ru=" Web Claude не видит Code-сессии. Code не видит Cowork."> Web Claude can't see your Code sessions. Code can't see Cowork.</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="All Anthropic products + Cowork subagents — one searchable index."
+              data-ru="Все продукты Anthropic + субагенты Cowork — в одном поисковом индексе.">
+          All Anthropic products + Cowork subagents — one searchable index.
+        </span>
+      </div>
 
-          <div class="comp-summary" style="margin-top: 24px;">
-            <h4 data-en="When to choose what:" data-ru="Когда выбирать что:">When to choose what:</h4>
-            <ul>
-              <li data-en="<strong>Mem0</strong> — if you're building an AI agent for your users and need memory infrastructure"
-                  data-ru="<strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure">
-                <strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure
-              </li>
-              <li data-en="<strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions"
-                  data-ru="<strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями">
-                <strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями
-              </li>
-              <li data-en="<strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud"
-                  data-ru="<strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку">
-                <strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку
-              </li>
-              <li data-en="<strong>memex</strong> — if you're at the intersection: multiple AI tools, no cloud, no subscription, archive must <strong>survive any scenario</strong>"
-                  data-ru="<strong>memex</strong> — если ты в пересечении: несколько AI-инструментов, не хочешь облако, не хочешь подписку, хочешь чтобы архив <strong>выжил при любом сценарии</strong>">
-                <strong>memex</strong> — если ты в пересечении: несколько AI-инструментов, не хочешь облако, не хочешь подписку, хочешь чтобы архив <strong>выжил при любом сценарии</strong>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </details>
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="No cross-AI memory by design."
+                data-ru="Cross-AI памяти не существует by design.">No cross-AI memory by design.</strong>
+        <span data-en=" ChatGPT, Cursor, Cline, Continue, Zed, Telegram AI bots — every provider keeps its own silo."
+              data-ru=" ChatGPT, Cursor, Cline, Continue, Zed, Telegram-боты — каждый провайдер держит свой silo."> ChatGPT, Cursor, Cline, Continue, Zed, Telegram AI bots — every provider keeps its own silo.</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="Any MCP-compatible client reads the same memex memory through 11 standard tools."
+              data-ru="Любой MCP-клиент читает одну и ту же память через 11 стандартных тулзов.">
+          Any MCP-compatible client reads the same memex memory through 11 standard tools.
+        </span>
+      </div>
 
-      <details class="faq-item">
-        <summary data-en="Across multiple devices — does memex work?"
-                 data-ru="Несколько устройств — как memex там работает?">Across multiple devices — does memex work?</summary>
-        <div class="faq-body">
-          <p data-en="Memex lives on one machine — daemon catches local files, SQLite builds locally. Three patterns for multi-device today:"
-             data-ru="Memex живёт на одной машине — daemon ловит локальные файлы, SQLite строится локально. Три паттерна для multi-device сегодня:">
-            Memex живёт на одной машине — daemon ловит локальные файлы, SQLite строится локально. Три паттерна для multi-device сегодня:
-          </p>
-          <ul>
-            <li data-en="<strong>Sync the SQLite file.</strong> <code>~/.memex/data/memex.db</code> is a regular file — replicate via iCloud / Syncthing / rsync. Daemon writes on your primary machine; others read through their local memex MCP. One writer, many readers."
-                data-ru="<strong>Синк SQLite-файла.</strong> <code>~/.memex/data/memex.db</code> — обычный файл, реплицируй через iCloud / Syncthing / rsync. Daemon пишет на основной машине, остальные читают через свой локальный memex MCP. Один writer, много readers.">
-              <strong>Синк SQLite-файла.</strong> <code>~/.memex/data/memex.db</code> — обычный файл, реплицируй через iCloud / Syncthing / rsync. Daemon пишет на основной машине, остальные читают через свой локальный memex MCP. Один writer, много readers.
-            </li>
-            <li data-en="<strong>Memex on each device independently.</strong> Install separately on each laptop. No sync, no conflicts — but memory isn't unified."
-                data-ru="<strong>Memex на каждом устройстве независимо.</strong> Установи отдельно на каждый ноут. Нет синка, нет конфликтов — но память не унифицирована.">
-              <strong>Memex на каждом устройстве независимо.</strong> Установи отдельно на каждый ноут. Нет синка, нет конфликтов — но память не унифицирована.
-            </li>
-            <li data-en="<strong>Mobile via Telegram bot</strong> <em>(roadmap, code drafted)</em>. Forward messages to @memex_bot — bot writes JSON to <code>~/.memex/inbox/</code> on your primary machine."
-                data-ru="<strong>Mobile через Telegram-бот</strong> <em>(в roadmap'е, код написан)</em>. Пересылаешь сообщения в @memex_bot — бот пишет JSON в <code>~/.memex/inbox/</code> основной машины.">
-              <strong>Mobile через Telegram-бот</strong> <em>(в roadmap'е, код написан)</em>. Пересылаешь сообщения в @memex_bot — бот пишет JSON в <code>~/.memex/inbox/</code> основной машины.
-            </li>
-          </ul>
-          <p data-en="iCloud setup on macOS:"
-             data-ru="iCloud setup на macOS:">iCloud setup на macOS:</p>
-<pre><code>export MEMEX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/memex"</code></pre>
-          <p data-en="⚠ <strong>One writer only.</strong> Run <code>memex-sync</code> daemon on exactly one machine — others read the synced file. Concurrent writers via filesystem sync can corrupt the WAL."
-             data-ru="⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине, остальные только читают. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.">
-            ⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине, остальные только читают. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.
-          </p>
-        </div>
-      </details>
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="Tied to one machine."
+                data-ru="Привязка к одной машине.">Tied to one machine.</strong>
+        <span data-en=" Claude Code's history lives in ~/.claude/projects/ on whichever laptop you used."
+              data-ru=" История Claude Code на конкретном ноуте."> Claude Code's history lives in ~/.claude/projects/ on whichever laptop you used.</span>
+        <span class="gap-source">anthropics/claude-code #25739</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="Plain SQLite file. Sync via iCloud / Syncthing / rsync / git-annex — your choice."
+              data-ru="Plain SQLite. Синк через iCloud / Syncthing / rsync / git-annex.">
+          Plain SQLite file. Sync via iCloud / Syncthing / rsync / git-annex — your choice.
+        </span>
+      </div>
 
-      <details class="faq-item">
-        <summary data-en="What about privacy and encryption?"
-                 data-ru="Что с приватностью и шифрованием?">What about privacy and encryption?</summary>
-        <div class="faq-body">
-          <p data-en="✅ <strong>What memex does:</strong> Lives only on your machine, never phones home, no API keys, no network access. OS-level file permissions — readable only by your user."
-             data-ru="✅ <strong>Что memex делает:</strong> Живёт только на твоей машине, никуда не звонит, без API-ключей, без network access. OS-level права — читает только твой user.">
-            ✅ <strong>Что memex делает:</strong> Живёт только на твоей машине, никуда не звонит, без API-ключей, без network access. OS-level права — читает только твой user.
-          </p>
-          <p data-en="❌ <strong>What it doesn't:</strong> Doesn't encrypt the DB file, doesn't redact secrets you pasted into AI chats, no password on memex itself."
-             data-ru="❌ <strong>Что не делает:</strong> Не шифрует БД, не редактирует секреты которые ты вставлял в чаты, нет пароля на сам memex.">
-            ❌ <strong>Что не делает:</strong> Не шифрует БД, не редактирует секреты которые ты вставлял в чаты, нет пароля на сам memex.
-          </p>
-          <p data-en="📦 <strong>Doesn't add risk — concentrates it.</strong> Your AI history is <em>already</em> on disk in plain text (Claude Code JSONL, Cursor state.vscdb, Cowork files, Obsidian markdown, Telegram local DB). Memex consolidates them into one SQLite. Same data, one place instead of five."
-             data-ru="📦 <strong>Не добавляет риск — концентрирует.</strong> Твоя AI-история <em>уже</em> на диске в plain text (Claude Code JSONL, Cursor state.vscdb, Cowork files, Obsidian markdown, Telegram local DB). Memex консолидирует в один SQLite. Те же данные, в одном месте вместо пяти.">
-            📦 <strong>Не добавляет риск — концентрирует.</strong> Твоя AI-история <em>уже</em> на диске в plain text (Claude Code JSONL, Cursor state.vscdb, Cowork files, Obsidian markdown, Telegram local DB). Memex консолидирует в один SQLite. Те же данные, в одном месте вместо пяти.
-          </p>
-          <p data-en="🛡️ <strong>Top recommendation: FileVault.</strong> On macOS: <em>System Settings → Privacy &amp; Security → FileVault → Turn On</em>. Full-disk AES-256 at the OS level — closes ~80% of realistic threats (stolen laptop, stolen backup, non-root malware). On Linux: LUKS does the same."
-             data-ru="🛡️ <strong>Топ-рекомендация: FileVault.</strong> На macOS: <em>System Settings → Privacy &amp; Security → FileVault → Turn On</em>. Full-disk AES-256 на уровне OS — закрывает ~80% реалистичных угроз (украденный ноут, кража backup, malware без root). На Linux то же делает LUKS.">
-            🛡️ <strong>Топ-рекомендация: FileVault.</strong> На macOS: <em>System Settings → Privacy &amp; Security → FileVault → Turn On</em>. Full-disk AES-256 на уровне OS — закрывает ~80% реалистичных угроз (украденный ноут, кража backup, malware без root). На Linux то же делает LUKS.
-          </p>
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary data-en="What about phone / web AI?"
-                 data-ru="А что с телефоном / web-AI?">What about phone / web AI?</summary>
-        <div class="faq-body">
-          <p data-en="<strong>Today:</strong> memex catches only what's on your laptop. Phone-based AI apps (ChatGPT mobile, Claude iOS) and web-only sessions (Claude.ai web, ChatGPT in browser) don't write files to your disk, so memex has nothing to read."
-             data-ru="<strong>Сегодня:</strong> memex ловит только то что на твоём ноуте. Phone-based AI (ChatGPT mobile, Claude iOS) и web-only сессии (Claude.ai web, ChatGPT в браузере) не пишут файлы тебе на диск — memex'у нечего читать.">
-            <strong>Сегодня:</strong> memex ловит только то что на твоём ноуте. Phone-based AI (ChatGPT mobile, Claude iOS) и web-only сессии (Claude.ai web, ChatGPT в браузере) не пишут файлы тебе на диск — memex'у нечего читать.
-          </p>
-          <p data-en="<strong>Workarounds:</strong> For Telegram-based AI bots — manual export → drop in inbox. For ChatGPT — export data via Settings, parser in roadmap."
-             data-ru="<strong>Workaround'ы:</strong> Для Telegram-ботов — ручной export → дроп в inbox. Для ChatGPT — export данных через Settings, парсер в roadmap'е.">
-            <strong>Workaround'ы:</strong> Для Telegram-ботов — ручной export → дроп в inbox. Для ChatGPT — export данных через Settings, парсер в roadmap'е.
-          </p>
-          <p data-en="<strong>Roadmap:</strong> Telegram bot (code drafted in <code>bot/</code>) for mobile capture — forward thoughts and messages from your phone, indexed automatically on your laptop."
-             data-ru="<strong>Roadmap:</strong> Telegram-бот (код написан в <code>bot/</code>) для mobile capture — пересылаешь мысли и сообщения с телефона, индексируется автоматически на ноуте.">
-            <strong>Roadmap:</strong> Telegram-бот (код написан в <code>bot/</code>) для mobile capture — пересылаешь мысли и сообщения с телефона, индексируется автоматически на ноуте.
-          </p>
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary data-en="Moving to a new laptop — does memex come with me?"
-                 data-ru="Переезжаю на новый ноут — memex со мной?">Moving to a new laptop — does memex come with me?</summary>
-        <div class="faq-body">
-          <p data-en="Yes. <code>~/.memex/data/memex.db</code> is a regular SQLite file. Three commands on the old laptop, three on the new — full history transfers including the FTS5 index. See README → <a href='https://github.com/parallelclaw/memex-mvp#миграция-между-устройствами--one-time-migration' target='_blank' rel='noopener'>One-time migration</a> for the exact commands."
-             data-ru="Да. <code>~/.memex/data/memex.db</code> — обычный SQLite-файл. Три команды на старом ноуте, три на новом — вся история переезжает вместе с FTS5-индексом. Точные команды — в README → <a href='https://github.com/parallelclaw/memex-mvp#миграция-между-устройствами--one-time-migration' target='_blank' rel='noopener'>Миграция между устройствами</a>.">
-            Да. <code>~/.memex/data/memex.db</code> — обычный SQLite-файл. Три команды на старом ноуте, три на новом — вся история переезжает вместе с FTS5-индексом. Точные команды — в README → <a href="https://github.com/parallelclaw/memex-mvp#миграция-между-устройствами--one-time-migration" target="_blank" rel="noopener">Миграция между устройствами</a>.
-          </p>
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary data-en="What if my Claude / ChatGPT account gets banned?"
-                 data-ru="А если мой Claude / ChatGPT забанят?">What if my Claude / ChatGPT account gets banned?</summary>
-        <div class="faq-body">
-          <p data-en="Memex doesn't care about your provider account — it reads files already on your disk. Even after a ban, your Claude Code sessions in <code>~/.claude/projects/</code> stay there. Memex indexes them and serves them through MCP to any locally available AI (Llama, Qwen, or Claude through a different account). Your work survives the access channel."
-             data-ru="Memex не зависит от твоего provider-аккаунта — читает файлы которые уже на твоём диске. Даже после бана твои Claude Code сессии в <code>~/.claude/projects/</code> остаются на месте. Memex индексирует их и отдаёт через MCP любому локально доступному AI (Llama, Qwen, или Claude через другой аккаунт). Твоя работа переживает канал доступа.">
-            Memex не зависит от твоего provider-аккаунта — читает файлы которые уже на твоём диске. Даже после бана твои Claude Code сессии в <code>~/.claude/projects/</code> остаются на месте. Memex индексирует их и отдаёт через MCP любому локально доступному AI (Llama, Qwen, или Claude через другой аккаунт). Твоя работа переживает канал доступа.
-          </p>
-        </div>
-      </details>
+      <div class="gap-cell gap-cell-native gap-row-last">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="Account dies → memory dies."
+                data-ru="Аккаунт умирает — память умирает.">Account dies → memory dies.</strong>
+        <span data-en=" Anthropic banned multiple orgs without warning in April 2026. Lose access — lose Memory + Projects + history."
+              data-ru=" Anthropic блокирует без предупреждения. Потерял доступ — потерял Memory + Projects + историю."> Anthropic banned multiple orgs without warning in April 2026. Lose access — lose Memory + Projects + history.</span>
+        <span class="gap-source">HN #47853021 · April 2026</span>
+      </div>
+      <div class="gap-cell gap-cell-memex gap-row-last">
+        <span class="gap-mark v">✓</span>
+        <span data-en="The SQLite file on your laptop doesn't depend on any provider. Yours by architecture — not policy."
+              data-ru="SQLite на твоём ноуте не зависит от провайдера. Твоё by architecture, не по policy.">
+          The SQLite file on your laptop doesn't depend on any provider. Yours by architecture — not policy.
+        </span>
+      </div>
     </div>
   </div>
 </section>
 
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="What it gives you" data-ru="Что даёт">What it gives you</h2>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">🔄</div>
+        <h3 data-en="Live auto-capture" data-ru="Live авто-захват">Live auto-capture</h3>
+        <p data-en="Daemon watches your Claude Code and Cowork directories via FSEvents. Every new session captured within ~1.5 seconds."
+           data-ru="Daemon через FSEvents следит за директориями Claude Code и Cowork. Каждая новая сессия в памяти за ~1.5 сек.">
+          Daemon watches your Claude Code and Cowork directories via FSEvents. Every new session captured within ~1.5 seconds.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🎯</div>
+        <h3 data-en="Proactive recall" data-ru="Проактивный recall">Proactive recall</h3>
+        <p data-en="Server-side instructions teach any connecting agent to call memex first — for any topic, name, or decision the user references."
+           data-ru="Серверные инструкции учат любого подключённого агента сначала идти в память — на любую тему, имя, решение которые упомянул юзер.">
+          Server-side instructions teach any connecting agent to call memex first — for any topic, name, or decision the user references.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🧠</div>
+        <h3 data-en="Cross-session, cross-agent" data-ru="Cross-session, cross-agent">Cross-session, cross-agent</h3>
+        <p data-en="Discussion in Cowork? Cursor sees it. Conversation in Claude Code? Continue can read it. Telegram chat with your AI bot? All searchable."
+           data-ru="Обсуждение в Cowork? Cursor его видит. Разговор в Claude Code? Continue читает. Telegram-чат с AI-ботом? Всё ищется.">
+          Discussion in Cowork? Cursor sees it. Conversation in Claude Code? Continue can read it. Telegram chat with your AI bot? All searchable.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🌳</div>
+        <h3 data-en="Subagent-aware" data-ru="Subagent-aware">Subagent-aware</h3>
+        <p data-en="Cowork sessions spawn helper subagents. Their transcripts captured separately and linked to parent."
+           data-ru="Cowork-сессии порождают subagent'ов-помощников. Их транскрипты захватываются отдельно и связываются с родителем.">
+          Cowork sessions spawn helper subagents. Their transcripts captured separately and linked to parent.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🔒</div>
+        <h3 data-en="Survives any ban" data-ru="Переживёт любой бан">Survives any ban</h3>
+        <p data-en="Anthropic decides when Claude Memory disappears. memex doesn't. The SQLite file on your laptop doesn't care about TOS updates."
+           data-ru="Anthropic решает когда Claude Memory исчезнет. Memex — нет. SQLite-файлу на твоём ноуте на TOS-апдейты плевать.">
+          Anthropic decides when Claude Memory disappears. memex doesn't. The SQLite file on your laptop doesn't care about TOS updates.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">⚡</div>
+        <h3 data-en="Two pieces, opt-in" data-ru="Две части, opt-in">Two pieces, opt-in</h3>
+        <p data-en="MCP server (passive memory) installs with npm. Auto-capture daemon (live updates) installs separately. You decide."
+           data-ru="MCP-сервер (пассивная память) — через npm. Daemon авто-захвата (live-обновления) — отдельно. Решение за тобой.">
+          MCP server (passive memory) installs with npm. Auto-capture daemon (live updates) installs separately. You decide.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="Across devices" data-ru="Между устройствами">Across devices</h2>
+    <p class="section-sub"
+       data-en="Memex lives on one machine — daemon catches local files, SQLite builds locally, MCP serves locally. Three patterns for multi-device today."
+       data-ru="Memex живёт на одной машине — daemon ловит локальные файлы, SQLite строится локально, MCP отдаёт локально. Три паттерна для multi-device сегодня.">
+      Memex lives on one machine — daemon catches local files, SQLite builds locally, MCP serves locally. Three patterns for multi-device today.
+    </p>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">☁️</div>
+        <h3 data-en="1. Sync the SQLite file" data-ru="1. Синк SQLite-файла">1. Sync the SQLite file</h3>
+        <p data-en="<code>~/.memex/data/memex.db</code> is a regular file. Replicate it via iCloud, Syncthing, rsync, or git-annex. Daemon writes on your primary machine; other machines read the same file through their local memex MCP server. One writer, many readers — works today."
+           data-ru="<code>~/.memex/data/memex.db</code> — обычный файл. Реплицируй через iCloud, Syncthing, rsync или git-annex. Daemon пишет на основной машине; остальные читают тот же файл через свой локальный memex MCP-сервер. Один writer, много readers — работает сегодня.">
+          <code>~/.memex/data/memex.db</code> — обычный файл. Реплицируй через iCloud, Syncthing, rsync или git-annex. Daemon пишет на основной машине; остальные читают тот же файл через свой локальный memex MCP-сервер. Один writer, много readers — работает сегодня.
+        </p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-icon">💻</div>
+        <h3 data-en="2. Memex on each device" data-ru="2. Memex на каждом устройстве">2. Memex on each device</h3>
+        <p data-en="Install memex separately on each laptop. Each builds its own corpus from local files. No sync, no conflicts — but the memory isn't unified across devices. Simple, reliable, no cloud round-trip."
+           data-ru="Установи memex отдельно на каждый ноут. Каждый строит свой корпус из локальных файлов. Нет синка, нет конфликтов — но память не унифицирована. Просто, надёжно, без облака.">
+          Установи memex отдельно на каждый ноут. Каждый строит свой корпус из локальных файлов. Нет синка, нет конфликтов — но память не унифицирована. Просто, надёжно, без облака.
+        </p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-icon">📱</div>
+        <h3 data-en="3. Mobile via Telegram bot" data-ru="3. Мобильный через Telegram-бот">3. Mobile via Telegram bot</h3>
+        <p data-en="<strong>Roadmap (code drafted).</strong> Forward messages or write thoughts to @memex_bot from your phone → bot writes them as JSON to <code>~/.memex/inbox/</code> on your primary machine → indexed automatically. Voice notes get transcribed via Nexara API. No mobile memex needed."
+           data-ru="<strong>В roadmap'е (код написан).</strong> Пересылаешь сообщения или пишешь мысли в @memex_bot с телефона → бот пишет их как JSON в <code>~/.memex/inbox/</code> основной машины → индексируется автоматически. Голосовухи транскрибируются через Nexara API. Memex на телефоне не нужен.">
+          <strong>В roadmap'е (код написан).</strong> Пересылаешь сообщения или пишешь мысли в @memex_bot с телефона → бот пишет их как JSON в <code>~/.memex/inbox/</code> основной машины → индексируется автоматически. Голосовухи транскрибируются через Nexara API. Memex на телефоне не нужен.
+        </p>
+      </div>
+    </div>
+
+    <div class="comp-summary">
+      <h4 data-en="iCloud sync setup (macOS)" data-ru="Настройка iCloud-синка (macOS)">iCloud sync setup (macOS)</h4>
+      <p style="color: var(--text-soft); font-size: 14px; line-height: 1.55; margin-bottom: 12px;"
+         data-en="Move the memex data dir into your iCloud folder and point memex at it:"
+         data-ru="Перемести memex data-директорию в iCloud-папку и укажи memex'у на неё:">
+        Перемести memex data-директорию в iCloud-папку и укажи memex'у на неё:
+      </p>
+<pre style="background: var(--bg-soft); padding: 12px 16px; border-radius: 8px; font-size: 13px; color: var(--text); overflow-x: auto; margin: 0 0 12px;"><code># Option A — symlink ~/.memex/data into iCloud Drive
+mv ~/.memex/data ~/Library/Mobile\ Documents/com~apple~CloudDocs/memex/data
+ln -s ~/Library/Mobile\ Documents/com~apple~CloudDocs/memex/data ~/.memex/data
+
+# Option B — point memex at iCloud path via env var
+export MEMEX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/memex"</code></pre>
+      <p style="color: var(--text-muted); font-size: 13px; line-height: 1.55; margin: 0;"
+         data-en="⚠ <strong>One writer only.</strong> Run the auto-capture daemon (<code>memex-sync</code>) on exactly one machine. Other devices read the synced file through their local memex MCP server — they should not run the daemon on the same shared DB. Concurrent writers via filesystem sync can corrupt the WAL."
+         data-ru="⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине. Остальные устройства читают синхронизированный файл через свой локальный memex MCP-сервер — на них daemon не запускай. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.">
+        ⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине. Остальные устройства читают синхронизированный файл через свой локальный memex MCP-сервер — на них daemon не запускай. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.
+      </p>
+    </div>
+
+    <p style="text-align: center; color: var(--text-muted); font-size: 14px; margin-top: 28px;"
+       data-en="Roadmap (v0.5+): built-in multi-device CRDT sync without iCloud workarounds. Remote MCP over HTTPS+OAuth for VPS / cloud agents."
+       data-ru="В roadmap'е (v0.5+): встроенная multi-device CRDT-синхронизация без iCloud-обходов. Remote MCP через HTTPS+OAuth для VPS / облачных агентов.">
+      Roadmap (v0.5+): built-in multi-device CRDT sync without iCloud workarounds. Remote MCP over HTTPS+OAuth for VPS / cloud agents.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="Privacy &amp; Security" data-ru="Приватность и безопасность">Privacy &amp; Security</h2>
+    <p class="section-sub"
+       data-en="One file with all your AI conversations — sounds scarier than it is. Honest breakdown."
+       data-ru="Один файл со всеми твоими AI-разговорами — звучит страшнее, чем есть. Разбираемся честно.">
+      One file with all your AI conversations — sounds scarier than it is. Honest breakdown.
+    </p>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">🔐</div>
+        <h3 data-en="What memex does / doesn't" data-ru="Что memex делает / не делает">What memex does / doesn't</h3>
+        <p data-en="✅ Lives only on your machine, never phones home, no API keys, no network access. OS-level file permissions — readable only by your user. ❌ Doesn't encrypt the DB file, doesn't redact secrets you pasted into AI chats, no password on memex itself."
+           data-ru="✅ Живёт только на твоей машине, никуда не звонит, без API-ключей, без network access. OS-level права на файлы — читает только твой user. ❌ Не шифрует БД, не редактирует секреты которые ты вставлял в чаты с AI, нет пароля на сам memex.">
+          ✅ Живёт только на твоей машине, никуда не звонит, без API-ключей, без network access. OS-level права на файлы — читает только твой user. ❌ Не шифрует БД, не редактирует секреты которые ты вставлял в чаты с AI, нет пароля на сам memex.
+        </p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-icon">📦</div>
+        <h3 data-en="Doesn't add risk — concentrates it" data-ru="Не добавляет риск — концентрирует">Doesn't add risk — concentrates it</h3>
+        <p data-en="Your AI history is <strong>already</strong> on your disk in plain text — Claude Code JSONL, Cursor state.vscdb, Cowork session files, Obsidian markdown, Telegram local DB. Memex consolidates them into one SQLite file. Same data, one place instead of five. Attack surface doesn't grow — visibility does."
+           data-ru="Твоя AI-история <strong>уже</strong> на диске в plain text — Claude Code JSONL, Cursor state.vscdb, Cowork-файлы, Obsidian markdown, Telegram local DB. Memex консолидирует их в один SQLite-файл. Те же данные, в одном месте вместо пяти. Attack surface не растёт — растёт видимость.">
+          Твоя AI-история <strong>уже</strong> на диске в plain text — Claude Code JSONL, Cursor state.vscdb, Cowork-файлы, Obsidian markdown, Telegram local DB. Memex консолидирует их в один SQLite-файл. Те же данные, в одном месте вместо пяти. Attack surface не растёт — растёт видимость.
+        </p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-icon">🛡️</div>
+        <h3 data-en="Top recommendation: FileVault" data-ru="Топ-рекомендация: FileVault">Top recommendation: FileVault</h3>
+        <p data-en="On macOS: <strong>System Settings → Privacy &amp; Security → FileVault → Turn On</strong>. Encrypts the entire disk with AES-256 at the OS level. Without your password, the disk is unreadable — closes ~80% of realistic threats (stolen laptop, stolen backup, malware reading files without root). On Linux: LUKS does the same. Do this <em>before</em> worrying about app-level encryption."
+           data-ru="На macOS: <strong>System Settings → Privacy &amp; Security → FileVault → Turn On</strong>. Шифрует весь диск AES-256 на уровне OS. Без твоего пароля диск нечитаем — закрывает ~80% реалистичных угроз (украденный ноут, кража backup, malware без root). На Linux то же делает LUKS. Сделай это <em>прежде</em> чем волноваться про app-level шифрование.">
+          На macOS: <strong>System Settings → Privacy &amp; Security → FileVault → Turn On</strong>. Шифрует весь диск AES-256 на уровне OS. Без твоего пароля диск нечитаем — закрывает ~80% реалистичных угроз (украденный ноут, кража backup, malware без root). На Linux то же делает LUKS. Сделай это <em>прежде</em> чем волноваться про app-level шифрование.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="We don't compete with the leaders" data-ru="Мы не конкурируем с лидерами">We don't compete with the leaders</h2>
+    <p class="section-sub"
+       data-en="The memory market in 2026 is large and divided. Each product is good at its own thing."
+       data-ru="Memory-рынок 2026 — большой и разделённый. Каждый продукт хорош в своём.">
+      The memory market in 2026 is large and divided. Each product is good at its own thing.
+    </p>
+
+    <div class="comparison-wrap">
+      <table class="comparison">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="memex-col" data-en="memex" data-ru="memex">memex</th>
+            <th data-en="Mem0" data-ru="Mem0">Mem0</th>
+            <th data-en="claude-mem" data-ru="claude-mem">claude-mem</th>
+            <th data-en="ChatGPT Memory" data-ru="ChatGPT Memory">ChatGPT Memory</th>
+            <th data-en="Anthropic Memory" data-ru="Anthropic Memory">Anthropic Memory</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-en="Audience" data-ru="Для кого">Audience</td>
+            <td class="memex-col" data-en="AI power user, own archive" data-ru="AI-power user, свой архив">AI power user, own archive</td>
+            <td data-en="Devs building AI agents" data-ru="Разработчики AI-агентов">Devs building AI agents</td>
+            <td data-en="Solo dev in Claude Code" data-ru="Solo dev в Claude Code">Solo dev in Claude Code</td>
+            <td data-en="Every ChatGPT user" data-ru="Каждый юзер ChatGPT">Every ChatGPT user</td>
+            <td data-en="Every Claude user" data-ru="Каждый юзер Claude">Every Claude user</td>
+          </tr>
+          <tr>
+            <td data-en="What's stored" data-ru="Что хранят">What's stored</td>
+            <td class="memex-col" data-en="Verbatim (raw)" data-ru="Дословно (raw)">Verbatim (raw)</td>
+            <td data-en="Extracted facts" data-ru="Извлечённые факты">Extracted facts</td>
+            <td data-en="AI-compressed obs" data-ru="AI-сжатые observations">AI-compressed obs</td>
+            <td data-en="Vendor-controlled" data-ru="Vendor-controlled">Vendor-controlled</td>
+            <td data-en="Filesystem" data-ru="Filesystem">Filesystem</td>
+          </tr>
+          <tr>
+            <td data-en="Where" data-ru="Где">Where</td>
+            <td class="memex-col" data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
+            <td data-en="Cloud / complex self-host" data-ru="Cloud / сложный self-host">Cloud / complex self-host</td>
+            <td data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
+            <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
+            <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
+          </tr>
+          <tr>
+            <td data-en="Sources" data-ru="Источники">Sources</td>
+            <td class="memex-col" data-en="5 (incl. Telegram)" data-ru="5 (incl. Telegram)">5 (incl. Telegram)</td>
+            <td data-en="AI chats only" data-ru="AI-чаты only">AI chats only</td>
+            <td data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</td>
+            <td data-en="ChatGPT only" data-ru="ChatGPT only">ChatGPT only</td>
+            <td data-en="Claude only" data-ru="Claude only">Claude only</td>
+          </tr>
+          <tr>
+            <td data-en="API key needed" data-ru="API-ключ">API key needed</td>
+            <td class="memex-col"><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+            <td><span class="y">✓</span> <span data-en="+ billing" data-ru="+ биллинг">+ billing</span></td>
+            <td><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+          </tr>
+          <tr>
+            <td data-en="Recovery after ban" data-ru="После бана">Recovery after ban</td>
+            <td class="memex-col"><span class="y">✓</span> <span data-en="Reads from disk" data-ru="читает с диска">Reads from disk</span></td>
+            <td><span class="n">✗</span> <span data-en="if cloud" data-ru="если cloud">if cloud</span></td>
+            <td><span class="partial">~</span> <span data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</span></td>
+            <td><span class="n">✗</span></td>
+            <td><span class="n">✗</span></td>
+          </tr>
+          <tr>
+            <td data-en="Cost" data-ru="Стоимость">Cost</td>
+            <td class="memex-col" data-en="$0 forever" data-ru="$0 forever">$0 forever</td>
+            <td data-en="$19–249/mo" data-ru="$19–249/мес">$19–249/mo</td>
+            <td data-en="$0" data-ru="$0">$0</td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+          </tr>
+          <tr>
+            <td data-en="Open source" data-ru="Open source">Open source</td>
+            <td class="memex-col"><span class="y">✓</span> MIT</td>
+            <td><span class="y">✓</span> Apache 2.0</td>
+            <td><span class="y">✓</span> MIT</td>
+            <td><span class="n">✗</span></td>
+            <td><span class="n">✗</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="comp-summary">
+      <h4 data-en="When to choose what:" data-ru="Когда выбирать что:">When to choose what:</h4>
+      <ul>
+        <li data-en="<strong>Mem0</strong> — if you're building an AI agent for your users and need memory infrastructure"
+            data-ru="<strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure">
+          <strong>Mem0</strong> — if you're building an AI agent for your users and need memory infrastructure
+        </li>
+        <li data-en="<strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions"
+            data-ru="<strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями">
+          <strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions
+        </li>
+        <li data-en="<strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud"
+            data-ru="<strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку">
+          <strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud
+        </li>
+        <li data-en="<strong>memex</strong> — if you're at the intersection: multiple AI tools, no cloud, no subscription, archive must <strong>survive any scenario</strong>"
+            data-ru="<strong>memex</strong> — если ты в пересечении: несколько AI-инструментов, не хочешь облако, не хочешь подписку, хочешь чтобы архив <strong>выжил при любом сценарии</strong>">
+          <strong>memex</strong> — if you're at the intersection: multiple AI tools, no cloud, no subscription, archive must <strong>survive any scenario</strong>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="manifesto">
+      <span class="manifesto-tag" data-en="And one more thing —" data-ru="И ещё одно —">And one more thing —</span>
+      <p data-en="<strong>memex is MIT-licensed and not VC-funded.</strong> The code on GitHub IS the product — forkable, runnable forever, and impossible to quietly kill via acquihire."
+         data-ru="<strong>memex под MIT-лицензией и не VC-funded.</strong> Код на GitHub — это и есть продукт: forkable, runnable forever, impossible to quietly kill via acquihire.">
+        <strong>memex is MIT-licensed and not VC-funded.</strong> The code on GitHub IS the product — forkable, runnable forever, and impossible to quietly kill via acquihire.
+      </p>
+      <p data-en="Rewind/Limitless got bought by Meta and shut down their Mac app on December 19, 2025. Local-first tools die when their owners cash out."
+         data-ru="Rewind/Limitless купила Meta и закрыла Mac-приложение 19 декабря 2025. Local-first инструменты умирают когда их владельцы cash-out'ятся.">
+        Rewind/Limitless got bought by Meta and shut down their Mac app on December 19, 2025. Local-first tools die when their owners cash out.
+      </p>
+      <p data-en="Memex can't — there's no central owner to buy."
+         data-ru="Memex не может — нет central-owner'а которого можно купить.">
+        Memex can't — there's no central owner to buy.
+      </p>
+    </div>
+  </div>
+</section>
 
 <section class="section" id="quickstart">
   <div class="section-inner">
@@ -1180,11 +1282,6 @@ which node   # → your-node-path</code></pre>
 <section class="final-cta">
   <h2 data-en="A year from now, you'll thank yourself."
       data-ru="Через год ты скажешь себе спасибо.">A year from now, you'll thank yourself.</h2>
-  <p style="color: var(--text-soft); font-size: 15px; max-width: 600px; margin: 0 auto 28px; line-height: 1.55;"
-     data-en="<strong>MIT-licensed, not VC-funded.</strong> Rewind/Limitless got bought by Meta and shut down their Mac app in 2025. Local-first tools die when their owners cash out. Memex can't — there's no central owner to buy."
-     data-ru="<strong>MIT-лицензия, без VC-денег.</strong> Rewind/Limitless купила Meta и закрыла Mac-приложение в 2025. Local-first продукты умирают когда владельцы кэшаут'ятся. Memex не может — нет central-owner'а которого можно купить.">
-    <strong>MIT-licensed, not VC-funded.</strong> Rewind/Limitless got bought by Meta and shut down their Mac app in 2025. Local-first tools die when their owners cash out. Memex can't — there's no central owner to buy.
-  </p>
   <div class="final-cta-actions">
     <a class="btn-primary" href="#quickstart"
        data-en="Install →" data-ru="Установить →">Install →</a>

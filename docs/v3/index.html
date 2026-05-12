@@ -156,6 +156,42 @@
 
   .cta-meta { font-size: 13px; color: var(--text-muted); margin-top: 18px; }
 
+  /* Logos strip — works with */
+  .logos-strip {
+    padding: 32px 24px 36px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .logos-strip-inner {
+    max-width: 1080px; margin: 0 auto;
+    text-align: center;
+  }
+  .logos-strip-label {
+    font-size: 12px; color: var(--text-muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    font-weight: 700; margin-bottom: 20px;
+  }
+  .logos-row {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 10px;
+  }
+  .tool-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 14px; border-radius: 999px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text-soft);
+    transition: all 0.18s;
+  }
+  .tool-chip:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(95, 182, 205, 0.06);
+  }
+  .tool-chip img {
+    width: 14px; height: 14px;
+    opacity: 0.85;
+  }
+
   /* Section base */
   .section {
     padding: 64px 24px;
@@ -561,6 +597,50 @@
        data-ru="MIT · Survives provider bans by design · Без облака · Без API-ключей">
        MIT · Survives provider bans by design · No cloud · No API keys
     </p>
+  </div>
+</section>
+
+<section class="logos-strip">
+  <div class="logos-strip-inner">
+    <div class="logos-strip-label" data-en="Works with the AI tools you already use"
+                                    data-ru="Работает с AI-инструментами, которые у тебя уже есть">
+      Works with the AI tools you already use
+    </div>
+    <div class="logos-row">
+      <div class="tool-chip">
+        <img src="https://cdn.simpleicons.org/anthropic/98968e" alt="" loading="lazy">
+        Claude Code
+      </div>
+      <div class="tool-chip">
+        <img src="https://cdn.simpleicons.org/anthropic/98968e" alt="" loading="lazy">
+        Cowork
+      </div>
+      <div class="tool-chip">
+        OpenClaw
+      </div>
+      <div class="tool-chip">
+        <img src="https://cdn.simpleicons.org/cursor/98968e" alt="" loading="lazy">
+        Cursor
+      </div>
+      <div class="tool-chip">
+        Cline
+      </div>
+      <div class="tool-chip">
+        Continue
+      </div>
+      <div class="tool-chip">
+        <img src="https://cdn.simpleicons.org/zedindustries/98968e" alt="" loading="lazy">
+        Zed
+      </div>
+      <div class="tool-chip">
+        <img src="https://cdn.simpleicons.org/telegram/98968e" alt="" loading="lazy">
+        Telegram
+      </div>
+      <div class="tool-chip">
+        <img src="https://cdn.simpleicons.org/obsidian/98968e" alt="" loading="lazy">
+        Obsidian
+      </div>
+    </div>
   </div>
 </section>
 

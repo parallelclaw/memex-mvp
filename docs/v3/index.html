@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Все твои AI. Одна память. Твоя. Локальный MCP, дословно сохраняющий разговоры с AI — Claude Code, Cowork, OpenClaw, Cursor, Telegram. Поиск по всему сразу.">
+<title>memex · все твои AI · одна память · твоя</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0e12;
+    --bg-soft: #1a1c24;
+    --bg-card: rgba(255,255,255,0.03);
+    --text: #e8e6e1;
+    --text-soft: #98968e;
+    --text-muted: #5d5b54;
+    --accent: #5fb6cd;
+    --accent-light: #82d0e6;
+    --accent-bg: rgba(95, 182, 205, 0.12);
+    --green: #7cc28e;
+    --red-soft: #c66;
+    --amber: #d8a86b;
+    --border: rgba(255,255,255,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, kbd { font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  a { color: var(--accent-light); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(13, 14, 18, 0.92);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .logo { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; color: var(--text); }
+  .logo .accent { color: var(--accent); }
+  .nav-links { display: flex; align-items: center; gap: 8px; }
+  .lang-toggle {
+    display: inline-flex; align-items: center;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px;
+    overflow: hidden;
+  }
+  .lang-toggle button {
+    background: none; border: none; padding: 6px 12px;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    color: var(--text-soft);
+  }
+  .lang-toggle button.active { background: var(--accent); color: var(--bg); }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--text); color: var(--bg);
+    font-weight: 600; font-size: 13px;
+    transition: background 0.15s;
+  }
+  .gh-btn:hover { text-decoration: none; background: var(--accent); }
+
+  /* Hero */
+  .hero {
+    padding: 80px 24px 56px;
+    background: linear-gradient(180deg, #0d0e12 0%, #131523 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-inner { max-width: 880px; margin: 0 auto; text-align: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 999px;
+    background: var(--accent-bg); color: var(--accent-light);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
+    margin-bottom: 26px;
+    border: 1px solid rgba(95, 182, 205, 0.25);
+  }
+  h1 {
+    font-size: clamp(36px, 6vw, 60px);
+    font-weight: 900; letter-spacing: -0.035em;
+    line-height: 1.04;
+    margin-bottom: 22px;
+  }
+  h1 .accent { color: var(--accent); }
+  .lede {
+    font-size: clamp(17px, 1.9vw, 21px);
+    color: var(--text-soft);
+    max-width: 720px; margin: 0 auto 32px;
+    line-height: 1.5;
+  }
+
+  /* Hero install block */
+  .hero-install {
+    max-width: 680px; margin: 0 auto 18px;
+    background: linear-gradient(180deg, rgba(95,182,205,0.10) 0%, rgba(95,182,205,0.02) 100%);
+    border: 1px solid rgba(95,182,205,0.3); border-radius: 14px;
+    padding: 20px 24px;
+    text-align: left;
+  }
+  .hero-install-label {
+    display: block;
+    font-size: 12px; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .hero-install-text {
+    font-size: 15px;
+    color: var(--text-soft);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .hero-install-actions {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  }
+  .btn-primary, .btn-secondary, .btn-tertiary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-radius: 10px;
+    font-weight: 700; font-size: 14.5px; letter-spacing: -0.005em;
+    border: 1.5px solid transparent; cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: var(--accent); color: var(--bg);
+  }
+  .btn-primary:hover {
+    background: var(--accent-light); transform: translateY(-1px);
+    text-decoration: none;
+  }
+  .btn-primary.copied { background: var(--green); }
+  .btn-secondary {
+    background: var(--bg-card); color: var(--text);
+    border-color: var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
+  .btn-tertiary {
+    background: transparent; color: var(--text-soft);
+    font-weight: 600; font-size: 14px;
+    padding: 12px 16px;
+  }
+  .btn-tertiary:hover { color: var(--accent-light); text-decoration: none; }
+
+  .cta-meta { font-size: 13px; color: var(--text-muted); margin-top: 18px; }
+
+  /* Section base */
+  .section {
+    padding: 64px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-inner { max-width: 880px; margin: 0 auto; }
+  .section-title {
+    font-size: clamp(24px, 3vw, 32px);
+    font-weight: 800; letter-spacing: -0.02em;
+    text-align: center; margin-bottom: 12px;
+  }
+  .section-sub {
+    text-align: center; color: var(--text-soft);
+    max-width: 660px; margin: 0 auto 40px;
+    font-size: 16px;
+  }
+
+  /* Two pains */
+  .pain-grid {
+    max-width: 880px; margin: 0 auto;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  }
+  .pain-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 26px 28px;
+  }
+  .pain-card h3 {
+    font-size: 18px; font-weight: 800; margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+  .pain-card.fragmentation h3 { color: var(--amber); }
+  .pain-card.ban h3 { color: var(--red-soft); }
+  .pain-card p {
+    color: var(--text-soft); font-size: 15px; line-height: 1.6;
+    margin-bottom: 8px;
+  }
+  .pain-card a { color: var(--accent-light); }
+  .pain-tail {
+    max-width: 880px; margin: 18px auto 0;
+    text-align: center; color: var(--text-muted);
+    font-size: 14.5px; font-style: italic;
+  }
+  @media (max-width: 720px) { .pain-grid { grid-template-columns: 1fr; } }
+
+  /* Recovery */
+  .recovery {
+    background: linear-gradient(180deg, rgba(124, 194, 142, 0.04) 0%, transparent 100%);
+    border-top: 1px solid rgba(124, 194, 142, 0.2);
+    border-bottom: 1px solid rgba(124, 194, 142, 0.2);
+  }
+  .recovery-card {
+    max-width: 720px; margin: 0 auto;
+    background: var(--bg-card);
+    border: 1px solid rgba(124, 194, 142, 0.3); border-radius: 14px;
+    padding: 28px 32px; text-align: center;
+  }
+  .recovery-tag {
+    display: inline-block;
+    font-size: 11px; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--green); margin-bottom: 10px;
+  }
+  .recovery-card h2 {
+    font-size: 26px; font-weight: 800; margin-bottom: 14px;
+    letter-spacing: -0.02em;
+  }
+  .recovery-card p {
+    color: var(--text-soft); font-size: 16px; line-height: 1.6;
+    margin-bottom: 12px;
+  }
+  .recovery-card .punchline {
+    color: var(--text); font-weight: 700; font-size: 17px;
+    margin-top: 16px;
+  }
+
+  /* How it works diagram */
+  .diagram {
+    max-width: 760px; margin: 0 auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 28px 32px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; line-height: 1.85;
+    color: var(--text);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .diagram .arrow { color: var(--accent); }
+  .diagram .comment { color: var(--text-muted); }
+
+  /* Five gaps */
+  .gaps-grid {
+    max-width: 940px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-card);
+  }
+  .gap-cell {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14.5px; line-height: 1.5;
+    color: var(--text-soft);
+  }
+  .gap-cell-native {
+    border-right: 1px solid var(--border);
+  }
+  .gap-cell-memex {
+    color: var(--text);
+    background: rgba(95, 182, 205, 0.04);
+  }
+  .gap-cell-header {
+    font-weight: 800; font-size: 12.5px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-soft);
+    padding: 12px 22px;
+  }
+  .gap-cell-header.memex { color: var(--accent); }
+  .gap-row-last { border-bottom: none; }
+  .gap-mark { display: inline-block; margin-right: 8px; font-size: 13px; }
+  .gap-mark.x { color: var(--red-soft); }
+  .gap-mark.v { color: var(--green); }
+  .gap-source {
+    display: block;
+    font-size: 11.5px; color: var(--text-muted);
+    margin-top: 4px; font-family: 'JetBrains Mono', monospace;
+  }
+  @media (max-width: 720px) {
+    .gaps-grid { grid-template-columns: 1fr; }
+    .gap-cell-native { border-right: none; }
+  }
+
+  /* Features grid */
+  .feat-grid {
+    max-width: 1080px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+  }
+  .feat {
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 22px;
+  }
+  .feat-icon { font-size: 26px; margin-bottom: 12px; }
+  .feat h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .feat p { font-size: 14.5px; color: var(--text-soft); line-height: 1.5; }
+
+  /* Comparison */
+  .comparison-wrap {
+    max-width: 1080px; margin: 0 auto;
+    overflow-x: auto;
+  }
+  .comparison {
+    width: 100%; min-width: 720px;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .comparison th, .comparison td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .comparison thead th {
+    font-size: 12.5px; font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+    background: var(--bg-soft);
+    text-transform: uppercase;
+  }
+  .comparison thead th.memex-col {
+    color: var(--accent); background: rgba(95, 182, 205, 0.08);
+  }
+  .comparison tbody td.memex-col {
+    background: rgba(95, 182, 205, 0.04);
+    color: var(--text); font-weight: 600;
+  }
+  .comparison tbody td:first-child {
+    font-weight: 700; color: var(--text);
+    width: 130px;
+  }
+  .comparison .y { color: var(--green); }
+  .comparison .n { color: var(--red-soft); }
+  .comparison .partial { color: var(--amber); }
+  .comp-summary {
+    max-width: 880px; margin: 32px auto 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 28px;
+  }
+  .comp-summary h4 {
+    font-size: 15px; font-weight: 700; margin-bottom: 14px;
+    color: var(--text); letter-spacing: -0.01em;
+  }
+  .comp-summary ul {
+    list-style: none; padding: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .comp-summary li {
+    font-size: 14.5px; color: var(--text-soft); line-height: 1.55;
+    padding-left: 18px; position: relative;
+  }
+  .comp-summary li::before {
+    content: '→'; position: absolute; left: 0; color: var(--accent);
+  }
+  .comp-summary li strong { color: var(--text); font-weight: 700; }
+
+  /* Manifesto */
+  .manifesto {
+    max-width: 720px; margin: 0 auto;
+    border-left: 3px solid var(--accent);
+    padding: 14px 24px;
+    background: rgba(95, 182, 205, 0.04);
+    border-radius: 0 10px 10px 0;
+    font-size: 15px; line-height: 1.65;
+    color: var(--text-soft);
+  }
+  .manifesto strong { color: var(--text); font-weight: 700; }
+  .manifesto-tag {
+    display: inline-block;
+    font-size: 11px; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .manifesto p { margin-bottom: 10px; }
+  .manifesto p:last-child { margin-bottom: 0; }
+
+  /* AI-installer (full) */
+  .ai-install {
+    max-width: 760px; margin: 0 auto 32px;
+    background: linear-gradient(180deg, rgba(95,182,205,0.08) 0%, rgba(95,182,205,0.02) 100%);
+    border: 1px solid rgba(95,182,205,0.3); border-radius: 14px;
+    padding: 28px 32px;
+    position: relative;
+  }
+  .ai-install .recommended {
+    position: absolute; top: -12px; left: 28px;
+    background: var(--accent); color: var(--bg);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+    padding: 4px 12px; border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .ai-install h4 { font-size: 19px; font-weight: 700; margin: 8px 0 8px; letter-spacing: -0.01em; }
+  .ai-install p.lede2 { color: var(--text-soft); font-size: 15px; line-height: 1.55; margin-bottom: 16px; }
+  .copy-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .copy-meta { font-size: 13px; color: var(--text-muted); }
+  .prompt-block {
+    background: var(--bg-soft);
+    padding: 16px 20px; border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; line-height: 1.6;
+    color: var(--text);
+    overflow-x: auto;
+    max-height: 320px; overflow-y: auto;
+    border: 1px solid var(--border);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .or-divider {
+    text-align: center;
+    margin: 28px 0 20px;
+    color: var(--text-muted); font-size: 13px; letter-spacing: 0.06em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .or-divider::before, .or-divider::after {
+    content: ''; display: inline-block; vertical-align: middle;
+    width: 60px; height: 1px; background: var(--border);
+    margin: 0 14px;
+  }
+
+  /* Quickstart steps */
+  .step {
+    border-left: 3px solid var(--accent);
+    padding: 0 0 0 18px;
+    margin: 26px 0;
+  }
+  .step-where {
+    display: inline-block;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-bg);
+    padding: 3px 10px; border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .step h4 {
+    font-size: 16.5px; font-weight: 700;
+    color: var(--text);
+    margin-bottom: 10px; letter-spacing: -0.01em;
+  }
+  .step p {
+    color: var(--text-soft);
+    font-size: 14.5px; line-height: 1.55;
+    margin-bottom: 10px;
+  }
+  .step pre {
+    background: var(--bg-soft);
+    padding: 12px 16px; border-radius: 8px;
+    font-size: 13px; color: var(--text);
+    overflow-x: auto; margin: 8px 0;
+  }
+  .step code { font-size: 13px; }
+  .step .hint {
+    font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+
+  .manual-card {
+    max-width: 760px; margin: 0 auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 32px;
+  }
+  .manual-card h3 { font-size: 19px; font-weight: 700; margin-bottom: 8px; text-align: center; }
+  .manual-intro {
+    color: var(--text-soft); font-size: 14px; text-align: center;
+    margin-bottom: 8px;
+  }
+
+  /* Final CTA */
+  .final-cta {
+    padding: 96px 24px;
+    text-align: center;
+    background: linear-gradient(180deg, var(--bg) 0%, #131523 100%);
+  }
+  .final-cta h2 {
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 800; letter-spacing: -0.025em;
+    margin-bottom: 32px;
+  }
+  .final-cta-actions {
+    display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+  }
+
+  /* Footer */
+  footer {
+    padding: 36px 24px;
+    border-top: 1px solid var(--border);
+    text-align: center; font-size: 14px; color: var(--text-muted);
+  }
+  footer a { color: var(--accent-light); margin: 0 10px; }
+  footer .footer-tagline { margin-top: 14px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="logo">me<span class="accent">mex</span></div>
+    <div class="nav-links">
+      <div class="lang-toggle">
+        <button data-lang="en" onclick="setLang('en')">EN</button>
+        <button class="active" data-lang="ru" onclick="setLang('ru')">RU</button>
+      </div>
+      <a class="gh-btn" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.08-2.7-1.08-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span data-en="GitHub" data-ru="GitHub">GitHub</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div class="pill" data-en="Cross-AI · Local-first · v0.3" data-ru="Cross-AI · Local-first · v0.3">Cross-AI · Local-first · v0.3</div>
+    <h1>
+      <span data-en="Every AI you use." data-ru="Все твои AI.">Every AI you use.</span><br>
+      <span class="accent" data-en="One memory you own." data-ru="Одна память. Твоя.">One memory you own.</span>
+    </h1>
+    <p class="lede"
+       data-en="A local MCP that captures every word of your AI conversations — Claude Code, Cowork, OpenClaw, Cursor, Telegram — into one searchable index on your machine."
+       data-ru="Локальный MCP, дословно сохраняющий все твои разговоры с AI — Claude Code, Cowork, OpenClaw, Cursor, Telegram. Поиск по всему сразу.">
+       A local MCP that captures every word of your AI conversations — Claude Code, Cowork, OpenClaw, Cursor, Telegram — into one searchable index on your machine.
+    </p>
+
+    <div class="hero-install">
+      <span class="hero-install-label" data-en="⚡ Install in 60 seconds" data-ru="⚡ Установка за 60 секунд">⚡ Install in 60 seconds</span>
+      <p class="hero-install-text"
+         data-en="Copy the prompt → paste into Claude Code, Cursor, Cline, Continue or Zed → AI installs everything itself."
+         data-ru="Скопируй промпт → вставь в Claude Code, Cursor, Cline, Continue или Zed → AI поставит всё сам.">
+         Copy the prompt → paste into Claude Code, Cursor, Cline, Continue or Zed → AI installs everything itself.
+      </p>
+      <div class="hero-install-actions">
+        <button class="btn-primary" id="hero-copy-btn" onclick="copyInstallPrompt('hero-copy-btn')">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+          <span class="btn-label" data-en="Copy install prompt" data-ru="Скопировать промпт">Copy install prompt</span>
+        </button>
+        <a class="btn-tertiary" href="#quickstart"
+           data-en="↓ or install manually"
+           data-ru="↓ или вручную">↓ or install manually</a>
+      </div>
+    </div>
+
+    <p class="cta-meta"
+       data-en="MIT · Survives provider bans by design · No cloud · No API keys"
+       data-ru="MIT · Survives provider bans by design · Без облака · Без API-ключей">
+       MIT · Survives provider bans by design · No cloud · No API keys
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="Two problems at once" data-ru="Две беды одновременно">Two problems at once</h2>
+    <div class="pain-grid">
+      <div class="pain-card fragmentation">
+        <h3 data-en="Context is scattered" data-ru="Контекст разбросан">Context is scattered</h3>
+        <p data-en="You discuss something important in one AI, continue in another, and a month later it just disappears."
+           data-ru="Ты обсуждаешь что-то важное в одном AI, продолжаешь в другом, а через месяц это просто исчезает.">
+           You discuss something important in one AI, continue in another, and a month later it just disappears.
+        </p>
+      </div>
+      <div class="pain-card ban">
+        <h3 data-en="Access is fragile" data-ru="Доступ хрупок">Access is fragile</h3>
+        <p data-en="In February 2026 Anthropic disabled <a href='https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost' target='_blank' rel='noopener'>all OpenClaw users</a> overnight. In May — <a href='https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e' target='_blank' rel='noopener'>entire companies overnight</a>. <a href='https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/' target='_blank' rel='noopener'>Country policy</a> blocks companies with &gt;50% RU/CN/IR/KP ownership. IP is checked on every request — VPN does not save you."
+           data-ru="В феврале 2026 Anthropic одним указом отключил <a href='https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost' target='_blank' rel='noopener'>всех юзеров OpenClaw</a>. В мае — <a href='https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e' target='_blank' rel='noopener'>целые компании overnight</a>. <a href='https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/' target='_blank' rel='noopener'>Country policy</a> блокирует компании с &gt;50% владения RU/CN/IR/KP. IP проверяется на каждый запрос — VPN не спасает.">
+           В феврале 2026 Anthropic одним указом отключил <a href="https://thenextweb.com/news/anthropic-openclaw-claude-subscription-ban-cost" target="_blank" rel="noopener">всех юзеров OpenClaw</a>. В мае — <a href="https://medium.com/@senaaravichandran/anthropic-shut-down-an-entire-companys-claude-access-overnight-64c5fa0cad8e" target="_blank" rel="noopener">целые компании overnight</a>. <a href="https://the-decoder.com/anthropic-bans-companies-majority-controlled-by-china-russia-iran-and-north-korea-from-claude/" target="_blank" rel="noopener">Country policy</a> блокирует компании с &gt;50% владения RU/CN/IR/KP. IP проверяется на каждый запрос — VPN не спасает.
+        </p>
+      </div>
+    </div>
+    <p class="pain-tail"
+       data-en="And even without bans, AI forgets every session."
+       data-ru="И даже без банов AI забывает каждую сессию.">
+       And even without bans, AI forgets every session.
+    </p>
+  </div>
+</section>
+
+<section class="section recovery">
+  <div class="section-inner">
+    <div class="recovery-card">
+      <span class="recovery-tag" data-en="Already banned?" data-ru="Уже заблокирован?">Already banned?</span>
+      <h2 data-en="Memex pulls your history back from local files."
+          data-ru="Memex вытащит твою историю из локальных файлов.">Memex pulls your history back from local files.</h2>
+      <p data-en="Claude Code wrote every session to your disk in <code>~/.claude/projects/</code>. When the API gets cut off — <strong>the files stay</strong>. Memex reads them, indexes them, and serves them through MCP to any locally available AI — Llama, Qwen, or Claude through a different account."
+         data-ru="Claude Code писал каждую сессию на твой диск в <code>~/.claude/projects/</code>. Когда отключают API — <strong>файлы остаются</strong>. Memex вытащит их обратно и отдаст через MCP любому локально доступному AI — Llama, Qwen, или Claude через другой аккаунт.">
+         Claude Code писал каждую сессию на твой диск в <code>~/.claude/projects/</code>. Когда отключают API — <strong>файлы остаются</strong>. Memex вытащит их обратно и отдаст через MCP любому локально доступному AI — Llama, Qwen, или Claude через другой аккаунт.
+      </p>
+      <p class="punchline"
+         data-en="Your year of work isn't lost. Just the access channel."
+         data-ru="Твоя работа за год не потеряна. Только канал доступа.">
+         Your year of work isn't lost. Just the access channel.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="How it works" data-ru="Как это работает">How it works</h2>
+    <p class="section-sub" data-en="One folder. One database. Any agent can ask."
+                            data-ru="Одна папка. Одна база. Любой агент может спросить.">
+      One folder. One database. Any agent can ask.
+    </p>
+<div class="diagram">~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
+~/Library/.../local-agent-mode  <span class="comment">← Cowork sessions (incl. subagents)</span>
+~/.memex/inbox/                 <span class="comment">← Telegram exports drop here</span>
+        <span class="arrow">↓</span>                       <span class="comment">memex-sync daemon · FSEvents · ~1.5s debounce</span>
+~/.memex/staging/               <span class="comment">← atomic tmp writes</span>
+        <span class="arrow">↓</span>                       <span class="comment">chokidar inbox watcher</span>
+parser                          <span class="comment">Claude JSONL / Cowork / Cursor / Obsidian / Telegram JSON</span>
+        <span class="arrow">↓</span>
+SQLite + FTS5                   <span class="comment">~/.memex/data/memex.db · UNIQUE(msg_id) dedup</span>
+        <span class="arrow">↓</span>
+MCP server                      <span class="comment">stdio JSON-RPC · 11 tools · proactive instructions</span>
+        <span class="arrow">↓</span>
+any client:
+  • Claude Code  <span class="comment">→ ~/.claude/config.json</span>
+  • Cursor       <span class="comment">→ ~/.cursor/mcp.json</span>
+  • Cline · Continue · Zed · ...
+
+<span class="comment">your agent calls memex_overview() at session start, then memex_search()
+on every topic the user references — no prompting needed</span></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="Five gaps in native AI memory" data-ru="Пять дыр в нативной AI-памяти">Five gaps in native AI memory</h2>
+    <p class="section-sub"
+       data-en="Even ChatGPT Memory, Claude Memory (Pro/Max) and CLAUDE.md leave structural holes. memex closes all five."
+       data-ru="Даже ChatGPT Memory, Claude Memory (Pro/Max) и CLAUDE.md оставляют структурные дыры. Memex закрывает все пять.">
+      Even ChatGPT Memory, Claude Memory (Pro/Max) and CLAUDE.md leave structural holes. memex closes all five.
+    </p>
+
+    <div class="gaps-grid">
+      <div class="gap-cell gap-cell-header" data-en="Native AI memory" data-ru="Нативная AI-память">Native AI memory</div>
+      <div class="gap-cell gap-cell-header memex" data-en="memex" data-ru="memex">memex</div>
+
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="Per-project silos." data-ru="Per-project silos.">Per-project silos.</strong>
+        <span data-en=" Claude Memory keeps separate state per project — no recall across them."
+              data-ru=" Claude Memory ведёт отдельное состояние на каждый проект — recall между ними нет."> Claude Memory keeps separate state per project — no recall across them.</span>
+        <span class="gap-source">anthropics/claude-code #36561, #39195</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="One SQLite index across every project, every chat, every machine."
+              data-ru="Один SQLite-индекс по всем проектам, всем чатам, всем машинам.">
+          One SQLite index across every project, every chat, every machine.
+        </span>
+      </div>
+
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="No bridge between Anthropic's own products."
+                data-ru="Нет мостов между продуктами Anthropic.">No bridge between Anthropic's own products.</strong>
+        <span data-en=" Web Claude can't see your Code sessions. Code can't see Cowork."
+              data-ru=" Web Claude не видит Code-сессии. Code не видит Cowork."> Web Claude can't see your Code sessions. Code can't see Cowork.</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="All Anthropic products + Cowork subagents — one searchable index."
+              data-ru="Все продукты Anthropic + субагенты Cowork — в одном поисковом индексе.">
+          All Anthropic products + Cowork subagents — one searchable index.
+        </span>
+      </div>
+
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="No cross-AI memory by design."
+                data-ru="Cross-AI памяти не существует by design.">No cross-AI memory by design.</strong>
+        <span data-en=" ChatGPT, Cursor, Cline, Continue, Zed, Telegram AI bots — every provider keeps its own silo."
+              data-ru=" ChatGPT, Cursor, Cline, Continue, Zed, Telegram-боты — каждый провайдер держит свой silo."> ChatGPT, Cursor, Cline, Continue, Zed, Telegram AI bots — every provider keeps its own silo.</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="Any MCP-compatible client reads the same memex memory through 11 standard tools."
+              data-ru="Любой MCP-клиент читает одну и ту же память через 11 стандартных тулзов.">
+          Any MCP-compatible client reads the same memex memory through 11 standard tools.
+        </span>
+      </div>
+
+      <div class="gap-cell gap-cell-native">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="Tied to one machine."
+                data-ru="Привязка к одной машине.">Tied to one machine.</strong>
+        <span data-en=" Claude Code's history lives in ~/.claude/projects/ on whichever laptop you used."
+              data-ru=" История Claude Code на конкретном ноуте."> Claude Code's history lives in ~/.claude/projects/ on whichever laptop you used.</span>
+        <span class="gap-source">anthropics/claude-code #25739</span>
+      </div>
+      <div class="gap-cell gap-cell-memex">
+        <span class="gap-mark v">✓</span>
+        <span data-en="Plain SQLite file. Sync via iCloud / Syncthing / rsync / git-annex — your choice."
+              data-ru="Plain SQLite. Синк через iCloud / Syncthing / rsync / git-annex.">
+          Plain SQLite file. Sync via iCloud / Syncthing / rsync / git-annex — your choice.
+        </span>
+      </div>
+
+      <div class="gap-cell gap-cell-native gap-row-last">
+        <span class="gap-mark x">✗</span>
+        <strong data-en="Account dies → memory dies."
+                data-ru="Аккаунт умирает — память умирает.">Account dies → memory dies.</strong>
+        <span data-en=" Anthropic banned multiple orgs without warning in April 2026. Lose access — lose Memory + Projects + history."
+              data-ru=" Anthropic блокирует без предупреждения. Потерял доступ — потерял Memory + Projects + историю."> Anthropic banned multiple orgs without warning in April 2026. Lose access — lose Memory + Projects + history.</span>
+        <span class="gap-source">HN #47853021 · April 2026</span>
+      </div>
+      <div class="gap-cell gap-cell-memex gap-row-last">
+        <span class="gap-mark v">✓</span>
+        <span data-en="The SQLite file on your laptop doesn't depend on any provider. Yours by architecture — not policy."
+              data-ru="SQLite на твоём ноуте не зависит от провайдера. Твоё by architecture, не по policy.">
+          The SQLite file on your laptop doesn't depend on any provider. Yours by architecture — not policy.
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="What it gives you" data-ru="Что даёт">What it gives you</h2>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">🔄</div>
+        <h3 data-en="Live auto-capture" data-ru="Live авто-захват">Live auto-capture</h3>
+        <p data-en="Daemon watches your Claude Code and Cowork directories via FSEvents. Every new session captured within ~1.5 seconds."
+           data-ru="Daemon через FSEvents следит за директориями Claude Code и Cowork. Каждая новая сессия в памяти за ~1.5 сек.">
+          Daemon watches your Claude Code and Cowork directories via FSEvents. Every new session captured within ~1.5 seconds.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🎯</div>
+        <h3 data-en="Proactive recall" data-ru="Проактивный recall">Proactive recall</h3>
+        <p data-en="Server-side instructions teach any connecting agent to call memex first — for any topic, name, or decision the user references."
+           data-ru="Серверные инструкции учат любого подключённого агента сначала идти в память — на любую тему, имя, решение которые упомянул юзер.">
+          Server-side instructions teach any connecting agent to call memex first — for any topic, name, or decision the user references.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🧠</div>
+        <h3 data-en="Cross-session, cross-agent" data-ru="Cross-session, cross-agent">Cross-session, cross-agent</h3>
+        <p data-en="Discussion in Cowork? Cursor sees it. Conversation in Claude Code? Continue can read it. Telegram chat with your AI bot? All searchable."
+           data-ru="Обсуждение в Cowork? Cursor его видит. Разговор в Claude Code? Continue читает. Telegram-чат с AI-ботом? Всё ищется.">
+          Discussion in Cowork? Cursor sees it. Conversation in Claude Code? Continue can read it. Telegram chat with your AI bot? All searchable.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🌳</div>
+        <h3 data-en="Subagent-aware" data-ru="Subagent-aware">Subagent-aware</h3>
+        <p data-en="Cowork sessions spawn helper subagents. Their transcripts captured separately and linked to parent."
+           data-ru="Cowork-сессии порождают subagent'ов-помощников. Их транскрипты захватываются отдельно и связываются с родителем.">
+          Cowork sessions spawn helper subagents. Their transcripts captured separately and linked to parent.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🔒</div>
+        <h3 data-en="Survives any ban" data-ru="Переживёт любой бан">Survives any ban</h3>
+        <p data-en="Anthropic decides when Claude Memory disappears. memex doesn't. The SQLite file on your laptop doesn't care about TOS updates."
+           data-ru="Anthropic решает когда Claude Memory исчезнет. Memex — нет. SQLite-файлу на твоём ноуте на TOS-апдейты плевать.">
+          Anthropic decides when Claude Memory disappears. memex doesn't. The SQLite file on your laptop doesn't care about TOS updates.
+        </p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">⚡</div>
+        <h3 data-en="Two pieces, opt-in" data-ru="Две части, opt-in">Two pieces, opt-in</h3>
+        <p data-en="MCP server (passive memory) installs with npm. Auto-capture daemon (live updates) installs separately. You decide."
+           data-ru="MCP-сервер (пассивная память) — через npm. Daemon авто-захвата (live-обновления) — отдельно. Решение за тобой.">
+          MCP server (passive memory) installs with npm. Auto-capture daemon (live updates) installs separately. You decide.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="We don't compete with the leaders" data-ru="Мы не конкурируем с лидерами">We don't compete with the leaders</h2>
+    <p class="section-sub"
+       data-en="The memory market in 2026 is large and divided. Each product is good at its own thing."
+       data-ru="Memory-рынок 2026 — большой и разделённый. Каждый продукт хорош в своём.">
+      The memory market in 2026 is large and divided. Each product is good at its own thing.
+    </p>
+
+    <div class="comparison-wrap">
+      <table class="comparison">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="memex-col" data-en="memex" data-ru="memex">memex</th>
+            <th data-en="Mem0" data-ru="Mem0">Mem0</th>
+            <th data-en="claude-mem" data-ru="claude-mem">claude-mem</th>
+            <th data-en="ChatGPT Memory" data-ru="ChatGPT Memory">ChatGPT Memory</th>
+            <th data-en="Anthropic Memory" data-ru="Anthropic Memory">Anthropic Memory</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-en="Audience" data-ru="Для кого">Audience</td>
+            <td class="memex-col" data-en="AI power user, own archive" data-ru="AI-power user, свой архив">AI power user, own archive</td>
+            <td data-en="Devs building AI agents" data-ru="Разработчики AI-агентов">Devs building AI agents</td>
+            <td data-en="Solo dev in Claude Code" data-ru="Solo dev в Claude Code">Solo dev in Claude Code</td>
+            <td data-en="Every ChatGPT user" data-ru="Каждый юзер ChatGPT">Every ChatGPT user</td>
+            <td data-en="Every Claude user" data-ru="Каждый юзер Claude">Every Claude user</td>
+          </tr>
+          <tr>
+            <td data-en="What's stored" data-ru="Что хранят">What's stored</td>
+            <td class="memex-col" data-en="Verbatim (raw)" data-ru="Дословно (raw)">Verbatim (raw)</td>
+            <td data-en="Extracted facts" data-ru="Извлечённые факты">Extracted facts</td>
+            <td data-en="AI-compressed obs" data-ru="AI-сжатые observations">AI-compressed obs</td>
+            <td data-en="Vendor-controlled" data-ru="Vendor-controlled">Vendor-controlled</td>
+            <td data-en="Filesystem" data-ru="Filesystem">Filesystem</td>
+          </tr>
+          <tr>
+            <td data-en="Where" data-ru="Где">Where</td>
+            <td class="memex-col" data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
+            <td data-en="Cloud / complex self-host" data-ru="Cloud / сложный self-host">Cloud / complex self-host</td>
+            <td data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
+            <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
+            <td data-en="Vendor's cloud" data-ru="Vendor's cloud">Vendor's cloud</td>
+          </tr>
+          <tr>
+            <td data-en="Sources" data-ru="Источники">Sources</td>
+            <td class="memex-col" data-en="5 (incl. Telegram)" data-ru="5 (incl. Telegram)">5 (incl. Telegram)</td>
+            <td data-en="AI chats only" data-ru="AI-чаты only">AI chats only</td>
+            <td data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</td>
+            <td data-en="ChatGPT only" data-ru="ChatGPT only">ChatGPT only</td>
+            <td data-en="Claude only" data-ru="Claude only">Claude only</td>
+          </tr>
+          <tr>
+            <td data-en="API key needed" data-ru="API-ключ">API key needed</td>
+            <td class="memex-col"><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+            <td><span class="y">✓</span> <span data-en="+ billing" data-ru="+ биллинг">+ billing</span></td>
+            <td><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+          </tr>
+          <tr>
+            <td data-en="Recovery after ban" data-ru="После бана">Recovery after ban</td>
+            <td class="memex-col"><span class="y">✓</span> <span data-en="Reads from disk" data-ru="читает с диска">Reads from disk</span></td>
+            <td><span class="n">✗</span> <span data-en="if cloud" data-ru="если cloud">if cloud</span></td>
+            <td><span class="partial">~</span> <span data-en="Claude Code only" data-ru="Claude Code only">Claude Code only</span></td>
+            <td><span class="n">✗</span></td>
+            <td><span class="n">✗</span></td>
+          </tr>
+          <tr>
+            <td data-en="Cost" data-ru="Стоимость">Cost</td>
+            <td class="memex-col" data-en="$0 forever" data-ru="$0 forever">$0 forever</td>
+            <td data-en="$19–249/mo" data-ru="$19–249/мес">$19–249/mo</td>
+            <td data-en="$0" data-ru="$0">$0</td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+            <td data-en="bundled" data-ru="bundled">bundled</td>
+          </tr>
+          <tr>
+            <td data-en="Open source" data-ru="Open source">Open source</td>
+            <td class="memex-col"><span class="y">✓</span> MIT</td>
+            <td><span class="y">✓</span> Apache 2.0</td>
+            <td><span class="y">✓</span> MIT</td>
+            <td><span class="n">✗</span></td>
+            <td><span class="n">✗</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="comp-summary">
+      <h4 data-en="When to choose what:" data-ru="Когда выбирать что:">When to choose what:</h4>
+      <ul>
+        <li data-en="<strong>Mem0</strong> — if you're building an AI agent for your users and need memory infrastructure"
+            data-ru="<strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure">
+          <strong>Mem0</strong> — if you're building an AI agent for your users and need memory infrastructure
+        </li>
+        <li data-en="<strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions"
+            data-ru="<strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями">
+          <strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions
+        </li>
+        <li data-en="<strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud"
+            data-ru="<strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку">
+          <strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud
+        </li>
+        <li data-en="<strong>memex</strong> — if you're at the intersection: multiple AI tools, no cloud, no subscription, archive must <strong>survive any scenario</strong>"
+            data-ru="<strong>memex</strong> — если ты в пересечении: несколько AI-инструментов, не хочешь облако, не хочешь подписку, хочешь чтобы архив <strong>выжил при любом сценарии</strong>">
+          <strong>memex</strong> — if you're at the intersection: multiple AI tools, no cloud, no subscription, archive must <strong>survive any scenario</strong>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="manifesto">
+      <span class="manifesto-tag" data-en="And one more thing —" data-ru="И ещё одно —">And one more thing —</span>
+      <p data-en="<strong>memex is MIT-licensed and not VC-funded.</strong> The code on GitHub IS the product — forkable, runnable forever, and impossible to quietly kill via acquihire."
+         data-ru="<strong>memex под MIT-лицензией и не VC-funded.</strong> Код на GitHub — это и есть продукт: forkable, runnable forever, impossible to quietly kill via acquihire.">
+        <strong>memex is MIT-licensed and not VC-funded.</strong> The code on GitHub IS the product — forkable, runnable forever, and impossible to quietly kill via acquihire.
+      </p>
+      <p data-en="Rewind/Limitless got bought by Meta and shut down their Mac app on December 19, 2025. Local-first tools die when their owners cash out."
+         data-ru="Rewind/Limitless купила Meta и закрыла Mac-приложение 19 декабря 2025. Local-first инструменты умирают когда их владельцы cash-out'ятся.">
+        Rewind/Limitless got bought by Meta and shut down their Mac app on December 19, 2025. Local-first tools die when their owners cash out.
+      </p>
+      <p data-en="Memex can't — there's no central owner to buy."
+         data-ru="Memex не может — нет central-owner'а которого можно купить.">
+        Memex can't — there's no central owner to buy.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="quickstart">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="Install" data-ru="Установка">Install</h2>
+    <p class="section-sub"
+       data-en="Two paths. Pick the one that fits."
+       data-ru="Два пути. Выбери тот что удобнее.">
+      Two paths. Pick the one that fits.
+    </p>
+
+    <div class="ai-install">
+      <span class="recommended" data-en="🤖 Easiest" data-ru="🤖 Проще всего">🤖 Easiest</span>
+      <h4 data-en="Let your AI install memex for you"
+          data-ru="Пусть твой AI установит memex сам">Let your AI install memex for you</h4>
+      <p class="lede2"
+         data-en="Already chatting with Claude Code, Cursor, Cline, Continue, or Zed? Any of them can do the whole install in 2 minutes — clone, wire the MCP config, turn on auto-capture. Just paste this prompt into the agent. It will show you each command before running, ask for confirmation on anything risky, and tell you when to restart."
+         data-ru="Уже общаешься с Claude Code, Cursor, Cline, Continue или Zed? Любой из них поставит memex за 2 минуты — клонирует, пропишет MCP-конфиг, включит авто-захват. Просто вставь этот промпт в агента. Он покажет каждую команду перед запуском, спросит подтверждение на рискованные действия, и скажет когда нужно перезапустить.">
+        Already chatting with Claude Code, Cursor, Cline, Continue, or Zed? Any of them can do the whole install in 2 minutes — clone, wire the MCP config, turn on auto-capture. Just paste this prompt into the agent. It will show you each command before running, ask for confirmation on anything risky, and tell you when to restart.
+      </p>
+      <div class="copy-row">
+        <button class="btn-primary" id="quickstart-copy-btn" onclick="copyInstallPrompt('quickstart-copy-btn')">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+          <span class="btn-label" data-en="Copy install prompt" data-ru="Скопировать промпт">Copy install prompt</span>
+        </button>
+        <span class="copy-meta"
+              data-en="Then paste into your AI agent's chat."
+              data-ru="Потом вставь в чат твоего AI-агента.">
+          Then paste into your AI agent's chat.
+        </span>
+      </div>
+      <pre id="install-prompt" class="prompt-block">Install memex on this machine. Memex is a local-first AI memory tool — it captures my Claude Code and Cowork conversations into a searchable SQLite index that any MCP-compatible agent can query. Repo: https://github.com/parallelclaw/memex-mvp
+
+Do these four steps in order. Show each command before you run it. Stop and ask if anything fails or looks wrong.
+
+1. Clone and install
+   - Suggest a parent directory (default: ~/Documents). Confirm with me.
+   - cd into that directory
+   - git clone https://github.com/parallelclaw/memex-mvp
+   - cd memex-mvp
+   - npm install
+   Verify: server.js exists; npm install completed without fatal errors.
+
+2. Wire memex into my MCP client
+   - You're running inside one of: Claude Code, Cursor, Cline, Continue, Zed.
+     Tell me which one you've inferred and which config file you'll edit.
+     Common locations:
+       Claude Code  → ~/.claude/config.json (or platform-specific equivalent)
+       Cursor       → ~/.cursor/mcp.json
+       Cline        → VS Code settings.json (cline.mcpServers)
+       Continue     → ~/.continue/config.json
+       Zed          → ~/.config/zed/settings.json (context_servers)
+     If unclear, ask me.
+   - Read the existing config (if present). Show me a diff before saving.
+   - MERGE this entry into mcpServers — never overwrite other servers I have:
+     {
+       "mcpServers": {
+         "memex": {
+           "command": "node",
+           "args": ["&lt;absolute path to memex-mvp/server.js&gt;"]
+         }
+       }
+     }
+     Use the absolute path from step 1 (run pwd inside memex-mvp).
+   - If the config file doesn't exist, create the parent directory and write a minimal valid file with just memex.
+   Verify: re-read the file after save; confirm memex entry is present and the path is absolute.
+
+3. Turn on live auto-capture (recommended)
+   - From the memex-mvp directory: npx memex-sync install
+   - Then npx memex-sync status — should print "daemon installed", "running (PID …)", "watching N sessions".
+   Verify: status output shows a non-zero PID.
+
+4. Tell me what to do next
+   - Tell me to fully quit and reopen the MCP client (Cmd+Q on macOS) so it picks up the new memex tools.
+   - After restart, suggest I ask: "show me what memex has in memory"
+     — that triggers memex_overview and confirms everything works end-to-end.
+
+Safety rules — read these before starting:
+- If `node` or `npm` aren't installed, stop and tell me to install Node.js (recommend nvm.sh). Don't try to install Node yourself.
+- Never run rm, sudo, or anything destructive without explicit confirmation from me.
+- Show every command before running it. If I say "no" or "stop", halt and explain.
+- If a step fails, do NOT auto-retry or auto-fix — tell me what failed and ask how to proceed.
+- When editing my MCP config, always preserve existing entries. If you can't merge cleanly, abort and tell me.
+
+Begin by greeting me, asking which directory to clone into, and confirming which MCP client I'm using.</pre>
+    </div>
+
+    <div class="or-divider"
+         data-en="— or do it yourself —"
+         data-ru="— или сделай вручную —">
+      — or do it yourself —
+    </div>
+
+    <div class="manual-card">
+      <h3 data-en="Manual install — 4 steps, ~5 minutes" data-ru="Установка вручную — 4 шага, ~5 минут">Manual install — 4 steps, ~5 minutes</h3>
+      <p class="manual-intro"
+         data-en="Each step shows where it happens. You only do this once."
+         data-ru="Каждый шаг помечен где он делается. Делается один раз.">
+        Each step shows where it happens. You only do this once.
+      </p>
+
+      <div class="step">
+        <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+        <h4 data-en="1. Install memex" data-ru="1. Установи memex">1. Install memex</h4>
+<pre><code>git clone https://github.com/parallelclaw/memex-mvp
+cd memex-mvp
+npm install</code></pre>
+        <p class="hint" data-en="The third command prints a lot of text — that's normal, wait until it finishes."
+                         data-ru="Третья команда печатает много текста — это нормально, дождись завершения.">
+          The third command prints a lot of text — that's normal, wait until it finishes.
+        </p>
+      </div>
+
+      <div class="step">
+        <span class="step-where" data-en="📝 Text editor" data-ru="📝 Текстовый редактор">📝 Text editor</span>
+        <h4 data-en="2. Tell Claude Code where memex lives" data-ru="2. Скажи Claude Code где лежит memex">2. Tell Claude Code where memex lives</h4>
+        <p data-en="Still in Terminal: <code>pwd</code> — copy the path. Open <code>~/.claude/config.json</code>:"
+           data-ru="В терминале: <code>pwd</code> — скопируй путь. Открой <code>~/.claude/config.json</code>:">
+          Still in Terminal: <code>pwd</code> — copy the path. Open <code>~/.claude/config.json</code>:
+        </p>
+<pre><code>{
+  "mcpServers": {
+    "memex": {
+      "command": "node",
+      "args": ["<em style="color: var(--accent-light); font-style: normal;">your-memex-path</em>/server.js"]
+    }
+  }
+}</code></pre>
+        <p class="hint" data-en="Cursor, Cline, Continue, Zed have similar config files — same JSON shape."
+                         data-ru="У Cursor, Cline, Continue, Zed такие же config-файлы — одна и та же JSON-структура.">
+          Cursor, Cline, Continue, Zed have similar config files — same JSON shape.
+        </p>
+      </div>
+
+      <div class="step">
+        <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+        <h4 data-en="3. Turn on auto-capture" data-ru="3. Включи авто-захват">3. Turn on auto-capture</h4>
+<pre><code>npx memex-sync install</code></pre>
+        <p data-en="Small background process — catches every new Claude Code / Cowork session within ~1.5 seconds. Install once, forget it."
+           data-ru="Маленький фоновый процесс — ловит каждую новую сессию Claude Code / Cowork за ~1.5 сек. Установил и забыл.">
+          Small background process — catches every new Claude Code / Cowork session within ~1.5 seconds. Install once, forget it.
+        </p>
+      </div>
+
+      <div class="step">
+        <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+        <h4 data-en="4. Verify" data-ru="4. Проверь">4. Verify</h4>
+<pre><code>npx memex-sync status</code></pre>
+        <p data-en="Should print <code>daemon running (PID …), watching N sessions</code>. Restart the MCP client (Cmd+Q + reopen). Ask: «show me what memex has in memory» — that triggers <code>memex_overview</code>."
+           data-ru="Должно показать <code>daemon running (PID …), watching N sessions</code>. Перезапусти MCP-клиент (Cmd+Q + открой заново). Скажи: «покажи что memex видит» — вызовет <code>memex_overview</code>.">
+          Should print <code>daemon running (PID …), watching N sessions</code>. Restart the MCP client (Cmd+Q + reopen). Ask: «show me what memex has in memory» — that triggers <code>memex_overview</code>.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <h2 data-en="A year from now, you'll thank yourself."
+      data-ru="Через год ты скажешь себе спасибо.">A year from now, you'll thank yourself.</h2>
+  <div class="final-cta-actions">
+    <a class="btn-primary" href="#quickstart"
+       data-en="Install →" data-ru="Установить →">Install →</a>
+    <a class="btn-secondary" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener"
+       data-en="GitHub ★" data-ru="GitHub ★">GitHub ★</a>
+  </div>
+</section>
+
+<footer>
+  <p>
+    <a href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/parallelclaw/memex-mvp/blob/main/README.md" target="_blank" rel="noopener" data-en="README" data-ru="README">README</a>
+    <a href="https://github.com/parallelclaw/memex-mvp/issues" target="_blank" rel="noopener" data-en="Issues" data-ru="Issues">Issues</a>
+  </p>
+  <p class="footer-tagline">
+    <span data-en="MIT · Not VC-funded · Not cloud · Not a subscription"
+          data-ru="MIT · Не VC-funded · Не cloud · Не подписка">
+      MIT · Not VC-funded · Not cloud · Not a subscription
+    </span>
+  </p>
+  <p style="margin-top: 8px; font-size: 12px;">
+    <span data-en="Built by" data-ru="Сделал">Built by</span>
+    <a href="https://github.com/parallelclaw" target="_blank" rel="noopener">parallelclaw</a>
+    · 2026
+  </p>
+</footer>
+
+<script>
+  let currentLang = 'ru';
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.querySelectorAll('.lang-toggle button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+    document.querySelectorAll('[data-en], [data-ru]').forEach(el => {
+      const text = el.dataset[lang];
+      if (text === undefined) return;
+      el.innerHTML = text;
+    });
+    try { localStorage.setItem('memex-lang', lang); } catch(e) {}
+  }
+  // Init: read saved preference, default to RU on this version
+  try {
+    const saved = localStorage.getItem('memex-lang');
+    if (saved === 'en') setLang('en');
+    else setLang('ru');
+  } catch(e) { setLang('ru'); }
+
+  // Copy install prompt to clipboard — works for any button with the same prompt
+  function copyInstallPrompt(btnId) {
+    const pre = document.getElementById('install-prompt');
+    const text = pre.textContent;
+    const btn = document.getElementById(btnId);
+    const label = btn.querySelector('.btn-label');
+    const original = label.textContent;
+    const ok = () => {
+      btn.classList.add('copied');
+      label.textContent = currentLang === 'ru' ? '✓ Скопировано!' : '✓ Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        label.textContent = original;
+      }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(() => fallbackCopy(text, ok));
+    } else {
+      fallbackCopy(text, ok);
+    }
+  }
+  function fallbackCopy(text, ok) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); }
+    catch (e) { alert('Copy failed — please select and copy the prompt manually.'); }
+    document.body.removeChild(ta);
+  }
+</script>
+
+</body>
+</html>

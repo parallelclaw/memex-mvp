@@ -796,6 +796,72 @@ on every topic the user references — no prompting needed</span></div>
 
 <section class="section">
   <div class="section-inner">
+    <h2 class="section-title" data-en="Across devices" data-ru="Между устройствами">Across devices</h2>
+    <p class="section-sub"
+       data-en="Memex lives on one machine — daemon catches local files, SQLite builds locally, MCP serves locally. Three patterns for multi-device today."
+       data-ru="Memex живёт на одной машине — daemon ловит локальные файлы, SQLite строится локально, MCP отдаёт локально. Три паттерна для multi-device сегодня.">
+      Memex lives on one machine — daemon catches local files, SQLite builds locally, MCP serves locally. Three patterns for multi-device today.
+    </p>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">☁️</div>
+        <h3 data-en="1. Sync the SQLite file" data-ru="1. Синк SQLite-файла">1. Sync the SQLite file</h3>
+        <p data-en="<code>~/.memex/data/memex.db</code> is a regular file. Replicate it via iCloud, Syncthing, rsync, or git-annex. Daemon writes on your primary machine; other machines read the same file through their local memex MCP server. One writer, many readers — works today."
+           data-ru="<code>~/.memex/data/memex.db</code> — обычный файл. Реплицируй через iCloud, Syncthing, rsync или git-annex. Daemon пишет на основной машине; остальные читают тот же файл через свой локальный memex MCP-сервер. Один writer, много readers — работает сегодня.">
+          <code>~/.memex/data/memex.db</code> — обычный файл. Реплицируй через iCloud, Syncthing, rsync или git-annex. Daemon пишет на основной машине; остальные читают тот же файл через свой локальный memex MCP-сервер. Один writer, много readers — работает сегодня.
+        </p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-icon">💻</div>
+        <h3 data-en="2. Memex on each device" data-ru="2. Memex на каждом устройстве">2. Memex on each device</h3>
+        <p data-en="Install memex separately on each laptop. Each builds its own corpus from local files. No sync, no conflicts — but the memory isn't unified across devices. Simple, reliable, no cloud round-trip."
+           data-ru="Установи memex отдельно на каждый ноут. Каждый строит свой корпус из локальных файлов. Нет синка, нет конфликтов — но память не унифицирована. Просто, надёжно, без облака.">
+          Установи memex отдельно на каждый ноут. Каждый строит свой корпус из локальных файлов. Нет синка, нет конфликтов — но память не унифицирована. Просто, надёжно, без облака.
+        </p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-icon">📱</div>
+        <h3 data-en="3. Mobile via Telegram bot" data-ru="3. Мобильный через Telegram-бот">3. Mobile via Telegram bot</h3>
+        <p data-en="<strong>Roadmap (code drafted).</strong> Forward messages or write thoughts to @memex_bot from your phone → bot writes them as JSON to <code>~/.memex/inbox/</code> on your primary machine → indexed automatically. Voice notes get transcribed via Nexara API. No mobile memex needed."
+           data-ru="<strong>В roadmap'е (код написан).</strong> Пересылаешь сообщения или пишешь мысли в @memex_bot с телефона → бот пишет их как JSON в <code>~/.memex/inbox/</code> основной машины → индексируется автоматически. Голосовухи транскрибируются через Nexara API. Memex на телефоне не нужен.">
+          <strong>В roadmap'е (код написан).</strong> Пересылаешь сообщения или пишешь мысли в @memex_bot с телефона → бот пишет их как JSON в <code>~/.memex/inbox/</code> основной машины → индексируется автоматически. Голосовухи транскрибируются через Nexara API. Memex на телефоне не нужен.
+        </p>
+      </div>
+    </div>
+
+    <div class="comp-summary">
+      <h4 data-en="iCloud sync setup (macOS)" data-ru="Настройка iCloud-синка (macOS)">iCloud sync setup (macOS)</h4>
+      <p style="color: var(--text-soft); font-size: 14px; line-height: 1.55; margin-bottom: 12px;"
+         data-en="Move the memex data dir into your iCloud folder and point memex at it:"
+         data-ru="Перемести memex data-директорию в iCloud-папку и укажи memex'у на неё:">
+        Перемести memex data-директорию в iCloud-папку и укажи memex'у на неё:
+      </p>
+<pre style="background: var(--bg-soft); padding: 12px 16px; border-radius: 8px; font-size: 13px; color: var(--text); overflow-x: auto; margin: 0 0 12px;"><code># Option A — symlink ~/.memex/data into iCloud Drive
+mv ~/.memex/data ~/Library/Mobile\ Documents/com~apple~CloudDocs/memex/data
+ln -s ~/Library/Mobile\ Documents/com~apple~CloudDocs/memex/data ~/.memex/data
+
+# Option B — point memex at iCloud path via env var
+export MEMEX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/memex"</code></pre>
+      <p style="color: var(--text-muted); font-size: 13px; line-height: 1.55; margin: 0;"
+         data-en="⚠ <strong>One writer only.</strong> Run the auto-capture daemon (<code>memex-sync</code>) on exactly one machine. Other devices read the synced file through their local memex MCP server — they should not run the daemon on the same shared DB. Concurrent writers via filesystem sync can corrupt the WAL."
+         data-ru="⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине. Остальные устройства читают синхронизированный файл через свой локальный memex MCP-сервер — на них daemon не запускай. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.">
+        ⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине. Остальные устройства читают синхронизированный файл через свой локальный memex MCP-сервер — на них daemon не запускай. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.
+      </p>
+    </div>
+
+    <p style="text-align: center; color: var(--text-muted); font-size: 14px; margin-top: 28px;"
+       data-en="Roadmap (v0.5+): built-in multi-device CRDT sync without iCloud workarounds. Remote MCP over HTTPS+OAuth for VPS / cloud agents."
+       data-ru="В roadmap'е (v0.5+): встроенная multi-device CRDT-синхронизация без iCloud-обходов. Remote MCP через HTTPS+OAuth для VPS / облачных агентов.">
+      Roadmap (v0.5+): built-in multi-device CRDT sync without iCloud workarounds. Remote MCP over HTTPS+OAuth for VPS / cloud agents.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
     <h2 class="section-title" data-en="We don't compete with the leaders" data-ru="Мы не конкурируем с лидерами">We don't compete with the leaders</h2>
     <p class="section-sub"
        data-en="The memory market in 2026 is large and divided. Each product is good at its own thing."

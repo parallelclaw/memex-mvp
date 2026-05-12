@@ -660,16 +660,16 @@ on every topic the user references — no prompting needed</span></div>
 
       <div class="gap-cell gap-cell-native">
         <span class="gap-mark x">✗</span>
-        <strong data-en="Per-project silos." data-ru="Per-project silos.">Per-project silos.</strong>
-        <span data-en=" Claude Memory keeps separate state per project — no recall across them."
-              data-ru=" Claude Memory ведёт отдельное состояние на каждый проект — recall между ними нет."> Claude Memory keeps separate state per project — no recall across them.</span>
+        <strong data-en="Hard-walled per-project silos." data-ru="Жёстко изолированные per-project silos.">Hard-walled per-project silos.</strong>
+        <span data-en=" Silos are useful by default — but Claude Memory locks them shut. When you actually need to recall a decision from a neighbouring project, there's no escape hatch."
+              data-ru=" Изоляция по умолчанию — полезно. Но Claude Memory закрывает границы намертво: когда нужно вспомнить решение из соседнего проекта, выйти за silos невозможно."> Silos are useful by default — but Claude Memory locks them shut. When you actually need to recall a decision from a neighbouring project, there's no escape hatch.</span>
         <span class="gap-source">anthropics/claude-code #36561, #39195</span>
       </div>
       <div class="gap-cell gap-cell-memex">
         <span class="gap-mark v">✓</span>
-        <span data-en="One SQLite index across every project, every chat, every machine."
-              data-ru="Один SQLite-индекс по всем проектам, всем чатам, всем машинам.">
-          One SQLite index across every project, every chat, every machine.
+        <span data-en="Project-aware, not siloed. <code>memex_search</code> takes an optional <code>project</code> filter — by default it can search wide, when you scope it, it stays inside. The boundary is your choice on every query."
+              data-ru="Project-aware, но не siloed. У <code>memex_search</code> есть опциональный фильтр <code>project</code> — по умолчанию ищет по всем, с фильтром — только в нужном. Граница на твоё усмотрение на каждый запрос.">
+          Project-aware, not siloed. <code>memex_search</code> takes an optional <code>project</code> filter — by default it can search wide, when you scope it, it stays inside. The boundary is your choice on every query.
         </span>
       </div>
 

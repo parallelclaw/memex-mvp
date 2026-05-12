@@ -1088,18 +1088,21 @@ Do these five steps in order. Show each command before you run it. Stop and ask 
        Zed          → ~/.config/zed/settings.json (context_servers)
      If unclear, ask me.
    - Read the existing config (if present). Show me a diff before saving.
+   - First, get the ABSOLUTE path to the node binary — GUI apps (Cursor, Cline, Claude Desktop) on macOS often don't inherit shell PATH, so a bare "command": "node" fails with `spawn node ENOENT`. Especially true for nvm users (node lives at ~/.nvm/versions/node/&lt;ver&gt;/bin/node). Run:
+     which node
+     Capture that path. If it's a shim (e.g. ~/.asdf/shims/node) — also run `realpath $(which node)` to resolve to the real binary.
    - MERGE this entry into mcpServers — never overwrite other servers I have:
      {
        "mcpServers": {
          "memex": {
-           "command": "node",
+           "command": "&lt;absolute node path from which node&gt;",
            "args": ["&lt;absolute path to memex-mvp/server.js&gt;"]
          }
        }
      }
-     Use the absolute path from step 1 (run pwd inside memex-mvp).
+     Both paths must be absolute. Get the memex-mvp path from `pwd` inside the cloned directory.
    - If the config file doesn't exist, create the parent directory and write a minimal valid file with just memex.
-   Verify: re-read the file after save; confirm memex entry is present and the path is absolute.
+   Verify: re-read the file after save; confirm memex entry is present and both `command` and `args[0]` are absolute paths.
 
 3. Turn on live auto-capture (recommended)
    - From the memex-mvp directory: npx memex-sync install
@@ -1154,18 +1157,21 @@ Begin by greeting me, asking which directory to clone into, and confirming which
        Zed          → ~/.config/zed/settings.json (context_servers)
      Если неясно — спроси меня.
    - Прочитай существующий config (если есть). Покажи мне diff перед сохранением.
+   - Сначала определи АБСОЛЮТНЫЙ путь к node-бинарнику — GUI-приложения (Cursor, Cline, Claude Desktop) на macOS часто не наследуют PATH из shell'а, поэтому голое "command": "node" падает с `spawn node ENOENT`. Особенно если node поставлен через nvm (живёт в ~/.nvm/versions/node/&lt;ver&gt;/bin/node). Запусти:
+     which node
+     Запомни этот путь. Если это shim (например ~/.asdf/shims/node) — дополнительно выполни `realpath $(which node)` чтобы получить реальный бинарник.
    - СМЕРДЖИ эту запись в mcpServers — никогда не перетирай другие серверы которые у меня есть:
      {
        "mcpServers": {
          "memex": {
-           "command": "node",
+           "command": "&lt;абсолютный путь к node из which node&gt;",
            "args": ["&lt;абсолютный путь к memex-mvp/server.js&gt;"]
          }
        }
      }
-     Используй абсолютный путь из шага 1 (запусти pwd внутри memex-mvp).
+     Оба пути должны быть абсолютными. Путь к memex-mvp получи через `pwd` внутри склонированной директории.
    - Если config-файла нет — создай parent-директорию и запиши минимальный валидный файл только с memex.
-   Проверь: перечитай файл после сохранения; убедись что memex-запись на месте и путь абсолютный.
+   Проверь: перечитай файл после сохранения; убедись что memex-запись на месте и оба пути (`command` и `args[0]`) абсолютные.
 
 3. Включи live auto-capture (рекомендуется)
    - Из директории memex-mvp: npx memex-sync install
@@ -1226,21 +1232,27 @@ npm install</code></pre>
       <div class="step">
         <span class="step-where" data-en="📝 Text editor" data-ru="📝 Текстовый редактор">📝 Text editor</span>
         <h4 data-en="2. Tell Claude Code where memex lives" data-ru="2. Скажи Claude Code где лежит memex">2. Tell Claude Code where memex lives</h4>
-        <p data-en="Still in Terminal: <code>pwd</code> — copy the path. Open <code>~/.claude/config.json</code>:"
-           data-ru="В терминале: <code>pwd</code> — скопируй путь. Открой <code>~/.claude/config.json</code>:">
-          Still in Terminal: <code>pwd</code> — copy the path. Open <code>~/.claude/config.json</code>:
+        <p data-en="Still in Terminal, get two absolute paths — <strong>memex</strong> location and your <strong>node</strong> binary location:"
+           data-ru="В терминале возьми два абсолютных пути — папка <strong>memex</strong> и бинарник <strong>node</strong>:">
+          Still in Terminal, get two absolute paths — <strong>memex</strong> location and your <strong>node</strong> binary location:
+        </p>
+<pre><code>pwd          # → your-memex-path
+which node   # → your-node-path</code></pre>
+        <p data-en="Open <code>~/.claude/config.json</code> and paste — replace both placeholders with the actual paths:"
+           data-ru="Открой <code>~/.claude/config.json</code> и вставь — замени оба placeholder'a реальными путями:">
+          Open <code>~/.claude/config.json</code> and paste — replace both placeholders with the actual paths:
         </p>
 <pre><code>{
   "mcpServers": {
     "memex": {
-      "command": "node",
+      "command": "<em style="color: var(--accent-light); font-style: normal;">your-node-path</em>",
       "args": ["<em style="color: var(--accent-light); font-style: normal;">your-memex-path</em>/server.js"]
     }
   }
 }</code></pre>
-        <p class="hint" data-en="Cursor, Cline, Continue, Zed have similar config files — same JSON shape."
-                         data-ru="У Cursor, Cline, Continue, Zed такие же config-файлы — одна и та же JSON-структура.">
-          Cursor, Cline, Continue, Zed have similar config files — same JSON shape.
+        <p class="hint" data-en="Why absolute node path? GUI apps (Cursor, Cline, Claude Desktop) on macOS often don't see your shell PATH, so a bare <code>&quot;node&quot;</code> fails with <code>spawn node ENOENT</code> — especially with nvm. Always use the path from <code>which node</code>. Cursor, Cline, Continue, Zed have similar config files — same JSON shape."
+                         data-ru="Почему абсолютный путь к node? GUI-приложения (Cursor, Cline, Claude Desktop) на macOS часто не видят твой PATH из shell'a, поэтому голое <code>&quot;node&quot;</code> падает с <code>spawn node ENOENT</code> — особенно с nvm. Всегда используй путь из <code>which node</code>. У Cursor, Cline, Continue, Zed такие же config-файлы — одна и та же JSON-структура.">
+          Why absolute node path? GUI apps (Cursor, Cline, Claude Desktop) on macOS often don't see your shell PATH, so a bare <code>"node"</code> fails with <code>spawn node ENOENT</code> — especially with nvm. Always use the path from <code>which node</code>. Cursor, Cline, Continue, Zed have similar config files — same JSON shape.
         </p>
       </div>
 

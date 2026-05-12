@@ -47,24 +47,33 @@ bash install.sh
 
 ### Подключение к Claude Code
 
-В `~/.claude/config.json` добавь:
+Сначала возьми **два абсолютных пути** в терминале:
+
+```bash
+pwd         # → путь до memex-mvp (из директории memex-mvp)
+which node  # → путь до бинарника node (например /Users/you/.nvm/versions/node/v24.15.0/bin/node)
+```
+
+В `~/.claude/config.json` добавь, подставив оба пути:
 
 ```json
 {
   "mcpServers": {
     "memex": {
-      "command": "node",
+      "command": "/абсолютный/путь/до/node",
       "args": ["/абсолютный/путь/до/memex-mvp/server.js"]
     }
   }
 }
 ```
 
+**Почему абсолютный путь к node, а не просто `"node"`?** GUI-приложения (Cursor, Cline VS Code, Claude Desktop) на macOS часто **не наследуют PATH из shell'a** (`~/.zshrc`). С `"command": "node"` MCP-сервер падает с `spawn node ENOENT` — особенно если node поставлен через nvm. Всегда используй путь из `which node`.
+
 Перезапусти Claude Code. Готово — у тебя в session появятся `memex_*` tool'ы.
 
 ### Подключение к Cursor / Cline / Continue / Zed
 
-Каждый клиент имеет свой `mcpServers` config (обычно в `~/.cursor/mcp.json`, `.cline/...`, и т.п.). Структура та же — `command: "node"`, `args: [путь к server.js]`.
+Каждый клиент имеет свой `mcpServers` config (обычно в `~/.cursor/mcp.json`, `.cline/...`, и т.п.). Структура та же — `command` = абсолютный путь до node, `args` = `[путь к server.js]`. Та же ENOENT-проблема актуальна для всех GUI-MCP клиентов.
 
 ---
 

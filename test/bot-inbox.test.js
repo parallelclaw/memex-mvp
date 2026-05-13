@@ -139,7 +139,8 @@ await test('write produces parser-compatible JSON file in inbox dir', () => {
     assertEq(raw.personal_information.user_id, String(USER_ID));
     assertEq(raw.chats.list.length, 1);
     const chat = raw.chats.list[0];
-    assertEq(chat.id, USER_ID);
+    assertEq(chat.id, `memex-bot-${USER_ID}`);
+    assertEq(chat.name, 'Memex Bot');
     assertEq(chat.type, 'personal_chat');
     assertEq(chat.messages.length, 1);
     const writtenMsg = chat.messages[0];
@@ -237,10 +238,12 @@ await test('end-to-end with real importTelegram parser', async () => {
     assertEq(rows.length, 1, 'one row inserted');
     assertEq(rows[0].text, 'integration test message');
     assertEq(rows[0].role, 'user');
-    assertEq(rows[0].conversation_id, `tg-${USER_ID}`);
+    // Synthetic chat.id keeps the bot thread distinct from Saved Messages
+    // (which would land at `tg-<USER_ID>`). Bot lives at `tg-memex-bot-<USER_ID>`.
+    assertEq(rows[0].conversation_id, `tg-memex-bot-${USER_ID}`);
 
     // Idempotency — re-running the insert is a no-op.
-    insert.run('telegram', `tg-${USER_ID}`, '500', 'user', 'me', 'integration test message', 1747001000, null);
+    insert.run('telegram', `tg-memex-bot-${USER_ID}`, '500', 'user', 'me', 'integration test message', 1747001000, null);
     const after = db.prepare(`SELECT COUNT(*) AS n FROM messages`).get().n;
     assertEq(after, 1, 'duplicate insert was deduped');
 

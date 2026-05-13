@@ -21,8 +21,16 @@ builds Telegram-export-format JSON snippet
 The bot writes JSON files in the same shape as a Telegram Desktop export.
 The existing `importTelegram` parser in `server.js` ingests them. **Zero new
 ingest code path** — voice transcripts, forwards, and direct messages all
-land as ordinary `tg-<your_user_id>` conversation rows, indistinguishable
-from imported chats.
+land in the dedicated `tg-memex-bot-<your_user_id>` conversation. The
+synthetic `memex-bot-` prefix keeps the bot thread separate from any real
+Telegram chat (including Saved Messages, which Telegram Desktop exports
+with `chat.id == your own user_id`).
+
+To search only what you captured via the bot, scope by chat title:
+
+```
+memex_search({ query: "...", chat: "Memex Bot" })
+```
 
 ## What's captured
 

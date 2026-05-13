@@ -130,6 +130,62 @@ test('date sort still respects FTS5 MATCH filter', () => {
   assertEq(rows.map(r => r.id), [3], 'only the row containing "final" survives the MATCH');
 });
 
+// ---------- chat filter (matches the same LOWER(c.title) LIKE LOWER(?) clause
+// memex_search builds in server.js — see the filterClause section.) ----------
+
+console.log('\nmemex_search chat filter:\n');
+
+// Seed three additional rows in distinctly-titled conversations to verify
+// that LOWER(...) LIKE LOWER('%text%') narrows results to the right chat.
+const insExtra = db.prepare(`
+  INSERT INTO messages (id, source, conversation_id, sender, role, text, ts)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+insExtra.run(10, 'telegram', 'tg-memex-bot-12345', 'me', 'user', 'mobile idea about launch', 1730000000);
+insExtra.run(11, 'telegram', 'tg-12345',             'me', 'user', 'launch reminder from Saved Messages',  1730000100);
+insExtra.run(12, 'telegram', 'tg-wife',              'me', 'user', 'launch dinner reminder',               1730000200);
+db.prepare('INSERT INTO conversations (conversation_id, title, archived_at) VALUES (?,?,?)').run('tg-memex-bot-12345', 'Memex Bot', null);
+db.prepare('INSERT INTO conversations (conversation_id, title, archived_at) VALUES (?,?,?)').run('tg-12345',            'Saved Messages', null);
+db.prepare('INSERT INTO conversations (conversation_id, title, archived_at) VALUES (?,?,?)').run('tg-wife',             'Wife', null);
+
+function buildSqlWithChat(orderBy) {
+  return `
+    SELECT m.id, c.title
+      FROM messages_fts
+      JOIN messages m ON m.id = messages_fts.rowid
+ LEFT JOIN conversations c ON c.conversation_id = m.conversation_id
+     WHERE messages_fts MATCH ?
+       AND (c.archived_at IS NULL OR c.archived_at = 0)
+       AND LOWER(c.title) LIKE LOWER(?)
+  ORDER BY ${orderBy}
+     LIMIT ?
+  `;
+}
+
+test('chat="Memex Bot" returns only the bot thread, NOT Saved Messages', () => {
+  const sql = buildSqlWithChat(ORDER_BY.date_desc);
+  const rows = db.prepare(sql).all('launch', '%Memex Bot%', 50);
+  assertEq(rows.map(r => r.id), [10], 'only msg 10 (bot chat) — msg 11 lives in Saved Messages and must be excluded');
+});
+
+test('chat filter is case-insensitive ("memex bot" matches "Memex Bot")', () => {
+  const sql = buildSqlWithChat(ORDER_BY.date_desc);
+  const rows = db.prepare(sql).all('launch', '%memex bot%', 50);
+  assertEq(rows.map(r => r.id), [10], 'lowercase query still hits the titled chat');
+});
+
+test('chat filter substring-matches partial titles ("wife" matches "Wife")', () => {
+  const sql = buildSqlWithChat(ORDER_BY.date_desc);
+  const rows = db.prepare(sql).all('launch', '%wife%', 50);
+  assertEq(rows.map(r => r.id), [12]);
+});
+
+test('chat filter without a match returns empty', () => {
+  const sql = buildSqlWithChat(ORDER_BY.date_desc);
+  const rows = db.prepare(sql).all('launch', '%no-such-chat%', 50);
+  assertEq(rows.length, 0);
+});
+
 db.close();
 
 console.log(`\n${passed}/${passed + failed} passed`);

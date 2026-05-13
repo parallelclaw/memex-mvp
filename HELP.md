@@ -232,7 +232,7 @@ Memex по дефолту сортирует по **релевантности**
 | Tool | Что делает |
 |---|---|
 | `memex_overview` | Снэпшот корпуса: источники, сколько сообщений, последние чаты, статус auto-capture |
-| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `half_life_days`, `expand_match` |
+| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `chat`, `half_life_days`, `expand_match`, `sort` |
 | `memex_list_projects` | Список всех проектов с количеством разговоров |
 | `memex_list_conversations` | Список чатов отсортированных по recency |
 | `memex_get_conversation(id)` | Полный transcript одного чата |

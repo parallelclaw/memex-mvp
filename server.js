@@ -873,6 +873,8 @@ Canonical examples:
   memex_search({ query: "арбитраж OR монетизация" })
   memex_search({ query: "temporal", project: "memex-mvp" })
   memex_search({ query: "Q2 launch deck", sort: "date_asc" })
+  memex_search({ query: "idea", chat: "Memex Bot" })  // only mobile captures
+  memex_search({ query: "договорились", chat: "wife" })  // one specific TG chat
   memex_list_conversations({ limit: 10, format: "json" })
   memex_list_projects({ limit: 20 })
 
@@ -1109,6 +1111,16 @@ const TOOLS = [
             'E.g. "memex-mvp" matches any conversation whose path contains "memex-mvp". ' +
             'Use memex_list_projects to discover available project paths. ' +
             'Telegram conversations have no project_path and are excluded by this filter.',
+        },
+        chat: {
+          type: 'string',
+          description:
+            'Optional chat/conversation title filter — case-insensitive substring match against ' +
+            'conversations.title. Use it to scope search to one specific chat by its human name: ' +
+            '"Memex Bot" to find only captures from the Telegram bot, "wife" to find one specific ' +
+            'Telegram conversation, "ai-memory-may" for a particular Claude Code session, etc. ' +
+            'Use memex_list_conversations to discover available titles. Combine with `source` for ' +
+            'tighter filtering.',
         },
         group_by_conversation: {
           type: 'boolean',
@@ -1469,6 +1481,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         filters.push('c.project_path LIKE ?');
         matchParams.push(`%${projectFilter}%`);
       }
+      const chatFilter = typeof args.chat === 'string' ? args.chat.trim() : '';
+      if (chatFilter) {
+        // Case-insensitive substring match on conversations.title. Conversations
+        // with no title (rare, malformed imports) are excluded by this filter.
+        filters.push('LOWER(c.title) LIKE LOWER(?)');
+        matchParams.push(`%${chatFilter}%`);
+      }
       const filterClause = filters.length ? `AND ${filters.join(' AND ')}` : '';
       // When grouping, fetch wider so we have enough unique conversations after dedup.
       const fetchLimit = groupByConv ? Math.min(500, limit * 10) : limit;
@@ -1540,6 +1559,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (projectFilter) {
           likeFilters.push('c.project_path LIKE ?');
           likeParams.push(`%${projectFilter}%`);
+        }
+        if (chatFilter) {
+          likeFilters.push('LOWER(c.title) LIKE LOWER(?)');
+          likeParams.push(`%${chatFilter}%`);
         }
         // Naive substring match — sufficient for the rare case where someone
         // wants to retrieve from compacted summaries. No FTS5 ranking; we

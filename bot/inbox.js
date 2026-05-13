@@ -9,9 +9,15 @@
  *   }
  *
  * One file per message. The conversation_id derived by the parser is
- * `tg-<chat.id>`, so we always set chat.id to the bot owner's user_id —
- * every captured message lands in the same `tg-<USER>` thread regardless
- * of whether it was typed, forwarded, or transcribed.
+ * `tg-<chat.id>`. We set chat.id to the string `memex-bot-<userId>` (NOT
+ * the bare Telegram user_id) so the resulting conversation_id is
+ * `tg-memex-bot-<userId>` — distinct from any real Telegram chat.id and,
+ * critically, distinct from "Saved Messages" exports (which Telegram
+ * Desktop emits with chat.id == your own user_id, so a synthetic prefix
+ * here is the only thing keeping the two streams from merging).
+ *
+ * Every captured message — typed, forwarded, voice-transcribed — lands
+ * in this same dedicated thread.
  *
  * Idempotency is automatic: each message uses Telegram's stable msg.id,
  * and `messages` has UNIQUE(source, conversation_id, msg_id). Reprocessing
@@ -43,7 +49,10 @@ export function writeInboxMessage({ inboxPath, userId, message }) {
     chats: {
       list: [
         {
-          id: Number(userId),
+          // Synthetic chat.id keeps the bot thread separate from any real
+          // Telegram chat (including Saved Messages, which uses the bare
+          // user_id). Resulting conversation_id is `tg-memex-bot-<userId>`.
+          id: `memex-bot-${userId}`,
           name: CHAT_NAME,
           type: 'personal_chat',
           messages: [message],

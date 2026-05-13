@@ -833,6 +833,67 @@ on every topic the user references — no prompting needed</span></div>
       </details>
 
       <details class="faq-item">
+        <summary data-en="What do I need to install memex? Any limitations?"
+                 data-ru="Что нужно для установки memex? Какие ограничения?">What do I need to install memex? Any limitations?</summary>
+        <div class="faq-body">
+          <p data-en="<strong>Hard requirements (memex won't run without):</strong>"
+             data-ru="<strong>Жёсткие требования (без них memex не запустится):</strong>">
+            <strong>Жёсткие требования (без них memex не запустится):</strong>
+          </p>
+          <ul>
+            <li data-en="<strong>Node.js 20.x – 24.x</strong> (recommend 22 LTS). The repo has a <code>.nvmrc</code> — run <code>nvm use</code> in the project dir."
+                data-ru="<strong>Node.js 20.x – 24.x</strong> (рекомендуем 22 LTS). В репо есть <code>.nvmrc</code> — запусти <code>nvm use</code> в директории проекта.">
+              <strong>Node.js 20.x – 24.x</strong> (рекомендуем 22 LTS). В репо есть <code>.nvmrc</code> — запусти <code>nvm use</code> в директории проекта.
+            </li>
+            <li data-en="<strong>macOS 12+ or Linux</strong> with inotify. Windows only via WSL."
+                data-ru="<strong>macOS 12+ или Linux</strong> с inotify. Windows — только через WSL.">
+              <strong>macOS 12+ или Linux</strong> с inotify. Windows — только через WSL.
+            </li>
+            <li data-en="<strong>Xcode Command Line Tools</strong> on macOS (<code>xcode-select --install</code>) — needed for native <code>better-sqlite3</code> compile if no prebuilt binary exists for your Node version."
+                data-ru="<strong>Xcode Command Line Tools</strong> на macOS (<code>xcode-select --install</code>) — нужны для нативной сборки <code>better-sqlite3</code>, если для твоей Node-версии нет prebuilt binaries.">
+              <strong>Xcode Command Line Tools</strong> на macOS (<code>xcode-select --install</code>) — нужны для нативной сборки <code>better-sqlite3</code>, если для твоей Node-версии нет prebuilt binaries.
+            </li>
+            <li data-en="<strong>MCP-compatible AI client</strong> — Claude Code, Cursor, Cline, Continue, Zed. Without one, memex builds the index but nothing can query it."
+                data-ru="<strong>MCP-совместимый AI-клиент</strong> — Claude Code, Cursor, Cline, Continue, Zed. Без него memex строит индекс, но обращаться к нему будет некому.">
+              <strong>MCP-совместимый AI-клиент</strong> — Claude Code, Cursor, Cline, Continue, Zed. Без него memex строит индекс, но обращаться к нему будет некому.
+            </li>
+          </ul>
+
+          <p data-en="<strong>Known limitations:</strong>"
+             data-ru="<strong>Известные ограничения:</strong>">
+            <strong>Известные ограничения:</strong>
+          </p>
+          <ul>
+            <li data-en="❌ <strong>Web-only AI</strong> (ChatGPT in browser, Claude.ai web) — these sessions live on vendor servers, not on your disk."
+                data-ru="❌ <strong>Web-only AI</strong> (ChatGPT в браузере, Claude.ai web) — эти сессии живут на серверах вендора, на твоём диске их нет.">
+              ❌ <strong>Web-only AI</strong> (ChatGPT в браузере, Claude.ai web) — эти сессии живут на серверах вендора, на твоём диске их нет.
+            </li>
+            <li data-en="❌ <strong>Mobile AI apps</strong> (ChatGPT iOS, Claude Android) — phone data doesn't write to your computer."
+                data-ru="❌ <strong>Мобильные AI-приложения</strong> (ChatGPT iOS, Claude Android) — phone-data не пишется на твой компьютер.">
+              ❌ <strong>Мобильные AI-приложения</strong> (ChatGPT iOS, Claude Android) — phone-data не пишется на твой компьютер.
+            </li>
+            <li data-en="❌ <strong>VPS / cloud agent sessions</strong> — memex reads the local filesystem only."
+                data-ru="❌ <strong>Сессии на VPS / в облаке</strong> — memex читает только локальную файловую систему.">
+              ❌ <strong>Сессии на VPS / в облаке</strong> — memex читает только локальную файловую систему.
+            </li>
+            <li data-en="❌ <strong>Auto-capture daemon on Linux</strong> — <code>npx memex-sync install</code> is macOS-only (uses LaunchAgent). On Linux run <code>npx memex-sync</code> in foreground or wire your own systemd unit."
+                data-ru="❌ <strong>Auto-capture daemon на Linux</strong> — <code>npx memex-sync install</code> работает только на macOS (LaunchAgent). На Linux запускай <code>npx memex-sync</code> в foreground или сделай свой systemd unit.">
+              ❌ <strong>Auto-capture daemon на Linux</strong> — <code>npx memex-sync install</code> работает только на macOS (LaunchAgent). На Linux запускай <code>npx memex-sync</code> в foreground или сделай свой systemd unit.
+            </li>
+            <li data-en="❌ <strong>Telegram mobile export</strong> — TG mobile app cannot export chats. Only Telegram Desktop produces the JSON format memex reads."
+                data-ru="❌ <strong>Telegram mobile export</strong> — мобильный TG не умеет экспортировать чаты. JSON для memex'a делает только Telegram Desktop.">
+              ❌ <strong>Telegram mobile export</strong> — мобильный TG не умеет экспортировать чаты. JSON для memex'a делает только Telegram Desktop.
+            </li>
+          </ul>
+
+          <p data-en="✅ <strong>Positive 'limitation':</strong> Internet is <em>not required</em> after install. No phone-home, no API keys, no cloud dependencies. That's a feature, not a bug."
+             data-ru="✅ <strong>Положительное «ограничение»:</strong> Internet <em>не нужен</em> после установки. Никаких phone-home, никаких API-ключей, никаких облачных зависимостей. Это feature, не bug.">
+            ✅ <strong>Положительное «ограничение»:</strong> Internet <em>не нужен</em> после установки. Никаких phone-home, никаких API-ключей, никаких облачных зависимостей. Это feature, не bug.
+          </p>
+        </div>
+      </details>
+
+      <details class="faq-item">
         <summary data-en="Across multiple devices — does memex work?"
                  data-ru="Несколько устройств — как memex там работает?">Across multiple devices — does memex work?</summary>
         <div class="faq-body">

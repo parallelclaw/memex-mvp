@@ -37,11 +37,41 @@ MCP server (stdio JSON-RPC)
 
 ## Requirements / Требования
 
-- **Node.js 20.x – 24.x** (рекомендуется **22 LTS**). В репо есть `.nvmrc` со значением `22` — если у тебя `nvm`, выполни `nvm use` в директории проекта чтобы автоматически переключиться.
-- **macOS / Linux** (Windows — через WSL).
-- **Xcode Command Line Tools** на macOS (`xcode-select --install`) — нужны чтобы `better-sqlite3` собрался если для твоей Node-версии нет prebuilt binaries.
+### Обязательное (без этого memex не запустится)
 
-> ⚠ **Node 25+ известная проблема.** На свежих bleeding-edge версиях Node (25.x) `better-sqlite3` ещё не имеет prebuilt binaries и пытается компилироваться из исходников — на macOS это может упасть с `fatal error: 'climits' file not found`. Решение: `nvm install 22 && nvm use 22`, потом переустанови зависимости.
+- **Node.js 20.x – 24.x** (рекомендуется **22 LTS**). В репо есть `.nvmrc` со значением `22` — если у тебя `nvm`, выполни `nvm use` в директории проекта.
+- **macOS 12+ или Linux** с inotify (Windows — только через WSL).
+- **Xcode Command Line Tools** на macOS (`xcode-select --install`) — нужны для нативной сборки `better-sqlite3`, если для твоей Node-версии нет prebuilt binaries.
+- **MCP-совместимый AI-клиент** для использования: Claude Code, Cursor, Cline, Continue, Zed или любой другой клиент с поддержкой MCP. Без этого memex стрит индекс, но обращаться к нему будет некому.
+
+### Опциональное (по ситуации)
+
+- **Telegram Desktop** — если хочешь индексировать TG-чаты. Мобильное приложение Telegram **не умеет** экспорт; нужен именно Desktop-клиент.
+- **iCloud Drive / Syncthing** — если хочешь sync БД между несколькими своими ноутами.
+- **Ollama / llama.cpp** — на будущее для локального LLM-extraction слоя (профильные факты). Сейчас в roadmap'е.
+
+### Аппаратные требования (small)
+
+- **Disk space:** ~5-30 МБ типичный корпус за год. Большие Telegram-экспорты с медиа — отдельно, до сотен МБ.
+- **RAM:** daemon ~30 МБ, MCP-сервер ~50 МБ. Незаметно.
+- **CPU:** на холостом ходу < 1%. Импорт сессии — миллисекунды.
+
+### Известные ограничения
+
+| Что **не** работает | Почему |
+|---|---|
+| ❌ Web-only AI (ChatGPT в браузере, Claude.ai web) | Эти сессии живут на серверах вендора, на твоём диске их нет |
+| ❌ Мобильные AI-приложения (ChatGPT iOS, Claude Android) | Phone-data не пишется на твой компьютер |
+| ❌ Сессии на VPS / в облаке | Memex читает локальную файловую систему |
+| ❌ Windows напрямую | Только через WSL (chokidar на Win работает плохо без inotify-shim) |
+| ❌ Auto-capture daemon на Linux | `npx memex-sync install` работает только на macOS (LaunchAgent). На Linux запускай daemon в foreground или сделай свой systemd unit |
+| ❌ Mobile capture сегодня | В roadmap'е — Telegram-бот в `bot/` директории |
+
+### Положительное «ограничение»
+
+✅ **Internet не нужен.** Memex после установки работает полностью офлайн. Никаких phone-home, никаких API-ключей, никаких облачных зависимостей. Это feature, не bug.
+
+> ⚠ **Node 25+ известная проблема.** На bleeding-edge Node (25.x) `better-sqlite3` ещё не имеет prebuilt binaries — fallback на компиляцию из исходников падает на macOS с `fatal error: 'climits' file not found`. Решение: `nvm install 22 && nvm use 22`, потом `npm install`.
 
 ---
 

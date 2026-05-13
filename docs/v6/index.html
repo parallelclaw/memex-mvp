@@ -368,6 +368,43 @@
   }
   .comp-summary li strong { color: var(--text); font-weight: 700; }
 
+  /* Use cases */
+  .usecase-grid {
+    max-width: 880px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .usecase {
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px 26px;
+  }
+  .usecase h3 {
+    font-size: 17px; font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+  .usecase-context {
+    color: var(--text-soft);
+    font-size: 14.5px; line-height: 1.55;
+    margin-bottom: 12px;
+  }
+  .usecase-prompt {
+    background: var(--bg-soft);
+    padding: 12px 16px; border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; line-height: 1.6;
+    color: var(--accent-light);
+    margin-bottom: 12px;
+    border-left: 3px solid var(--accent);
+    white-space: pre-wrap;
+  }
+  .usecase-result {
+    color: var(--text-muted);
+    font-size: 13.5px; line-height: 1.55;
+  }
+  .usecase-result strong { color: var(--text-soft); font-weight: 600; }
+
   /* FAQ collapsibles */
   .faq-list { max-width: 760px; margin: 0 auto; }
   .faq-item {
@@ -667,6 +704,104 @@ any client:
 
 <span class="comment">your agent calls memex_overview() at session start, then memex_search()
 on every topic the user references — no prompting needed</span></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="Try this after install" data-ru="Что делать после установки">Try this after install</h2>
+    <p class="section-sub"
+       data-en="Concrete scenarios — copy the prompt, paste it into your AI agent. Each one shows what memex actually enables."
+       data-ru="Конкретные сценарии — копируй промпт, вставляй в свой AI-агент. Каждый показывает что memex реально даёт.">
+      Конкретные сценарии — копируй промпт, вставляй в свой AI-агент. Каждый показывает что memex реально даёт.
+    </p>
+
+    <div class="usecase-grid">
+      <div class="usecase">
+        <h3 data-en="📋 Turn a work Telegram chat into an action plan"
+            data-ru="📋 Превратить рабочий чат из Telegram в чек-лист">📋 Превратить рабочий чат из Telegram в чек-лист</h3>
+        <p class="usecase-context"
+           data-en="Export your Telegram chat with a client (TG Desktop → Settings → Advanced → Export), drop the JSON into <code>~/.memex/inbox/</code>. Then in Claude / Cursor:"
+           data-ru="Сделай TG-export рабочего чата с клиентом (TG Desktop → Settings → Advanced → Export), кинь JSON в <code>~/.memex/inbox/</code>. Потом в Claude / Cursor:">
+          Сделай TG-export рабочего чата с клиентом (TG Desktop → Settings → Advanced → Export), кинь JSON в <code>~/.memex/inbox/</code>. Потом в Claude / Cursor:
+        </p>
+        <div class="usecase-prompt" data-en="Read my Telegram chat with client X from the last month via memex_search. Make an action checklist with priorities and a list of open questions that need answering."
+                                  data-ru="Прочитай через memex_search мой последний месяц переписки с клиентом X в Telegram. Сделай чек-лист действий с приоритетами и список открытых вопросов на которые надо ответить.">Прочитай через memex_search мой последний месяц переписки с клиентом X в Telegram. Сделай чек-лист действий с приоритетами и список открытых вопросов на которые надо ответить.</div>
+        <p class="usecase-result"
+           data-en="→ Agent finds the relevant messages, reads context, returns a structured plan. <strong>You stopped re-reading three months of chat history manually.</strong>"
+           data-ru="→ Агент найдёт релевантные сообщения, прочитает контекст и выдаст структурированный план. <strong>Ты перестаёшь вручную перечитывать три месяца переписки.</strong>">
+          → Агент найдёт релевантные сообщения, прочитает контекст и выдаст структурированный план. <strong>Ты перестаёшь вручную перечитывать три месяца переписки.</strong>
+        </p>
+      </div>
+
+      <div class="usecase">
+        <h3 data-en="🌉 One AI sees another AI's history"
+            data-ru="🌉 Один AI видит историю другого">🌉 Один AI видит историю другого</h3>
+        <p class="usecase-context"
+           data-en="Yesterday in Claude Code you discussed architecture. Today you open Cursor:"
+           data-ru="Вчера в Claude Code обсуждал архитектуру. Сегодня открываешь Cursor:">
+          Вчера в Claude Code обсуждал архитектуру. Сегодня открываешь Cursor:
+        </p>
+        <div class="usecase-prompt" data-en="Find via memex_search what I discussed with Claude yesterday about auth. Continue from there — no need to re-explain."
+                                  data-ru="Найди через memex_search что я вчера обсуждал с Claude про auth. Продолжай отсюда — не нужно объяснять заново.">Найди через memex_search что я вчера обсуждал с Claude про auth. Продолжай отсюда — не нужно объяснять заново.</div>
+        <p class="usecase-result"
+           data-en="→ Cursor reads the Claude Code session through MCP. <strong>Context crosses between AIs without re-explanation.</strong>"
+           data-ru="→ Cursor через MCP читает сессию Claude Code. <strong>Контекст переходит между AI без повторных объяснений.</strong>">
+          → Cursor через MCP читает сессию Claude Code. <strong>Контекст переходит между AI без повторных объяснений.</strong>
+        </p>
+      </div>
+
+      <div class="usecase">
+        <h3 data-en="🔍 Recall the exact wording from March"
+            data-ru="🔍 Найти что именно ты сказал в марте">🔍 Найти что именно ты сказал в марте</h3>
+        <p class="usecase-context"
+           data-en="You decided something about pricing two months ago and can't remember the wording:"
+           data-ru="Решал что-то про pricing два месяца назад и не помнишь точную формулировку:">
+          Решал что-то про pricing два месяца назад и не помнишь точную формулировку:
+        </p>
+        <div class="usecase-prompt" data-en="In March I made a decision about pricing. Find the exact wording in my AI sessions."
+                                  data-ru="В марте я что-то решал про pricing. Найди дословную формулировку в моих сессиях с AI.">В марте я что-то решал про pricing. Найди дословную формулировку в моих сессиях с AI.</div>
+        <p class="usecase-result"
+           data-en="→ <code>memex_search(\"pricing\")</code> returns the original messages — not a paraphrase, the exact quote with date and source session."
+           data-ru="→ <code>memex_search(\"pricing\")</code> возвращает оригинальные сообщения — не пересказ, точную цитату с датой и из какой сессии.">
+          → <code>memex_search("pricing")</code> возвращает оригинальные сообщения — не пересказ, точную цитату с датой и из какой сессии.
+        </p>
+      </div>
+
+      <div class="usecase">
+        <h3 data-en="🔄 'Where did I leave this project?'"
+            data-ru="🔄 «Где я остановился в этом проекте?»">🔄 «Где я остановился в этом проекте?»</h3>
+        <p class="usecase-context"
+           data-en="Returning to a project after a break — instead of digging through git log and notes:"
+           data-ru="Возвращаешься к проекту после паузы — вместо копания в git log и заметках:">
+          Возвращаешься к проекту после паузы — вместо копания в git log и заметках:
+        </p>
+        <div class="usecase-prompt" data-en="I'm back on the memex project after two weeks. Via memex_list_projects and memex_recent show me where I stopped. What was done? What's still open?"
+                                  data-ru="Возвращаюсь к проекту memex после двух недель. Через memex_list_projects и memex_recent покажи где я остановился. Что сделано, что осталось?">Возвращаюсь к проекту memex после двух недель. Через memex_list_projects и memex_recent покажи где я остановился. Что сделано, что осталось?</div>
+        <p class="usecase-result"
+           data-en="→ Agent reconstructs the picture from your recent sessions in that project_path."
+           data-ru="→ Агент собирает картину из последних сессий по этому project_path.">
+          → Агент собирает картину из последних сессий по этому project_path.
+        </p>
+      </div>
+
+      <div class="usecase">
+        <h3 data-en="💡 Discover patterns across all AI conversations"
+            data-ru="💡 Найти паттерны во всех твоих AI-разговорах">💡 Найти паттерны во всех твоих AI-разговорах</h3>
+        <p class="usecase-context"
+           data-en="Curious where a topic surfaces across your stack:"
+           data-ru="Любопытно где конкретная тема всплывала в твоём стеке:">
+          Любопытно где конкретная тема всплывала в твоём стеке:
+        </p>
+        <div class="usecase-prompt" data-en="Find all mentions of Postgres in my AI sessions via memex_search. In what context? What was I solving? What problems came up?"
+                                  data-ru="Через memex_search найди все упоминания Postgres в моих сессиях с AI. В каком контексте? Что я решал? Какие проблемы всплывали?">Через memex_search найди все упоминания Postgres в моих сессиях с AI. В каком контексте? Что я решал? Какие проблемы всплывали?</div>
+        <p class="usecase-result"
+           data-en="→ One query → agent sees every mention across all tools, groups by theme."
+           data-ru="→ 1 запрос → агент видит все упоминания через все инструменты и сводит в темы.">
+          → 1 запрос → агент видит все упоминания через все инструменты и сводит в темы.
+        </p>
+      </div>
+    </div>
   </div>
 </section>
 

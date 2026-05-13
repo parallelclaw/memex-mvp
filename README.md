@@ -411,6 +411,12 @@ One file with all your AI conversations — sounds scarier than it is.
 
 ---
 
+## Как использовать на практике / How to actually use it
+
+Полный guide с **6 типовыми use case'ами** (Telegram → action plan, cross-AI bridge, recall, project resume, patterns, deck-анализ), описанием всех MCP-tools и troubleshooting — в [HELP.md](HELP.md). Скопируй любой промпт из этого файла → вставь в свой AI-агент → попробуй сразу после установки.
+
+---
+
 ## Проверь что работает
 
 В Claude Code/Cursor/Cline напиши:

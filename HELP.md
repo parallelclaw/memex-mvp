@@ -1,0 +1,170 @@
+# Memex — как пользоваться
+
+> **Кратко:** memex — твой локальный архив всех разговоров с AI. Сохраняет дословно. Любой AI-агент через MCP видит всю твою историю.
+
+Если ты только установил memex и не знаешь что делать — этот файл объясняет на конкретных кейсах. Скопируй промпт, вставь в свой AI (Claude Code, Cursor, Cline, Continue, Zed) — и попробуй.
+
+---
+
+## Что memex сохраняет
+
+- **Claude Code** — каждую сессию из `~/.claude/projects/`
+- **Claude Cowork** (включая субагентов) — сессии из `~/Library/Application Support/Claude/local-agent-mode-sessions/`
+- **Cursor** — composer history из `state.vscdb`
+- **Obsidian** — заметки из настроенных vault'ов
+- **Telegram** — экспорты которые ты сам положишь в `~/.memex/inbox/`
+
+Всё это лежит в **одном файле** `~/.memex/data/memex.db` и доступно через MCP-tools любому AI на твоём компьютере.
+
+---
+
+## 6 типовых сценариев — что попросить агента
+
+### 1. 📋 Превратить рабочий Telegram-чат в action plan
+
+```
+Прочитай через memex_search мой последний месяц переписки с клиентом X
+в Telegram. Сделай чек-лист действий с приоритетами и список открытых
+вопросов на которые надо ответить.
+```
+
+→ Агент находит сообщения через `memex_search`, читает контекст, выдаёт структурированный план. Не нужно вручную перечитывать три месяца переписки.
+
+---
+
+### 2. 📊 Анализ pitch-deck'a из рабочего Telegram
+
+```
+Через memex_search найди в моём чате с маркетологом deck про Q2 launch
+(около двух месяцев назад) и всё обсуждение вокруг него. Открой сам файл
+(путь у memex в metadata) и сведи: 1) ключевые тезисы deck'a, 2) комментарии
+команды из чата, 3) открытые вопросы для следующей встречи.
+```
+
+→ memex даёт контекст разговора, агент читает PDF своими тулами, выдаёт синтез **deck + обсуждение** в одном.
+
+---
+
+### 3. 🌉 Один AI видит историю другого
+
+```
+Найди через memex_search что я вчера обсуждал с Claude про auth.
+Продолжай отсюда — не нужно объяснять заново.
+```
+
+→ Cursor через MCP читает Claude Code сессию. Контекст переходит между AI без повторных объяснений.
+
+---
+
+### 4. 🔍 Найти точную цитату из прошлого
+
+```
+В марте я что-то решал про pricing. Найди дословную формулировку
+в моих сессиях с AI.
+```
+
+→ `memex_search("pricing")` возвращает оригинальные сообщения — не пересказ, точную цитату с датой и из какой сессии.
+
+---
+
+### 5. 🔄 «Где я остановился в этом проекте?»
+
+```
+Возвращаюсь к проекту memex после двух недель. Через memex_list_projects
+и memex_recent покажи где я остановился. Что было сделано, что осталось?
+```
+
+→ Агент собирает картину из последних сессий по этому project_path.
+
+---
+
+### 6. 💡 Найти паттерны во всех AI-разговорах
+
+```
+Через memex_search найди все упоминания Postgres в моих сессиях с AI.
+В каком контексте? Что я решал? Какие проблемы всплывали?
+```
+
+→ Один запрос → агент видит все упоминания через все инструменты и сводит в темы.
+
+---
+
+## Какие MCP-tools агент может вызвать
+
+| Tool | Что делает |
+|---|---|
+| `memex_overview` | Снэпшот корпуса: источники, сколько сообщений, последние чаты, статус auto-capture |
+| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `half_life_days`, `expand_match` |
+| `memex_list_projects` | Список всех проектов с количеством разговоров |
+| `memex_list_conversations` | Список чатов отсортированных по recency |
+| `memex_get_conversation(id)` | Полный transcript одного чата |
+| `memex_recent` | Последние N сообщений по всем источникам |
+| `memex_archive_conversation(id)` | Скрыть чат из дефолтных списков (не удаляет) |
+| `memex_export_markdown` | Экспорт чата в Markdown (для Obsidian) |
+| `memex_list_sources` | Что и сколько импортировано |
+| `memex_status` | Здоровье memex-sync daemon'a |
+| `memex_sources_status` | Какие источники включены/отключены |
+
+---
+
+## Если что-то не работает
+
+### Поиск пустой
+
+1. Вызови `memex_overview`. Внимание на статус-баннер сверху:
+   - 🟢 daemon работает — всё ок, может ещё не успел проиндексировать
+   - 🔴 daemon установлен но не работает — `launchctl load ~/Library/LaunchAgents/com.parallelclaw.memex.sync.plist`
+   - ⚪ daemon не установлен — `npx memex-sync install` из директории memex-mvp
+
+### Хочу проиндексировать существующие сессии (бэкфилл)
+
+```bash
+npx memex-sync scan
+```
+
+Обходит `~/.claude/projects/`, Cowork-сессии, Cursor state.vscdb, и Obsidian-vault'ы один раз — ингестит всё что уже есть на диске.
+
+### Telegram-чаты не появляются
+
+1. В Telegram **Desktop** (не mobile!): чат → меню → **Export chat history** → **Format: JSON**
+2. Кинь `result.json` в `~/.memex/inbox/`
+3. Memex подхватит автоматически за ~1.5 сек
+
+### Хочу подключить новый Obsidian-vault
+
+```bash
+npx memex-sync vault add ~/path/to/vault
+```
+
+### Я в Cursor, memex не видит мои Claude Code сессии
+
+`memex_overview` покажет что захватывается. Если Claude Code не в списке источников — проверь что `~/.claude/projects/` существует на твоей машине и не пустая. Затем `npx memex-sync scan-claude` для одноразового ингеста.
+
+### Хочу удалить какой-то чат
+
+```bash
+# Скрыть из дефолтных списков (рекомендуется)
+memex_archive_conversation(conversation_id="tg-...")
+
+# Или полностью удалить через sqlite
+sqlite3 ~/.memex/data/memex.db "DELETE FROM messages WHERE conversation_id = '...'"
+```
+
+---
+
+## Где живёт твоя память
+
+- **`~/.memex/data/memex.db`** — твой SQLite-архив. Это main файл. Бэкап через `cp`.
+- **`~/.memex/inbox/`** — куда дроп'ать Telegram-экспорты или другие JSON для импорта
+- **`~/.memex/staging/`** — внутренняя кухня daemon'a, **не трогай**
+- **`~/.memex/data/conversations/`** — импортированные файлы переезжают сюда после успешного парсинга
+- **`~/.memex/data/ingest.log`** — лог daemon'a (`tail -f` чтобы смотреть в реальном времени)
+- **`~/.memex/config.json`** — конфиг (какие источники включены)
+
+---
+
+## Ничего не помогает?
+
+- Issues / баги: https://github.com/parallelclaw/memex-mvp/issues
+- README с архитектурой: https://github.com/parallelclaw/memex-mvp#readme
+- Лендинг с use cases: https://memex.parallelclaw.ai

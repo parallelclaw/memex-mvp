@@ -22,6 +22,7 @@ import chokidar from 'chokidar';
 import { homedir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { mkdirSync, readFileSync, renameSync, existsSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import {
   extractMessageFromRecord,
@@ -525,6 +526,10 @@ memex_overview — corpus snapshot for orientation. Sources, totals, date
   range, recent conversation titles. Call once at the start of a session
   before reaching for memex_search.
 
+memex_help — full user guide with 6 use cases, tool reference, and
+  troubleshooting. Call this when the user asks "what can I do with
+  memex" or seems lost.
+
 memex_search — primary entry point. Find past discussions by keyword.
   Default mode (group_by_conversation: true) returns one best hit per
   chat plus match_count, so long threads don't dominate.
@@ -981,6 +986,22 @@ const TOOLS = [
           type: 'string',
           enum: ['markdown', 'json'],
           default: 'markdown',
+        },
+      },
+    },
+  },
+  {
+    name: 'memex_help',
+    description:
+      'Return the memex user guide — 6 concrete use cases with copy-pasteable prompts, a full reference of every MCP tool, and troubleshooting. Call this whenever the user asks "what is memex", "how do I use it", "what can it do", or seems unsure what to do next after install. Always prefer this over guessing at memex capabilities.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          enum: ['markdown', 'text'],
+          default: 'markdown',
+          description: 'Output format. Markdown by default — the file is markdown.',
         },
       },
     },
@@ -1653,6 +1674,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         '_Use memex_search next to query specific topics, or memex_get_conversation with one of the conversation_ids above._'
       );
       return textResult(lines.join('\n'));
+    }
+
+    if (name === 'memex_help') {
+      const helpPath = join(dirname(fileURLToPath(import.meta.url)), 'HELP.md');
+      let content;
+      try {
+        content = readFileSync(helpPath, 'utf-8');
+      } catch (err) {
+        return textResult('HELP.md not found in repo root. Repo: github.com/parallelclaw/memex-mvp');
+      }
+      return textResult(content);
     }
 
     if (name === 'memex_export_markdown') {

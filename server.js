@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import {
   extractMessageFromRecord,
+  extractCompactBoundary,
   isContinuationBoilerplate,
   extractAiTitle,
 } from './lib/parse.js';
@@ -144,10 +145,123 @@ try {
 } catch (err) {
   // index creation is idempotent via IF NOT EXISTS
 }
+// project_path on conversations (added 0.5) — absolute filesystem path of
+// the project this conversation took place in (cwd for Claude Code/Cowork,
+// vault root for Obsidian, NULL for Telegram). Lets `memex_search` filter
+// to one project's history. Partial index excludes NULL rows (Telegram).
+try {
+  db.exec(`ALTER TABLE conversations ADD COLUMN project_path TEXT`);
+} catch (err) {
+  if (!String(err.message).includes('duplicate column name')) throw err;
+}
+try {
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_conversations_project
+       ON conversations(project_path)
+     WHERE project_path IS NOT NULL`
+  );
+} catch (_) {}
+// Dedupe imports (added 0.4): the same file dropped into the inbox more than
+// once — or two server.js instances watching the inbox at the same time —
+// used to produce N identical rows. Collapse pre-existing duplicates (keep
+// the row with the highest id, i.e. latest imported_at) before installing
+// the unique index, otherwise the CREATE would fail on existing data.
+db.exec(`
+  DELETE FROM imports
+   WHERE id NOT IN (
+     SELECT MAX(id) FROM imports
+      GROUP BY file_name, source, message_count
+   )
+`);
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_imports_unique
+    ON imports(file_name, source, message_count)
+`);
+// edited_at on messages (added 0.4): unix-ts of the latest edit we've
+// recorded for this row. NULL = we've only seen an unedited version.
+// Drives the upsert in insertMessage so re-imports overwrite text only
+// when the incoming export is provably newer than what we already have.
+try {
+  db.exec(`ALTER TABLE messages ADD COLUMN edited_at INTEGER`);
+} catch (err) {
+  if (!String(err.message).includes('duplicate column name')) throw err;
+}
+// uuid on messages (added 0.6): the source-system record uuid (Claude Code
+// writes one per JSONL line). Used to stitch cross-file continuation chains
+// after /compact starts a new JSONL — the new file's first record has a
+// parentUuid pointing back at the previous file's last record. Indexed so
+// the lookup is cheap. NULL for sources that don't have one (Telegram).
+try {
+  db.exec(`ALTER TABLE messages ADD COLUMN uuid TEXT`);
+} catch (err) {
+  if (!String(err.message).includes('duplicate column name')) throw err;
+}
+try {
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_messages_uuid
+       ON messages(uuid)
+     WHERE uuid IS NOT NULL`
+  );
+} catch (_) {}
+// pending_parent_uuid on conversations (added 0.6): when a child conversation
+// is imported but its parent (the file that ended in /compact) hasn't been
+// imported yet, we stash the parentUuid here. After every import we sweep
+// pending rows and resolve any that can now be linked. Without this the
+// link would silently drop when files arrive out of temporal order.
+try {
+  db.exec(`ALTER TABLE conversations ADD COLUMN pending_parent_uuid TEXT`);
+} catch (err) {
+  if (!String(err.message).includes('duplicate column name')) throw err;
+}
 
+// FTS5 triggers (rewritten 0.6) — exclude role IN ('boundary','summary')
+// from messages_fts so the synthetic compaction summary doesn't double-count
+// against the original raw turns it summarises. Drop+recreate is idempotent
+// and necessary because pre-0.6 DBs have triggers without the WHEN clause.
+db.exec(`
+  DROP TRIGGER IF EXISTS messages_fts_ai;
+  DROP TRIGGER IF EXISTS messages_fts_ad;
+  DROP TRIGGER IF EXISTS messages_fts_au;
+  CREATE TRIGGER messages_fts_ai AFTER INSERT ON messages
+    WHEN new.role NOT IN ('boundary', 'summary')
+  BEGIN
+    INSERT INTO messages_fts(rowid, text, sender, conversation_id, source)
+    VALUES (new.id, new.text, new.sender, new.conversation_id, new.source);
+  END;
+  CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN
+    DELETE FROM messages_fts WHERE rowid = old.id;
+  END;
+  CREATE TRIGGER messages_fts_au AFTER UPDATE ON messages BEGIN
+    DELETE FROM messages_fts WHERE rowid = old.id;
+    INSERT INTO messages_fts(rowid, text, sender, conversation_id, source)
+      SELECT new.id, new.text, new.sender, new.conversation_id, new.source
+       WHERE new.role NOT IN ('boundary', 'summary');
+  END;
+`);
+
+// Re-imports of edited messages: a row already exists (UNIQUE on
+// source/conversation_id/msg_id), but the source app has since updated
+// the text. Overwrite only when the incoming edited_at is newer —
+// leaves unedited rows untouched and prevents an older export from
+// clobbering a newer local row. The AFTER UPDATE FTS trigger keeps the
+// search index in sync.
+//
+// uuid is COALESCE'd: if a row was first inserted before the uuid column
+// existed (or by a source that doesn't carry one), a later re-import can
+// backfill it — but a populated uuid never gets blanked.
 const insertMessage = db.prepare(`
-  INSERT OR IGNORE INTO messages (source, conversation_id, msg_id, role, sender, text, ts, metadata)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO messages (source, conversation_id, msg_id, role, sender, text, ts, metadata, edited_at, uuid)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(source, conversation_id, msg_id) DO UPDATE SET
+    text = CASE
+      WHEN excluded.edited_at IS NOT NULL
+       AND (messages.edited_at IS NULL OR excluded.edited_at > messages.edited_at)
+      THEN excluded.text ELSE messages.text END,
+    edited_at = CASE
+      WHEN excluded.edited_at IS NOT NULL
+       AND (messages.edited_at IS NULL OR excluded.edited_at > messages.edited_at)
+      THEN excluded.edited_at ELSE messages.edited_at END,
+    uuid = COALESCE(messages.uuid, excluded.uuid)
 `);
 // On re-imports the additive counter would drift (it doubles every time the
 // same file gets reprocessed, because messages dedupe via UNIQUE(msg_id) but
@@ -156,21 +270,25 @@ const insertMessage = db.prepare(`
 //
 // parent_conversation_id is set by the importer when the conversation is a
 // Cowork subagent (id contains "-sub-"). Once set, it sticks via COALESCE.
+// project_path is set on first ingest from a `project-path` inbox record
+// (or backfill-projects). COALESCE so a later re-import without the record
+// doesn't blank an already-populated path.
 const upsertConversation = db.prepare(`
-  INSERT INTO conversations (conversation_id, source, title, first_ts, last_ts, message_count, parent_conversation_id)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO conversations (conversation_id, source, title, first_ts, last_ts, message_count, parent_conversation_id, project_path)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(conversation_id) DO UPDATE SET
     title = excluded.title,
     first_ts = MIN(first_ts, excluded.first_ts),
     last_ts = MAX(last_ts, excluded.last_ts),
     parent_conversation_id = COALESCE(excluded.parent_conversation_id, parent_conversation_id),
+    project_path = COALESCE(excluded.project_path, project_path),
     message_count = (
       SELECT COUNT(*) FROM messages
        WHERE messages.conversation_id = conversations.conversation_id
     )
 `);
 const insertImport = db.prepare(`
-  INSERT INTO imports (file_name, source, imported_at, message_count) VALUES (?, ?, ?, ?)
+  INSERT OR REPLACE INTO imports (file_name, source, imported_at, message_count) VALUES (?, ?, ?, ?)
 `);
 
 // -------------------- Importers --------------------
@@ -224,6 +342,13 @@ function importTelegram(filePath) {
           last_ts = Math.max(last_ts, ts);
         }
 
+        // Telegram Desktop tags edited messages with `edited_unixtime` (a
+        // string). Absent on unedited messages — pass NULL so the upsert
+        // leaves existing rows alone.
+        const editedAt = msg.edited_unixtime
+          ? parseInt(msg.edited_unixtime, 10) || null
+          : null;
+
         const fromId = String(msg.from_id || '');
         const isMe =
           (myUserId && fromId === `user${myUserId}`) ||
@@ -242,7 +367,9 @@ function importTelegram(filePath) {
             chat_name: chat.name,
             chat_type: chat.type,
             reply_to: msg.reply_to_message_id || null,
-          })
+          }),
+          editedAt,
+          null // uuid — Telegram messages have no source uuid
         );
         chatMsgs += 1;
       }
@@ -255,7 +382,8 @@ function importTelegram(filePath) {
           isFinite(first_ts) ? first_ts : null,
           last_ts || null,
           chatMsgs,
-          null // parent_conversation_id — N/A for telegram
+          null, // parent_conversation_id — N/A for telegram
+          null  // project_path — Telegram chats are scoped by chat_id already
         );
         totalImported += chatMsgs;
       }
@@ -293,6 +421,17 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
   // fall back to the first user message (truncated), then to the file stem.
   let aiTitle = null;
   let firstUserText = null;
+  // project-path: emitted by memex-sync at the top of each inbox file (the
+  // cwd of a Claude Code/Cowork session, the vault root for Obsidian).
+  // Lets memex_search filter by project. NULL when the inbox file predates
+  // this feature — backfilled via `memex-sync backfill-projects`.
+  let projectPath = null;
+  // For cross-file continuation stitching: when Claude Code starts a new
+  // JSONL after /compact, the new file's first non-boundary record has a
+  // parentUuid pointing at the previous file's last record. If we can find
+  // that uuid in another conversation, we link the child via
+  // parent_conversation_id (same column Cowork subagents use).
+  let firstDialogueParentUuid = null;
 
   const tx = db.transaction((rows) => {
     for (const line of rows) {
@@ -307,12 +446,64 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
         aiTitle = obj.aiTitle.trim();
         continue;
       }
+      if (obj && obj.type === 'project-path' && typeof obj.projectPath === 'string' && obj.projectPath.trim()) {
+        projectPath = obj.projectPath.trim();
+        continue;
+      }
+
+      // Compaction boundary: persisted as a first-class event (role='boundary')
+      // so users see WHERE long sessions were compacted and HOW MUCH context
+      // collapsed (preTokens → postTokens). FTS trigger excludes these from
+      // search ranking; they live in messages for transcript reconstruction.
+      const boundary = extractCompactBoundary(obj);
+      if (boundary) {
+        const ts = boundary.timestamp
+          ? Math.floor(new Date(boundary.timestamp).getTime() / 1000)
+          : 0;
+        if (ts) {
+          first_ts = Math.min(first_ts, ts);
+          last_ts = Math.max(last_ts, ts);
+        }
+        // Stable msg_id from the source uuid so re-imports stay idempotent.
+        // Fall back to the daemon-supplied id, then to timestamp, then to a
+        // placeholder so the UNIQUE constraint still has something to hash.
+        const msgId =
+          boundary.id ||
+          (boundary.uuid ? `boundary-${boundary.uuid}` : null) ||
+          (boundary.timestamp ? `boundary-${boundary.timestamp}` : 'boundary-unknown');
+        insertMessage.run(
+          source,
+          conversationId,
+          msgId,
+          'boundary',
+          'compact',
+          JSON.stringify(boundary.metadata || {}),
+          ts,
+          JSON.stringify({
+            raw_type: 'compact_boundary',
+            parentUuid: boundary.parentUuid || null,
+            logicalParentUuid: boundary.logicalParentUuid || null,
+          }),
+          null,
+          boundary.uuid || null
+        );
+        imported += 1;
+        continue;
+      }
 
       const msg = extractMessageFromRecord(obj);
       if (!msg) continue;
-      // Index only proper dialogue turns. The 'tool_result' role (legacy
-      // flat shape with string content) and 'system' role aren't user-facing.
-      if (msg.role !== 'user' && msg.role !== 'assistant') continue;
+      // Index proper dialogue turns plus compaction-summary turns (synthetic
+      // user message generated by /compact, tagged role='summary' upstream).
+      // tool_result / system / other roles are ignored.
+      if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'summary') continue;
+
+      // First real dialogue parentUuid → candidate for cross-file linking.
+      // Skip summary turns (those reference the synthetic boundary, not the
+      // previous file's last message) and require an actual parentUuid.
+      if (!firstDialogueParentUuid && msg.role !== 'summary' && msg.parentUuid) {
+        firstDialogueParentUuid = msg.parentUuid;
+      }
 
       const ts = msg.timestamp
         ? Math.floor(new Date(msg.timestamp).getTime() / 1000)
@@ -331,15 +522,24 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
           firstUserText = text.slice(0, 80);
         }
       }
+      const sender =
+        msg.role === 'user' ? 'me'
+        : msg.role === 'summary' ? 'compact-summary'
+        : source;
       insertMessage.run(
         source,
         conversationId,
         msg.id,
         msg.role,
-        msg.role === 'user' ? 'me' : source,
+        sender,
         msg.text,
         ts,
-        JSON.stringify({ raw_type: obj.type || null })
+        JSON.stringify({
+          raw_type: obj.type || null,
+          parentUuid: msg.parentUuid || null,
+        }),
+        null, // edited_at — Claude Code / Cowork logs are append-only
+        msg.uuid || null
       );
       imported += 1;
     }
@@ -352,9 +552,27 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
     //   claude-cowork-cowork-<innerShort>-sub-<agentShort>
     // and we link them back to the parent (main) session for nav/roll-up.
     let parent_conversation_id = null;
+    let pending_parent_uuid = null;
     const subMatch = conversationId.match(/^(claude-(?:code|cowork)-(?:code|cowork)-[0-9a-f]+)-sub-/);
     if (subMatch) {
       parent_conversation_id = subMatch[1];
+    } else if (firstDialogueParentUuid) {
+      // Cross-file continuation candidate: find any other conversation that
+      // already contains a message with this uuid. If found, link as parent.
+      // If not (parent imports later), stash the uuid for the resolution
+      // sweep below.
+      const parentMsg = db
+        .prepare(
+          `SELECT conversation_id FROM messages
+            WHERE uuid = ? AND conversation_id != ?
+            LIMIT 1`
+        )
+        .get(firstDialogueParentUuid, conversationId);
+      if (parentMsg) {
+        parent_conversation_id = parentMsg.conversation_id;
+      } else {
+        pending_parent_uuid = firstDialogueParentUuid;
+      }
     }
     const baseTitle =
       aiTitle ||
@@ -369,10 +587,54 @@ function importClaudeCodeJsonl(filePath, source = 'claude-code') {
       isFinite(first_ts) ? first_ts : null,
       last_ts || null,
       imported,
-      parent_conversation_id
+      parent_conversation_id,
+      projectPath
     );
+    if (pending_parent_uuid) {
+      db.prepare(
+        `UPDATE conversations
+            SET pending_parent_uuid = ?
+          WHERE conversation_id = ?
+            AND parent_conversation_id IS NULL`
+      ).run(pending_parent_uuid, conversationId);
+    } else if (parent_conversation_id && !subMatch) {
+      // Just resolved a continuation link — clear any stale pending hint.
+      db.prepare(
+        `UPDATE conversations
+            SET pending_parent_uuid = NULL
+          WHERE conversation_id = ?`
+      ).run(conversationId);
+    }
+    // Resolution sweep: a previously-imported child may have been waiting on
+    // this file's uuids. Cheap with the partial index on uuid.
+    resolvePendingParents();
   }
   return imported;
+}
+
+// Resolve any conversation with pending_parent_uuid that now matches a
+// message uuid in another conversation. Runs after every successful import
+// so late-arriving parents heal the link. The single SQL UPDATE uses a
+// correlated subquery; with idx_messages_uuid in place this is O(P log N)
+// where P is the count of pending rows.
+function resolvePendingParents() {
+  db.exec(`
+    UPDATE conversations
+       SET parent_conversation_id = (
+             SELECT m.conversation_id FROM messages m
+              WHERE m.uuid = conversations.pending_parent_uuid
+                AND m.conversation_id != conversations.conversation_id
+              LIMIT 1
+           ),
+           pending_parent_uuid = NULL
+     WHERE pending_parent_uuid IS NOT NULL
+       AND parent_conversation_id IS NULL
+       AND EXISTS (
+             SELECT 1 FROM messages m
+              WHERE m.uuid = conversations.pending_parent_uuid
+                AND m.conversation_id != conversations.conversation_id
+           )
+  `);
 }
 
 /** Auto-detect format and import */
@@ -463,7 +725,7 @@ chokidar
 // — what the server is, when to use which tool, search tips, gotchas.
 const SERVER_INSTRUCTIONS = `Memex is the user's personal memory across all their AI conversations
 (Telegram, Claude Code, Claude Cowork, …) — one SQLite + FTS5 database
-exposed via 10 tools.
+exposed via 11 tools.
 
 USE MEMEX PROACTIVELY. The whole point of this server is that the user
 has invested in indexing their past discussions; recall them. Whenever
@@ -535,6 +797,14 @@ memex_search — primary entry point. Find past discussions by keyword.
   chat plus match_count, so long threads don't dominate.
   Be liberal: search for names, technical terms, project codenames,
   vague topic words. Try synonyms back-to-back if the first miss.
+  Pass \`project: "<path-or-substring>"\` to scope to one project
+  (cwd for Claude Code/Cowork, vault root for Obsidian) — use
+  memex_list_projects first to discover available paths.
+
+memex_list_projects — distinct project paths memex has captured, with
+  conversation/message counts per path. Use when the user asks "what
+  projects has memex captured" or before scoping a memex_search with
+  \`project:\` to confirm the path/substring is in the corpus.
 
 memex_list_conversations — browse chats sorted by recency.
   Best for "what have I been working on", or finding a chat by title
@@ -601,7 +871,9 @@ Canonical examples:
   memex_search({ query: "memex", limit: 5 })
   memex_search({ query: "Postgres миграция", source: "claude-code" })
   memex_search({ query: "арбитраж OR монетизация" })
+  memex_search({ query: "temporal", project: "memex-mvp" })
   memex_list_conversations({ limit: 10, format: "json" })
+  memex_list_projects({ limit: 20 })
 
 ══ FORMAT ══
 
@@ -810,6 +1082,15 @@ const TOOLS = [
           type: 'string',
           description: 'Optional filter: "telegram", "claude-code", "claude-cowork", etc.',
         },
+        project: {
+          type: 'string',
+          description:
+            'Optional project filter — substring-matched against the conversation\'s project_path ' +
+            '(the cwd for Claude Code/Cowork sessions, the vault root for Obsidian). ' +
+            'E.g. "memex-mvp" matches any conversation whose path contains "memex-mvp". ' +
+            'Use memex_list_projects to discover available project paths. ' +
+            'Telegram conversations have no project_path and are excluded by this filter.',
+        },
         group_by_conversation: {
           type: 'boolean',
           default: true,
@@ -827,6 +1108,12 @@ const TOOLS = [
           default: false,
           description:
             'If true, return the full untruncated text of each matching message (instead of the 360-char preview). Use when the snippet was cut off before the actual answer. Costs more tokens but saves a follow-up memex_get_conversation call when the answer fits in one message.',
+        },
+        include_summaries: {
+          type: 'boolean',
+          default: false,
+          description:
+            'If true, also search the synthetic /compact summary turns (role=summary). They\'re excluded by default to avoid double-counting against the original raw discussion they summarise. Useful when looking for a topic that may only survive in a compacted form (e.g. a long session whose pre-compact half lives only in the summary). Slower than the default — uses a LIKE scan rather than FTS5.',
         },
         half_life_days: {
           type: 'number',
@@ -1081,6 +1368,36 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'memex_list_projects',
+    description:
+      'List distinct project paths captured by memex, with conversation/message counts. ' +
+      'A "project" is the cwd of a Claude Code/Cowork session or the vault root of an Obsidian ' +
+      'note — i.e. the filesystem location where the work happened. ' +
+      'Use this to (a) discover what projects memex has indexed, (b) pick a path/substring to pass ' +
+      'as the `project` filter on memex_search. Telegram conversations have no project_path and ' +
+      'are excluded. Sorted by conversation count descending.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', default: 50, minimum: 1, maximum: 500 },
+        source: {
+          type: 'string',
+          description: 'Optional source filter ("claude-code", "claude-cowork", "obsidian", "cursor").',
+        },
+        include_archived: {
+          type: 'boolean',
+          default: false,
+          description: 'If true, count archived conversations too. Default: false.',
+        },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown',
+        },
+      },
+    },
+  },
 ];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -1094,6 +1411,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const groupByConv = args.group_by_conversation !== false; // default true
       const includeArchived = args.include_archived === true;
       const expandMatch = args.expand_match === true;
+      const includeSummaries = args.include_summaries === true;
       const textLimit = expandMatch ? Infinity : 360;
       const format = pickFormat(args);
       // FTS5 needs special handling for non-alphanumeric input — quote tokens
@@ -1116,6 +1434,14 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       }
       if (!includeArchived) {
         filters.push('(c.archived_at IS NULL OR c.archived_at = 0)');
+      }
+      const projectFilter = typeof args.project === 'string' ? args.project.trim() : '';
+      if (projectFilter) {
+        // Substring match — the user is unlikely to remember the full absolute
+        // path, and the same project can live at slightly different roots on
+        // different machines. Implicitly excludes NULL (Telegram).
+        filters.push('c.project_path LIKE ?');
+        matchParams.push(`%${projectFilter}%`);
       }
       const filterClause = filters.length ? `AND ${filters.join(' AND ')}` : '';
       // When grouping, fetch wider so we have enough unique conversations after dedup.
@@ -1142,7 +1468,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
                m.text, m.ts,
                snippet(messages_fts, 0, '<<', '>>', ' … ', 24) AS snippet,
                c.title AS conversation_title,
-               c.archived_at AS archived_at
+               c.archived_at AS archived_at,
+               c.project_path AS project_path
           FROM messages_fts
           JOIN messages m ON m.id = messages_fts.rowid
      LEFT JOIN conversations c ON c.conversation_id = m.conversation_id
@@ -1155,11 +1482,60 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         ? [...matchParams, halfLife, fetchLimit]
         : [...matchParams, fetchLimit];
       let rows = db.prepare(sql).all(...queryParams);
-      if (rows.length === 0) {
+
+      // Optional: include compaction summaries (role='summary'). They live in
+      // messages but are excluded from messages_fts to prevent double-counting
+      // against the original raw discussion. Fall back to a LIKE scan that
+      // mirrors the same source/project/archived filters. Appended after FTS
+      // hits — same conversation may surface twice; we de-dup in groupByConv.
+      let summaryRows = [];
+      if (includeSummaries) {
+        const likeFilters = ["m.role = 'summary'"];
+        const likeParams = [];
+        if (args.source) {
+          likeFilters.push('m.source = ?');
+          likeParams.push(args.source);
+        }
+        if (!includeArchived) {
+          likeFilters.push('(c.archived_at IS NULL OR c.archived_at = 0)');
+        }
+        if (projectFilter) {
+          likeFilters.push('c.project_path LIKE ?');
+          likeParams.push(`%${projectFilter}%`);
+        }
+        // Naive substring match — sufficient for the rare case where someone
+        // wants to retrieve from compacted summaries. No FTS5 ranking; we
+        // just sort newest-first as a sensible default.
+        const likeTerm = `%${args.query.replace(/[%_\\]/g, '\\$&')}%`;
+        likeFilters.push("m.text LIKE ? ESCAPE '\\\\'");
+        likeParams.push(likeTerm);
+        const likeSql = `
+          SELECT m.id, m.source, m.conversation_id, m.sender, m.role,
+                 m.text, m.ts,
+                 substr(m.text, 1, 360) AS snippet,
+                 c.title AS conversation_title,
+                 c.archived_at AS archived_at,
+                 c.project_path AS project_path
+            FROM messages m
+       LEFT JOIN conversations c ON c.conversation_id = m.conversation_id
+           WHERE ${likeFilters.join(' AND ')}
+        ORDER BY m.ts DESC
+           LIMIT ?
+        `;
+        summaryRows = db.prepare(likeSql).all(...likeParams, fetchLimit);
+      }
+
+      if (rows.length === 0 && summaryRows.length === 0) {
         return format === 'json'
           ? jsonResult({ query: args.query, count: 0, results: [] })
           : textResult(`No results for "${args.query}".`);
       }
+
+      // Merge summary hits after FTS hits. They're sorted independently
+      // (FTS by relevance/recency; summaries by ts DESC). FTS rows come
+      // first so a real-turn match always outranks the same chat's summary
+      // hit — the summary is a fallback signal, not a primary one.
+      if (summaryRows.length > 0) rows = [...rows, ...summaryRows];
 
       if (groupByConv) {
         // Real per-conversation match counts across the whole corpus, not just the fetched window.
@@ -1187,6 +1563,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           if (deduped.length >= limit) break;
         }
         rows = deduped;
+      } else if (rows.length > limit) {
+        rows = rows.slice(0, limit);
       }
 
       if (format === 'json') {
@@ -1199,6 +1577,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             conversation_id: r.conversation_id,
             title: r.conversation_title || null,
             source: r.source,
+            project_path: r.project_path || null,
             ts: r.ts || null,
             date: fmtDateTime(r.ts),
             sender: r.sender || r.role,
@@ -1336,6 +1715,21 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const formatted = rows
         .map((r) => {
           const tag = r.conversation_id !== args.conversation_id ? ' [↳ subagent]' : '';
+          // Boundary rows store the JSON compactMetadata in `text`. Render
+          // them as a divider with the token-delta so the user sees WHERE
+          // long sessions were compacted. Summary rows are flagged so it's
+          // clear they're synthetic, not a real turn.
+          if (r.role === 'boundary') {
+            let meta = {};
+            try { meta = JSON.parse(r.text || '{}'); } catch (_) {}
+            const pre = meta.preTokens ? meta.preTokens.toLocaleString() : '?';
+            const post = meta.postTokens ? meta.postTokens.toLocaleString() : '?';
+            const trigger = meta.trigger || 'unknown';
+            return `\n--- /compact (${trigger}) · ${pre} → ${post} tokens · ${fmtDateTime(r.ts) || ''} ---\n`;
+          }
+          if (r.role === 'summary') {
+            return `[${fmtDateTime(r.ts) || ''}] **[compact-summary]**${tag}: ${r.text}`;
+          }
           return `[${fmtDateTime(r.ts) || ''}] **${r.sender}**${tag}: ${r.text}`;
         })
         .join('\n');
@@ -1783,6 +2177,71 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       if (r.changes === 0) return textResult(`Conversation not found: ${conversationId}`);
       const action = archive ? 'archived' : 'unarchived';
       return textResult(`✓ ${action}: \`${conversationId}\``);
+    }
+
+    if (name === 'memex_list_projects') {
+      const limit = Math.min(500, Math.max(1, args.limit || 50));
+      const includeArchived = args.include_archived === true;
+      const format = pickFormat(args);
+      const where = ['project_path IS NOT NULL', "project_path != ''"];
+      const params = [];
+      if (args.source) {
+        where.push('source = ?');
+        params.push(args.source);
+      }
+      if (!includeArchived) {
+        where.push('(archived_at IS NULL OR archived_at = 0)');
+      }
+      params.push(limit);
+      const rows = db
+        .prepare(
+          `SELECT project_path,
+                  COUNT(*) AS conversations,
+                  SUM(message_count) AS messages,
+                  GROUP_CONCAT(DISTINCT source) AS sources,
+                  MAX(last_ts) AS last_ts
+             FROM conversations
+            WHERE ${where.join(' AND ')}
+         GROUP BY project_path
+         ORDER BY conversations DESC, last_ts DESC
+            LIMIT ?`
+        )
+        .all(...params);
+
+      if (rows.length === 0) {
+        const hint =
+          'No project paths recorded yet. Either nothing has been ingested with project metadata, ' +
+          'or you may need to run: `npx memex-sync backfill-projects` to populate paths for ' +
+          'previously-imported Claude Code / Cowork / Obsidian sessions.';
+        return format === 'json'
+          ? jsonResult({ count: 0, projects: [], hint })
+          : textResult(hint);
+      }
+
+      if (format === 'json') {
+        return jsonResult({
+          count: rows.length,
+          projects: rows.map((r) => ({
+            project_path: r.project_path,
+            conversations: r.conversations,
+            messages: r.messages || 0,
+            sources: r.sources ? r.sources.split(',') : [],
+            last_ts: r.last_ts || null,
+            last_date: fmtDate(r.last_ts),
+          })),
+        });
+      }
+
+      const lines = [`**${rows.length} project(s)** (most conversations first):`, ''];
+      for (const r of rows) {
+        const last = fmtDate(r.last_ts) || '?';
+        const srcs = r.sources ? r.sources.split(',').join(', ') : '';
+        lines.push(
+          `- \`${r.project_path}\` — ${r.conversations} conv(s), ${(r.messages || 0).toLocaleString()} msg(s) · ${srcs} · last ${last}`
+        );
+      }
+      lines.push('', '_Pass any path or substring as `project` on memex_search to scope a query._');
+      return textResult(lines.join('\n'));
     }
 
     if (name === 'memex_list_sources') {

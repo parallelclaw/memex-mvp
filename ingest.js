@@ -30,6 +30,7 @@
  */
 
 import chokidar from 'chokidar';
+import Database from 'better-sqlite3';
 import { homedir, platform } from 'node:os';
 import { join, basename, sep, resolve, relative } from 'node:path';
 import {
@@ -39,7 +40,11 @@ import {
 import { createHash } from 'node:crypto';
 import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { extractMessageFromRecord, extractAiTitle } from './lib/parse.js';
+import {
+  extractMessageFromRecord,
+  extractCompactBoundary,
+  extractAiTitle,
+} from './lib/parse.js';
 import {
   defaultCursorDbPath,
   openCursorDB,
@@ -88,6 +93,22 @@ const LEGACY_LABEL = 'com.parallelclaw.memex.ingest'; // pre-rename, migrated tr
 const PLIST_PATH = join(HOME, 'Library', 'LaunchAgents', `${LAUNCH_LABEL}.plist`);
 const LEGACY_PLIST_PATH = join(HOME, 'Library', 'LaunchAgents', `${LEGACY_LABEL}.plist`);
 
+// Chokidar-watched JSONL roots. Declared here (not below the dispatch
+// block) so CLI subcommands that run BEFORE the daemon body — e.g.
+// `backfill-projects` — can see this binding without tripping TDZ.
+const SOURCES = [
+  {
+    name: 'claude-code',
+    prefix: 'code',
+    dir: join(HOME, '.claude', 'projects'),
+  },
+  {
+    name: 'claude-cowork',
+    prefix: 'cowork',
+    dir: join(HOME, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions'),
+  },
+];
+
 // -------------------- Subcommand dispatch --------------------
 const subcommand = process.argv[2];
 if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === false) {
@@ -100,6 +121,7 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     restart: cmdRestart,
     sources: cmdSources,
     vault: cmdVault,
+    'backfill-projects': cmdBackfillProjects,
     serve: cmdServe, // explicit foreground; same as no-arg
     // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.
@@ -127,6 +149,11 @@ daemon mode:
   memex-sync restart            restart the LaunchAgent (after config changes)
   memex-sync status             show daemon health, watched files, last activity
   memex-sync logs               tail the daemon log
+
+maintenance:
+  memex-sync backfill-projects  populate project_path on conversations that
+                                were ingested before this column existed
+                                (Claude Code/Cowork cwd, Obsidian vault root)
 
 source control:
   memex-sync sources            list which sources are enabled / disabled
@@ -503,22 +530,132 @@ function cmdVault() {
   process.exit(2);
 }
 
+/**
+ * Backfill project_path on conversations that were ingested before the
+ * column existed. Walks the on-disk source directories (Claude Code,
+ * Cowork, Obsidian via memex-sync's state file), extracts the project
+ * path for each session, and UPDATEs the matching memex.db row.
+ *
+ * One-shot, idempotent: only fills rows where project_path is NULL/empty,
+ * so re-running won't clobber values set by the live ingest path or a
+ * prior backfill.
+ *
+ * Cursor: not backfilled (no workspace path captured by the current
+ * parser). Telegram: skipped by design — chats have no project concept.
+ */
+function cmdBackfillProjects() {
+  const dbPath = join(MEMEX_DIR, 'data', 'memex.db');
+  if (!existsSync(dbPath)) {
+    console.error(`memex.db not found at ${dbPath} — nothing to backfill yet.`);
+    process.exit(1);
+  }
+  const db = new Database(dbPath);
+  // Coexist with the running MCP server (also WAL) — wait up to 5s on
+  // contention rather than failing the whole backfill on a single SQLITE_BUSY.
+  db.pragma('busy_timeout = 5000');
+  const update = db.prepare(
+    `UPDATE conversations SET project_path = ?
+      WHERE conversation_id = ?
+        AND (project_path IS NULL OR project_path = '')`
+  );
+  const updateTx = db.transaction((items) => {
+    let n = 0;
+    for (const it of items) n += update.run(it.path, it.convId).changes;
+    return n;
+  });
+
+  let scanned = 0;
+  const pending = [];
+
+  // --- Claude Code + Cowork ---
+  for (const source of SOURCES) {
+    if (!existsSync(source.dir)) {
+      console.log(`- skipping ${source.name}: directory not found at ${source.dir}`);
+      continue;
+    }
+    console.log(`scanning ${source.name}: ${source.dir}`);
+    walkDir(source.dir, (p) => {
+      if (!shouldIngest(p)) return;
+      scanned++;
+      const inboxName = inboxNameFor(p, source);
+      if (!inboxName) return;
+      const stem = basename(inboxName, '.jsonl');
+      const convId = `${source.name}-${stem}`;
+      const cwd = readFirstCwd(p);
+      if (!cwd) return;
+      pending.push({ convId, path: cwd });
+    });
+  }
+
+  // --- Obsidian ---
+  // The memex-sync state file maps note path → { vault, ... }. That's the
+  // only place we recorded the vault root after import; rebuilding it from
+  // scratch would require autodetecting vaults again, which can miss
+  // user-configured ones. State-file-driven backfill is precise.
+  if (existsSync(STATE_PATH)) {
+    let state = {};
+    try { state = JSON.parse(readFileSync(STATE_PATH, 'utf-8')); }
+    catch (_) {}
+    let obsCount = 0;
+    for (const [notePath, v] of Object.entries(state)) {
+      if (!v || !v.vault) continue;
+      if (!notePath.endsWith('.md')) continue;
+      obsCount++;
+      const rel = relative(v.vault, notePath);
+      const slug = vaultSlug(v.vault);
+      const short = noteShortId(v.vault, rel);
+      const convId = `obsidian-obsidian-${slug}-${short}`;
+      pending.push({ convId, path: v.vault });
+    }
+    if (obsCount > 0) console.log(`scanning obsidian state: ${obsCount} note(s)`);
+  }
+
+  const updated = updateTx(pending);
+  db.close();
+
+  console.log('');
+  console.log(`scanned ${scanned} session file(s) · queued ${pending.length} update(s) · ${updated} row(s) updated`);
+  if (pending.length > updated) {
+    const skipped = pending.length - updated;
+    console.log(`(${skipped} skipped: conversation row missing OR project_path already set)`);
+  }
+  process.exit(0);
+}
+
+/**
+ * Read the first non-empty `cwd` field from a Claude Code / Cowork JSONL
+ * file. Sessions don't change cwd mid-conversation in practice, so first
+ * hit wins. Reads only the first 64 KB to avoid loading multi-megabyte
+ * transcripts — cwd lands on the very first system event in every sample
+ * we've inspected.
+ */
+function readFirstCwd(filePath) {
+  let fd;
+  try {
+    fd = openSync(filePath, 'r');
+    const buf = Buffer.alloc(64 * 1024);
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.subarray(0, n).toString('utf-8');
+    // The last chunk-line may be truncated — drop it.
+    const lines = text.split('\n');
+    if (lines.length > 1) lines.pop();
+    for (const line of lines) {
+      if (!line) continue;
+      let obj;
+      try { obj = JSON.parse(line); } catch (_) { continue; }
+      if (obj && typeof obj.cwd === 'string' && obj.cwd.trim()) return obj.cwd.trim();
+    }
+    return null;
+  } catch (_) {
+    return null;
+  } finally {
+    if (fd !== undefined) try { closeSync(fd); } catch (_) {}
+  }
+}
+
 
 const RESCAN_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const DEBOUNCE_MS = 1500;
-
-const SOURCES = [
-  {
-    name: 'claude-code',
-    prefix: 'code',
-    dir: join(HOME, '.claude', 'projects'),
-  },
-  {
-    name: 'claude-cowork',
-    prefix: 'cowork',
-    dir: join(HOME, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions'),
-  },
-];
 
 [INBOX, STAGING, DATA].forEach((d) => mkdirSync(d, { recursive: true }));
 
@@ -615,18 +752,36 @@ function slicePy(text, n) {
 function parseFileForDialogue(filePath) {
   const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
   let aiTitle = null;
+  // Claude Code / Cowork write `cwd` (absolute project directory) on most
+  // top-level records. First non-empty value wins — sessions don't change
+  // cwd mid-conversation in practice, and the first record is usually the
+  // initialisation event that carries it.
+  let projectPath = null;
   const dialogue = [];
+  // /compact (auto or manual) writes a `compact_boundary` system record into
+  // the JSONL — we forward it to the inbox as its own record type so memex
+  // can persist boundary markers AND skip the synthetic summary turn from
+  // FTS indexing. See lib/parse.js extractCompactBoundary for shape details.
+  const boundaries = [];
   for (const line of lines) {
     let obj;
     try { obj = JSON.parse(line); } catch (_) { continue; }
+    if (!projectPath && obj && typeof obj.cwd === 'string' && obj.cwd.trim()) {
+      projectPath = obj.cwd.trim();
+    }
     const t = extractAiTitle(obj);
     if (t) { aiTitle = t; continue; }
+    const boundary = extractCompactBoundary(obj);
+    if (boundary) { boundaries.push(boundary); continue; }
     const msg = extractMessageFromRecord(obj);
     if (!msg) continue;
-    if (msg.role !== 'user' && msg.role !== 'assistant') continue;
+    // 'summary' = compaction-summary turn (extractMessageFromRecord re-tags
+    // isCompactSummary:true records). Forward it so memex can store it with
+    // role='summary' for transcript reconstruction; FTS trigger excludes it.
+    if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'summary') continue;
     dialogue.push(msg);
   }
-  return { aiTitle, dialogue };
+  return { aiTitle, projectPath, dialogue, boundaries };
 }
 
 function emitToInbox(srcPath, source) {
@@ -667,6 +822,26 @@ function emitToInbox(srcPath, source) {
   if (parsed.aiTitle) {
     records.push({ type: 'ai-title', aiTitle: parsed.aiTitle });
   }
+  if (parsed.projectPath) {
+    records.push({ type: 'project-path', projectPath: parsed.projectPath });
+  }
+  for (const b of parsed.boundaries) {
+    // Seed the synthetic id off the source uuid so re-emits collide via
+    // the messages UNIQUE(source, conv, msg_id) index. Falls back to
+    // timestamp if uuid is somehow absent (defensive — Claude Code always
+    // writes one on real compact_boundary records).
+    const seed = `compact-boundary|${b.uuid || b.timestamp || ''}`;
+    const msgId = createHash('sha1').update(seed).digest('hex').slice(0, 16);
+    records.push({
+      type: 'compact-boundary',
+      timestamp: b.timestamp,
+      uuid: b.uuid || null,
+      parentUuid: b.parentUuid || null,
+      logicalParentUuid: b.logicalParentUuid || null,
+      metadata: b.metadata || {},
+      id: `${source.prefix}-${shortId}-${msgId}`,
+    });
+  }
   for (const m of parsed.dialogue) {
     const seed = `${m.role}|${m.timestamp}|${slicePy(m.text, 200)}`;
     const msgId = createHash('sha1').update(seed).digest('hex').slice(0, 16);
@@ -674,6 +849,12 @@ function emitToInbox(srcPath, source) {
       role: m.role,
       content: m.text,
       timestamp: m.timestamp,
+      // Pass uuid/parentUuid through so server.js can stitch cross-file
+      // continuation chains (new JSONL after /compact references the
+      // previous file's last uuid). Stays null for sources that don't
+      // emit uuids (Cursor, Obsidian, Telegram).
+      uuid: m.uuid || null,
+      parentUuid: m.parentUuid || null,
       id: `${source.prefix}-${shortId}-${msgId}`,
     });
   }
@@ -684,6 +865,7 @@ function emitToInbox(srcPath, source) {
     size: stat.size,
     mtime: stat.mtimeMs,
     dialogueCount: parsed.dialogue.length,
+    boundaryCount: parsed.boundaries.length,
   };
 
   if (records.length === 0) {
@@ -974,6 +1156,7 @@ function emitObsidianNote(notePath, vaultRoot) {
 
   const records = [
     { type: 'ai-title', aiTitle: note.title },
+    { type: 'project-path', projectPath: vaultRoot },
     {
       role: 'user',
       content: note.body,

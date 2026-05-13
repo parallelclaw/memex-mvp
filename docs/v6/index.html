@@ -644,35 +644,6 @@
 
 <section class="section">
   <div class="section-inner">
-    <h2 class="section-title" data-en="How it works" data-ru="Как это работает">How it works</h2>
-    <p class="section-sub" data-en="One folder. One database. Any agent can ask."
-                            data-ru="Одна папка. Одна база. Любой агент может спросить.">
-      One folder. One database. Any agent can ask.
-    </p>
-<div class="diagram">~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
-~/Library/.../local-agent-mode  <span class="comment">← Cowork sessions (incl. subagents)</span>
-~/.memex/inbox/                 <span class="comment">← Telegram exports drop here</span>
-        <span class="arrow">↓</span>                       <span class="comment">memex-sync daemon · FSEvents · ~1.5s debounce</span>
-~/.memex/staging/               <span class="comment">← atomic tmp writes</span>
-        <span class="arrow">↓</span>                       <span class="comment">chokidar inbox watcher</span>
-parser                          <span class="comment">Claude JSONL / Cowork / Cursor / Obsidian / Telegram JSON</span>
-        <span class="arrow">↓</span>
-SQLite + FTS5                   <span class="comment">~/.memex/data/memex.db · UNIQUE(msg_id) dedup</span>
-        <span class="arrow">↓</span>
-MCP server                      <span class="comment">stdio JSON-RPC · 11 tools · proactive instructions</span>
-        <span class="arrow">↓</span>
-any client:
-  • Claude Code  <span class="comment">→ ~/.claude/config.json</span>
-  • Cursor       <span class="comment">→ ~/.cursor/mcp.json</span>
-  • Cline · Continue · Zed · ...
-
-<span class="comment">your agent calls memex_overview() at session start, then memex_search()
-on every topic the user references — no prompting needed</span></div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-inner">
     <h2 class="section-title" data-en="Memex use cases" data-ru="Примеры применения Memex">Memex use cases</h2>
     <p class="section-sub"
        data-en="Concrete scenarios — copy the prompt, paste it into your AI agent. Each one shows what memex actually enables."
@@ -783,6 +754,35 @@ on every topic the user references — no prompting needed</span></div>
         </p>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="How it works" data-ru="Как это работает">How it works</h2>
+    <p class="section-sub" data-en="One folder. One database. Any agent can ask."
+                            data-ru="Одна папка. Одна база. Любой агент может спросить.">
+      One folder. One database. Any agent can ask.
+    </p>
+<div class="diagram">~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
+~/Library/.../local-agent-mode  <span class="comment">← Cowork sessions (incl. subagents)</span>
+~/.memex/inbox/                 <span class="comment">← Telegram exports drop here</span>
+        <span class="arrow">↓</span>                       <span class="comment">memex-sync daemon · FSEvents · ~1.5s debounce</span>
+~/.memex/staging/               <span class="comment">← atomic tmp writes</span>
+        <span class="arrow">↓</span>                       <span class="comment">chokidar inbox watcher</span>
+parser                          <span class="comment">Claude JSONL / Cowork / Cursor / Obsidian / Telegram JSON</span>
+        <span class="arrow">↓</span>
+SQLite + FTS5                   <span class="comment">~/.memex/data/memex.db · UNIQUE(msg_id) dedup</span>
+        <span class="arrow">↓</span>
+MCP server                      <span class="comment">stdio JSON-RPC · 11 tools · proactive instructions</span>
+        <span class="arrow">↓</span>
+any client:
+  • Claude Code  <span class="comment">→ ~/.claude/config.json</span>
+  • Cursor       <span class="comment">→ ~/.cursor/mcp.json</span>
+  • Cline · Continue · Zed · ...
+
+<span class="comment">your agent calls memex_overview() at session start, then memex_search()
+on every topic the user references — no prompting needed</span></div>
   </div>
 </section>
 

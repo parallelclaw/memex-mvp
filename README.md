@@ -35,11 +35,22 @@ MCP server (stdio JSON-RPC)
 
 ---
 
+## Requirements / Требования
+
+- **Node.js 20.x – 24.x** (рекомендуется **22 LTS**). В репо есть `.nvmrc` со значением `22` — если у тебя `nvm`, выполни `nvm use` в директории проекта чтобы автоматически переключиться.
+- **macOS / Linux** (Windows — через WSL).
+- **Xcode Command Line Tools** на macOS (`xcode-select --install`) — нужны чтобы `better-sqlite3` собрался если для твоей Node-версии нет prebuilt binaries.
+
+> ⚠ **Node 25+ известная проблема.** На свежих bleeding-edge версиях Node (25.x) `better-sqlite3` ещё не имеет prebuilt binaries и пытается компилироваться из исходников — на macOS это может упасть с `fatal error: 'climits' file not found`. Решение: `nvm install 22 && nvm use 22`, потом переустанови зависимости.
+
+---
+
 ## Установка за 3 минуты
 
 ```bash
 git clone https://github.com/parallelclaw/memex-mvp.git
 cd memex-mvp
+nvm use   # подхватит Node 22 из .nvmrc (если у тебя nvm)
 bash install.sh
 ```
 

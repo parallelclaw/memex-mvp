@@ -7,16 +7,18 @@
   "bin": {
     "memex-mvp": "./server.js",
     "memex-sync": "./ingest.js",
-    "memex-ingest": "./ingest.js"
+    "memex-ingest": "./ingest.js",
+    "memex-bot": "./bot/index.js"
   },
   "scripts": {
     "start": "node server.js",
     "sync": "node ingest.js",
     "ingest": "node ingest.js",
-    "test": "node test/parser.test.js"
+    "bot": "node bot/index.js",
+    "test": "node test/parser.test.js && node test/bot-inbox.test.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0 <25.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

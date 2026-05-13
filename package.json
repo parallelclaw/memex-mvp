@@ -15,7 +15,7 @@
     "sync": "node ingest.js",
     "ingest": "node ingest.js",
     "bot": "node bot/index.js",
-    "test": "node test/parser.test.js && node test/bot-inbox.test.js"
+    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"

@@ -872,6 +872,7 @@ Canonical examples:
   memex_search({ query: "Postgres миграция", source: "claude-code" })
   memex_search({ query: "арбитраж OR монетизация" })
   memex_search({ query: "temporal", project: "memex-mvp" })
+  memex_search({ query: "Q2 launch deck", sort: "date_asc" })
   memex_list_conversations({ limit: 10, format: "json" })
   memex_list_projects({ limit: 20 })
 
@@ -915,6 +916,24 @@ what the user asked? If not, refuse honestly:
 NEVER stitch an answer together from semantically-unrelated snippets
 just because the keyword matched. That's hallucination dressed up as
 recall, and it's worse than admitting you don't know.
+
+══ SORT — evolution / versions / timeline queries ══
+
+Default sort is BM25 × recency — perfect for "find the specific thing".
+But when the user asks how something CHANGED OVER TIME — versions of a
+deck, evolution of a plan, a feature's history — relevance ordering
+scatters the timeline. For those queries pass \`sort: "date_asc"\`
+(oldest first, read forward) or \`sort: "date_desc"\` (latest first).
+
+Triggers: "how did X change", "evolution of", "all versions of",
+"timeline of", "show me from oldest to newest", "история X".
+
+Example:
+  memex_search({ query: "Q2 launch deck", sort: "date_asc" })
+
+The FTS5 MATCH still filters the candidate set lexically — only the
+ORDER BY changes. Combine with \`expand_match: true\` when you want
+the full text of each version rather than snippets.
 
 ══ EXPAND MATCH — when snippets are cut off ══
 
@@ -1118,7 +1137,14 @@ const TOOLS = [
         half_life_days: {
           type: 'number',
           description:
-            'Optional override of the temporal recency boost. Score = bm25 * exp(-age_days / half_life_days), so recent hits float above old ones for the same lexical relevance. Defaults to the value in ~/.memex/config.json (search.half_life_days, default 30). Use 7 for "what did we discuss this week", 90 for long-term recall, 0 to disable the boost entirely (pure BM25).',
+            'Optional override of the temporal recency boost. Score = bm25 * exp(-age_days / half_life_days), so recent hits float above old ones for the same lexical relevance. Defaults to the value in ~/.memex/config.json (search.half_life_days, default 30). Use 7 for "what did we discuss this week", 90 for long-term recall, 0 to disable the boost entirely (pure BM25). Ignored when `sort` is "date_asc" or "date_desc".',
+        },
+        sort: {
+          type: 'string',
+          enum: ['relevance', 'date_asc', 'date_desc'],
+          default: 'relevance',
+          description:
+            'Result ordering. "relevance" (default) is BM25 × recency boost — best for "find specific thing". "date_asc" returns oldest-first, "date_desc" newest-first — use these for evolution / version / timeline queries ("how did X change over time?", "list all versions of the Q2 deck") where the user wants to read history in order. FTS5 MATCH still filters the candidate set; only the ORDER BY changes.',
         },
         format: {
           type: 'string',
@@ -1456,12 +1482,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       // Config is re-read per call so edits to ~/.memex/config.json take effect
       // on the next query — no server restart required. The disk read is cheap
       // (small JSON, OS-cached) and memex_search isn't a hot path.
+      const sortMode = args.sort === 'date_asc' || args.sort === 'date_desc' ? args.sort : 'relevance';
       const halfLifeArg = typeof args.half_life_days === 'number' ? args.half_life_days : null;
       const halfLife = halfLifeArg !== null ? halfLifeArg : getSearchHalfLifeDays(loadConfig());
-      const useBoost = halfLife > 0 && isFinite(halfLife);
-      const orderBy = useBoost
-        ? `bm25(messages_fts) * exp(-(CAST(strftime('%s','now') AS REAL) - COALESCE(NULLIF(m.ts, 0), CAST(strftime('%s','now') AS REAL))) / 86400.0 / ?)`
-        : 'rank';
+      const useBoost = sortMode === 'relevance' && halfLife > 0 && isFinite(halfLife);
+      // Date-sort modes push rows with ts NULL/0 to the END regardless of
+      // direction — they carry no temporal signal, so they shouldn't anchor
+      // either end of a timeline. CASE returns 1 for missing, 0 otherwise;
+      // sorting on it first keeps real-dated rows together.
+      let orderBy;
+      if (sortMode === 'date_asc') {
+        orderBy = 'CASE WHEN m.ts IS NULL OR m.ts = 0 THEN 1 ELSE 0 END, m.ts ASC';
+      } else if (sortMode === 'date_desc') {
+        orderBy = 'CASE WHEN m.ts IS NULL OR m.ts = 0 THEN 1 ELSE 0 END, m.ts DESC';
+      } else if (useBoost) {
+        orderBy = `bm25(messages_fts) * exp(-(CAST(strftime('%s','now') AS REAL) - COALESCE(NULLIF(m.ts, 0), CAST(strftime('%s','now') AS REAL))) / 86400.0 / ?)`;
+      } else {
+        orderBy = 'rank';
+      }
 
       const sql = `
         SELECT m.id, m.source, m.conversation_id, m.sender, m.role,

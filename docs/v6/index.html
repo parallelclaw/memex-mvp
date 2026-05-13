@@ -1144,6 +1144,21 @@ How memex works (read this so you don't get confused by paths below): memex has 
 
 ⚠ Prerequisite: this prompt only works if you are running INSIDE an AI agent that has direct access to my laptop's shell (terminal) — i.e. one of: Claude Code (CLI), Cursor, Cline, Continue, or Zed. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute git/npm/file operations on my machine — for those, point me to the manual install at https://memex.parallelclaw.ai/#quickstart instead. If you are NOT a CLI-based agent with shell access, stop now and tell me to use the manual install path.
 
+Discovery (do this BEFORE the numbered steps): scan my setup so you can tailor advice and tell me exactly what memex will pick up.
+- Which MCP client are you running inside? Look at your own context. You should be one of: Claude Code CLI, Cursor, Cline (in VS Code), Continue, or Zed.
+- Which AI tools have data on this machine? Run these read-only checks one by one:
+  - Claude Code data:   ls -d ~/.claude/projects 2>/dev/null
+  - Claude Cowork data: ls -d ~/Library/Application\ Support/Claude/local-agent-mode-sessions 2>/dev/null
+  - Cursor data:        ls -d ~/Library/Application\ Support/Cursor 2>/dev/null
+  - Continue config:    ls ~/.continue/config.json 2>/dev/null
+  - Zed config:         ls -d ~/.config/zed 2>/dev/null
+- Then report to me in plain language:
+  - "You're running inside [X]. I will edit [path] in step 2 below."
+  - "Tools with data found on this machine: [list]"
+  - "Tools NOT found (memex won't capture from these): [list]"
+  - "After install, memex will auto-index conversations from: [detected sources]"
+- Wait for my "ok" before starting step 1.
+
 Do these five steps in order. Show each command before you run it. Stop and ask if anything fails or looks wrong.
 
 1. Clone and install
@@ -1215,6 +1230,21 @@ Begin by greeting me, asking which directory to clone into, and confirming which
 Как memex работает (прочитай это чтобы не запутаться в путях ниже): memex имеет СВОЁ хранилище в ~/.memex/data/memex.db. Он ЧИТАЕТ из нативной директории каждого инструмента автоматически — Claude Code из ~/.claude/projects/, Cursor из его state.vscdb, Cowork из его sessions-директории, Obsidian из настроенных vault'ов. Тебе НЕ нужно менять куда Claude Code, Cursor или любой другой инструмент сохраняет свои данные. Memex — passive observer.
 
 ⚠ Условие: этот промпт работает только если ты запущен ВНУТРИ AI-агента с прямым доступом к терминалу моего ноутбука — то есть Claude Code (CLI), Cursor, Cline, Continue или Zed. Web-агенты (ChatGPT в браузере, Claude.ai web, Claude Desktop без тулзов и т.п.) не могут выполнять git/npm/файловые операции на моей машине — для них направь меня к ручной установке на https://memex.parallelclaw.ai/#quickstart. Если ты НЕ CLI-агент с доступом к shell — остановись прямо сейчас и скажи мне использовать manual install.
+
+Discovery (сделай ДО пронумерованных шагов): просканируй мою среду, чтобы дать целевые советы и сказать что memex реально подхватит.
+- В каком MCP-клиенте ты запущен? Посмотри на свой контекст. Ты должен быть в одном из: Claude Code CLI, Cursor, Cline (в VS Code), Continue или Zed.
+- Какие AI-инструменты есть у меня на диске? Запусти read-only команды по одной:
+  - Данные Claude Code:   ls -d ~/.claude/projects 2>/dev/null
+  - Данные Claude Cowork: ls -d ~/Library/Application\ Support/Claude/local-agent-mode-sessions 2>/dev/null
+  - Данные Cursor:        ls -d ~/Library/Application\ Support/Cursor 2>/dev/null
+  - Конфиг Continue:      ls ~/.continue/config.json 2>/dev/null
+  - Конфиг Zed:           ls -d ~/.config/zed 2>/dev/null
+- Доложи мне плэйн-языком:
+  - "Ты запущен в [X]. Я буду править [путь] в шаге 2 ниже."
+  - "Инструменты с данными на этой машине: [список]"
+  - "Не найдены (memex их не захватит): [список]"
+  - "После установки memex автоматически проиндексирует разговоры из: [найденные источники]"
+- Жди моего «ok» перед стартом шага 1.
 
 Сделай эти пять шагов по порядку. Показывай каждую команду перед запуском. Останавливайся и спрашивай если что-то падает или выглядит не так.
 

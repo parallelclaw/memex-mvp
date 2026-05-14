@@ -1,6 +1,15 @@
 ---
 name: install-memex
 description: Install memex (local-first MCP server for cross-agent AI memory) on the user's machine. Detects which MCP client is active, registers memex in its config, sets up the auto-capture daemon, and verifies end-to-end. Use when the user says "install memex", "set up memex", "add memex to this", or similar. Takes ~2 minutes; requires Node.js and shell access.
+version: 1.0.0
+metadata:
+  openclaw:
+    emoji: "🧠"
+    homepage: https://memex.parallelclaw.ai
+    requires:
+      bins:
+        - node
+        - npm
 ---
 
 # Install memex

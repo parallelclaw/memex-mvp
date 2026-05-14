@@ -121,6 +121,21 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
 
 …или `/install-memex`. Агент сам сделает `npm install`, пропишет MCP-config, поднимет daemon и проверит что всё работает — ~2 минуты.
 
+### Сохранение URL'ов в memex (v0.6+)
+
+После установки в любом MCP-агенте (Claude Code, Cursor, Cline, Continue, Zed) можно сохранять **web-страницы, AI-chat share'ы и pasted-тексты** прямо в memex-память:
+
+```
+Сохрани https://www.perplexity.ai/share/<id> в memex
+Добавь эту статью в memex: https://example.com/article
+```
+
+Агент сам fetch'ит страницу через свой WebFetch — для Cloudflare-защищённых сайтов (Perplexity, npm.com, Twitter, Medium) автоматически falls back на `r.jina.ai` proxy (memex учит агента этому трюку через tool description). Затем агент вызывает `memex_store_document`, который хранит контент verbatim как conversation с `source: "web"`.
+
+**Memex остаётся 100% локальным** — fetch делает агент, memex только хранит. Никаких outbound network calls со стороны memex.
+
+Полное руководство и edge cases (private Perplexity, paywall, login-walls): [HELP.md §8](HELP.md).
+
 ### Подключение к Claude Code
 
 Сначала возьми **два абсолютных пути** в терминале:
@@ -162,9 +177,11 @@ which node  # → путь до бинарника node (например /Users
 | **Cursor IDE** (Composer + Chat) | SQLite `state.vscdb` в `~/Library/Application Support/Cursor/` | ✅ работает (poll каждые 5 мин) |
 | **Obsidian** vault notes | `.md` файлы + YAML frontmatter | ✅ работает (FSEvents, hash-based dedupe) |
 | **Telegram** | `result.json` из Desktop export | ✅ работает |
-| Claude.ai web export | будет в v0.3 | — |
-| ChatGPT export | будет в v0.3 | — |
-| Apple Notes | будет в v0.3 | — |
+| **Telegram (live)** | бот `memex-bot` ловит твои сообщения / форварды | ✅ работает |
+| **Web-страницы, AI-share'ы, paste'ы** | `memex_store_document` — агент fetch'ит, memex хранит verbatim (v0.6+) | ✅ работает |
+| Claude.ai web export | будет в v0.7 | — |
+| ChatGPT export | будет в v0.7 | — |
+| Apple Notes | будет в v0.7 | — |
 
 ### Filename convention для inbox-файлов
 

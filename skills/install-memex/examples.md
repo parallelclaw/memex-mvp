@@ -179,6 +179,34 @@ Sample interactions when the user invokes this skill. These show typical happy p
 
 ---
 
+---
+
+## Example 6 · Right after install — testing URL save (v0.6+)
+
+> **User:** save https://en.wikipedia.org/wiki/As_We_May_Think to memex
+>
+> **Agent:** Fetching the page with WebFetch...
+>
+> ```
+> ✓ Got 12,847 chars from en.wikipedia.org
+> ```
+>
+> Calling `memex_store_document(content, url=https://en.wikipedia.org/wiki/As_We_May_Think, title=auto)`...
+>
+> ```
+> ✓ stored
+>   conversation_id: web-d3b07a384d1b
+>   title: "As We May Think"
+>   length: 12,847 chars
+>   warnings: []
+> ```
+>
+> Saved. Try searching it now: *"search memex for memex Bush 1945"* — the article will show up alongside any AI chats where you discussed it.
+>
+> 💡 By the way, you can save any URL this way — Perplexity threads, blog posts, ChatGPT shares, Twitter threads, GitHub discussions. For Perplexity specifically, the thread must be made Public first (Share → Public link). For Cloudflare-protected sites, memex auto-falls back through `r.jina.ai` proxy.
+
+---
+
 ## What these examples illustrate about the skill's behavior
 
 - **Always discover first**, then ask for confirmation before any write action

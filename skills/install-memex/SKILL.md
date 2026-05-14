@@ -1,6 +1,6 @@
 ---
 name: install-memex
-description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~2 minutes — npm install, MCP config wiring, auto-capture daemon, history backfill. No cloud, no account, verbatim storage. Also indexes Obsidian notes and Telegram chats. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", or similar.
+description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~2 minutes — npm install, MCP config wiring, auto-capture daemon, history backfill. No cloud, no account, verbatim storage. Also indexes Obsidian notes, Telegram chats, and any URL the user wants to save (web pages, Perplexity threads, AI chat shares — memex_store_document tool, v0.6+). Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", or similar.
 version: 1.0.0
 metadata:
   openclaw:
@@ -160,6 +160,7 @@ After restart, suggest they try any of:
 - "show me what memex has in memory" → triggers `memex_overview`
 - "what projects has memex captured" → triggers `memex_list_projects`
 - "search memex for [recent topic]" → triggers `memex_search`
+- "save https://en.wikipedia.org/wiki/As_We_May_Think to memex" → triggers `memex_store_document` and teaches the user that URL-saving exists (v0.6+)
 
 These confirm everything works end-to-end.
 

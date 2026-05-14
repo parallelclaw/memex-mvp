@@ -100,6 +100,23 @@ For a fully-automated install across all detected MCP clients, see [the AI-drive
 
 ---
 
+## Save URLs into memex (v0.6+)
+
+Once memex is installed, any MCP-aware agent can also save **web pages, AI chat shares, and pasted text** into your memex memory — searchable from any other AI chat later. In Claude Code, Cursor, Cline, …:
+
+```
+Save https://www.perplexity.ai/share/<id> to memex
+Add this article to my memex: https://example.com/long-post
+```
+
+The agent fetches the page via its own WebFetch (auto-falling back to `r.jina.ai` for Cloudflare-protected sites — memex teaches the trick) and calls `memex_store_document`. Memex stores the content verbatim as a `web` source conversation, indistinguishable from AI chats at search time.
+
+Perplexity threads need to be made **Public** in the Share dialog first — memex detects private threads and tells the user how to fix it. Full guide: [HELP.md §8](HELP.md).
+
+**Memex stays 100% local** — the agent fetches, memex only stores. Zero outbound calls from memex itself.
+
+---
+
 ## What it captures
 
 | Source                | How it gets in                                                 |
@@ -111,6 +128,7 @@ For a fully-automated install across all detected MCP clients, see [the AI-drive
 | Obsidian notes        | Auto: per-vault markdown watcher                               |
 | Telegram exports      | Manual: drop `result.json` (Telegram Desktop) into `~/.memex/inbox/` |
 | Telegram (live)       | Run [`memex-bot`](bot/README.md) — captures messages you send/forward to your private bot |
+| **Web pages, AI chat shares, pasted text** | From any MCP agent: *"save https://... to memex"*. Agent fetches; memex stores verbatim. Cloudflare-protected pages (Perplexity, npm.com, Twitter, Medium, …) handled via the agent's r.jina.ai fallback. See [HELP.md §8](HELP.md) |
 
 All sources land in the same FTS5 corpus, searchable by one `memex_search` call.
 
@@ -128,6 +146,7 @@ All sources land in the same FTS5 corpus, searchable by one `memex_search` call.
 | `memex_list_projects`         | Distinct project paths captured (for the `project` filter)               |
 | `memex_archive_conversation`  | Hide a chat from default listings (data preserved)                       |
 | `memex_export_markdown`       | Export one conversation as Markdown (for Obsidian round-trip)            |
+| `memex_store_document`        | Save a web page, AI chat share, or pasted text. Agent fetches; memex stores verbatim. Teaches the Jina r.jina.ai trick for Cloudflare-blocked pages |
 | `memex_list_sources`          | Per-source enabled/disabled + counts                                     |
 | `memex_status`                | Daemon health: PID, last capture, watched files                          |
 | `memex_sources_status`        | Which sources are captured + the exact CLI to opt out                    |

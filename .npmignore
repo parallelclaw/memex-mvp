@@ -1,0 +1,44 @@
+# Belt-and-braces companion to the `files` whitelist in package.json.
+# `files` decides what GOES IN; this list decides what STAYS OUT if it
+# somehow leaks past the whitelist (e.g. globbed dir contents).
+
+# Dev / VCS
+.git/
+.github/
+.gitignore
+.nvmrc
+
+# Dependencies — npm fetches these from the registry, never ship them
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# Tests — published code doesn't ship tests
+test/
+
+# Internal docs / website — code-only package
+docs/
+memory/
+MULTI_MACHINE.md
+install.sh
+
+# Local user data — should never exist in repo, but defence-in-depth
+data/
+inbox/
+.memex/
+*.db
+*.sqlite
+*.sqlite3
+
+# Configs that might hold tokens
+bot.config.json
+**/bot.config.json
+.env
+.env.*
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log

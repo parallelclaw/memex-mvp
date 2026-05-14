@@ -1,6 +1,6 @@
 # memex-mvp · your AI's missing memory
 
-> **Claude забывает каждую сессию. Memex помнит навсегда.**
+> **Единое хранилище для всех твоих AI и Telegram чатов.**
 
 Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 8 простых tool'ов.
 

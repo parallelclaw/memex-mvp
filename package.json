@@ -1,21 +1,31 @@
 {
   "name": "memex-mvp",
-  "version": "0.1.0",
-  "description": "Local-first MCP server for cross-agent AI memory. Drop chat exports into ~/.memex/inbox/ and Claude can search them.",
+  "version": "0.5.0",
+  "description": "Local-first MCP server for cross-agent AI memory. One SQLite + FTS5 corpus across Claude Code, Cowork, Cursor, Continue, Zed, Obsidian, and Telegram — passively captured, verbatim, searchable from any MCP-compatible client.",
   "type": "module",
   "main": "server.js",
   "bin": {
-    "memex-mvp": "./server.js",
+    "memex": "./server.js",
     "memex-sync": "./ingest.js",
     "memex-ingest": "./ingest.js",
     "memex-bot": "./bot/index.js"
   },
+  "files": [
+    "server.js",
+    "ingest.js",
+    "lib/",
+    "bot/",
+    "HELP.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node server.js",
     "sync": "node ingest.js",
     "ingest": "node ingest.js",
     "bot": "node bot/index.js",
-    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js"
+    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"
@@ -27,14 +37,34 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "claude",
+    "claude-code",
+    "claude-cowork",
+    "cursor",
     "memex",
     "memory",
-    "ai",
+    "ai-memory",
     "local-first",
+    "verbatim",
+    "chat-archive",
+    "fts5",
+    "sqlite",
     "telegram",
     "openclaw"
   ],
-  "author": "sedelev",
-  "license": "MIT"
+  "author": {
+    "name": "parallelclaw",
+    "email": "sedelev@gmail.com",
+    "url": "https://memex.parallelclaw.ai"
+  },
+  "license": "MIT",
+  "homepage": "https://memex.parallelclaw.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parallelclaw/memex-mvp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/parallelclaw/memex-mvp/issues"
+  }
 }

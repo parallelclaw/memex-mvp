@@ -227,12 +227,60 @@ Memex по дефолту сортирует по **релевантности**
 
 ---
 
+### 8. 🔗 Сохранение URL'ов в memex (Perplexity, статьи, AI-share'ы)
+
+Ты читаешь что-то — Perplexity research thread, длинную статью, GitHub-обсуждение, AI-chat share — и хочешь чтобы это жило в memex-памяти, искалось из любого AI-чата.
+
+**В любом MCP-агенте (Claude Code, Cursor, Cline, Continue, Zed):**
+
+```
+Сохрани https://perplexity.ai/share/<id> в memex
+Добавь эту статью в memex: https://example.com/great-post
+Захвати этот ChatGPT-разговор: https://chat.openai.com/share/<id>
+```
+
+**Что происходит за кулисами:**
+
+1. Агент сам делает fetch URL'a (через свой WebFetch)
+2. Если страница защищена Cloudflare (Perplexity, npm.com, Twitter, Medium…) — агент авто-retry через `r.jina.ai` proxy (бесплатный JS-runtime, обходит Cloudflare)
+3. Агент вызывает `memex_store_document(content, url, title)`
+4. Memex сохраняет содержимое как conversation с `source: "web"` — ищется через `memex_search` рядом с AI-чатами
+
+**Для Perplexity-thread'ов:** thread должен быть **PUBLIC**. В Perplexity: открой thread → Share → toggle "Public link" → скопируй новый URL → дай его агенту. URL из адресной строки браузера (`perplexity.ai/search/<id>`) — это **твой owner-URL, не shareable**.
+
+Если забудешь — memex детектит «private» в ответе и agent тебе явно скажет что делать.
+
+**Login-walled или paywalled контент не fetch'нется** (NYT subscription, твои приватные ChatGPT-чаты). Для них вставь контент руками:
+
+```
+Сохрани этот текст в memex (название: "..."): <вставь содержимое>
+```
+
+**Tag'и при сохранении** — для последующей фильтрации:
+
+```
+Сохрани https://... в memex, поставь теги "research" и "perplexity"
+```
+
+**Поиск:**
+
+```
+Найди в memex что Perplexity говорил про X на прошлой неделе
+```
+
+`memex_search` возвращает совпадения **и из AI-чатов, и из сохранённых URL'ов** в одном запросе — отсортировано по релевантности или дате.
+
+**Memex принципиально НЕ делает outbound network calls.** Fetcher живёт в твоём AI-агенте. Если он использует Jina для обхода Cloudflare — Jina видит URL (но НЕ остальной memex-корпус). Это выбор агента, не memex'a.
+
+---
+
 ## Какие MCP-tools агент может вызвать
 
 | Tool | Что делает |
 |---|---|
 | `memex_overview` | Снэпшот корпуса: источники, сколько сообщений, последние чаты, статус auto-capture |
 | `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `chat`, `half_life_days`, `expand_match`, `sort` |
+| `memex_store_document(content, url?, title?)` | Сохранить внешний документ (web-страница, AI-chat share, paste) в memex. Агент сам делает fetch, memex хранит verbatim. Учит Jina-трюк для Cloudflare-страниц |
 | `memex_list_projects` | Список всех проектов с количеством разговоров |
 | `memex_list_conversations` | Список чатов отсортированных по recency |
 | `memex_get_conversation(id)` | Полный transcript одного чата |

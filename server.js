@@ -43,6 +43,13 @@ import {
   KNOWN_SOURCES,
   CONFIG_PATH,
 } from './lib/config.js';
+import {
+  canonicalize as canonicalizeUrl,
+  extractDomain,
+} from './lib/store-doc/canonicalize.js';
+import { detectIssues, isBlocked } from './lib/store-doc/detect.js';
+import { extractTitle } from './lib/store-doc/extract-title.js';
+import { createHash } from 'node:crypto';
 
 // -------------------- Paths --------------------
 const HOME = homedir();
@@ -952,6 +959,72 @@ Archived conversations are hidden from default list/search but stay
 fully indexed. Pass include_archived: true on search/list to include
 them. Visibility flag only — never deletes data.
 
+══ DOCUMENT INGESTION (web pages, articles, AI chat shares) ══
+
+memex_store_document accepts content YOU fetch and stores it verbatim.
+Memex never fetches by itself — that's your job. Reasons:
+  • Memex stays 100% local (no outbound network egress)
+  • You have better tools (WebFetch, WebSearch, shell curl)
+  • You have context for error recovery (can ask user to paste)
+
+THE JINA TRICK (full reference):
+
+Modern web is mostly Cloudflare-protected. Server-side fetchers
+(including most agent WebFetch implementations) hit a JS challenge and
+return interstitial content instead of the page itself. The free
+workaround is Jina AI Reader:
+
+  Original:  https://example.com/whatever
+  Wrapped:   https://r.jina.ai/https://example.com/whatever
+
+This works for: Perplexity shared threads (must be Public!), npm.com
+package pages, X/Twitter threads, Medium articles, Substack public
+posts, most modern SaaS marketing pages.
+
+This DOESN'T help for: login-walled content (paywall, private
+accounts), SPA with no SSR (Jina gets empty initial HTML),
+geo-restricted content.
+
+DETECTION HEURISTIC — when to retry through Jina:
+After your first WebFetch, retry through Jina if you see:
+  • HTTP 403 with header \`cf-mitigated: challenge\`
+  • Body contains "Just a moment..." / "Verifying you are human"
+  • Body contains \`cf-turnstile\` or \`cf_chl_opt\`
+  • Body < 500 bytes from a page that should be substantive
+
+After Jina retry, if you get clean markdown — pass to memex_store_document.
+If Jina ALSO returns "This thread is private" / "Sign in" / login form —
+that's authentication, not Cloudflare. Tell the user what to do.
+
+PERPLEXITY-SPECIFIC:
+Perplexity shared threads need to be marked "Public" by the owner.
+The URL in the user's address bar (perplexity.ai/search/<id>) is the
+OWNER'S private URL, not the shareable one. They must:
+  1. Open the thread in Perplexity
+  2. Click Share → toggle Public link
+  3. Copy the new URL Perplexity shows
+  4. Give you THAT URL
+
+If memex_store_document returns warning type=perplexity-private,
+surface the message verbatim — it has the exact instructions.
+
+PROACTIVE OFFER (TIMING):
+When user shares a URL they're DISCUSSING or RESEARCHING:
+  "I can save this to your memex memory — you'll be able to search
+   it from any AI chat later. Want me to?"
+
+Don't offer for:
+  • URLs you're already analyzing in the current turn
+  • Same URL twice in one session
+  • Casual passing mentions ("like example.com/foo")
+  • URLs that are just navigation aids in conversation
+
+Right moments:
+  • User finished Perplexity research and is about to move on
+  • User pasted a long article they want to discuss
+  • User shared documentation they keep returning to
+  • User shared an AI chat (ChatGPT/Claude.ai/Gemini share link)
+
 ══ ONBOARDING THE LAZY USER ══
 
 The user probably hasn't read the README. Treat yourself as their
@@ -1434,6 +1507,61 @@ const TOOLS = [
           default: 'markdown',
         },
       },
+    },
+  },
+  {
+    name: 'memex_store_document',
+    description:
+      'Save an external document (web page, AI chat share, pasted text) to memex memory. Memex stores verbatim what you pass — it does NOT fetch URLs itself, that\'s your job (memex stays 100% local, no outbound network calls).\n\n' +
+      'TYPICAL FLOW for a URL:\n' +
+      '  content = WebFetch("https://example.com/article")\n' +
+      '  memex_store_document(content, url="https://example.com/article", title="...")\n\n' +
+      '⚠ THE JINA TRICK — memorize this:\n' +
+      'Many modern pages (Perplexity, npm.com, X/Twitter, Medium, ChatGPT shares) sit behind Cloudflare bot-protection. Server-side fetches return "Just a moment..." / 403 / "cf-mitigated: challenge" instead of the real content.\n\n' +
+      'Workaround: prepend `https://r.jina.ai/` to the URL.\n' +
+      '  Before: https://www.perplexity.ai/search/abc123\n' +
+      '  After:  https://r.jina.ai/https://www.perplexity.ai/search/abc123\n\n' +
+      'Jina AI Reader bypasses Cloudflare (runs a real browser server-side) and returns clean markdown. Free, no API key needed for personal use. Both http:// and https:// after `r.jina.ai/` work.\n\n' +
+      'Heuristic — when to retry through Jina:\n' +
+      '  • HTTP 403 with cf-mitigated header\n' +
+      '  • Body contains "Just a moment..." / "Verifying you are human" / cf-turnstile\n' +
+      '  • Body < 500 bytes from a substantive page\n\n' +
+      'PERPLEXITY THREADS need to be made PUBLIC first (Share → Public link in Perplexity). Private threads return "This thread is private" even via Jina — memex will detect this on store and tell you what to say to the user.\n\n' +
+      'PRIVATE / LOGIN-WALLED content (paywall, your private ChatGPT chats) can\'t be fetched server-side. Tell the user — don\'t try to scrape.\n\n' +
+      'PROACTIVE OFFER: When the user shares a substantive URL they\'re DISCUSSING or RESEARCHING (not just casually mentioning), offer to save it. Especially for Perplexity threads — that research is ephemeral and worth preserving.\n\n' +
+      'Returns: {conversation_id, title, length, stored, warnings[]}. If stored=false, the `warnings` array tells you exactly what went wrong and how to fix it — surface that message to the user.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description:
+            'The fetched page content as text or markdown. YOU (the agent) fetch this via WebFetch / curl / Jina. Memex stores it verbatim — no LLM processing, no summarization.',
+        },
+        url: {
+          type: 'string',
+          description:
+            'The original source URL. Used for conversation_id (sha256 of canonical form → free deduplication), domain metadata, and the slug-based title fallback. Omit for non-URL pastes — memex will assign a content-hash-based synthetic id.',
+        },
+        title: {
+          type: 'string',
+          description:
+            'Page title or document name. If omitted, memex extracts from content (markdown H1 → HTML title → URL slug → "Untitled document").',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional tags stored in metadata (e.g. ["research", "perplexity"]). For future tag-based filtering. Lowercased and deduped on store.',
+        },
+        refresh: {
+          type: 'boolean',
+          default: false,
+          description:
+            'If a document with the same canonical URL was already ingested, set true to refetch and replace the stored content (the new message overwrites the old). Default false = skip with a "already in memex" note + the existing conversation_id.',
+        },
+      },
+      required: ['content'],
     },
   },
 ];
@@ -2372,6 +2500,196 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       lines.push(`_Inbox path:_ \`${INBOX}\``);
       lines.push(`_Database:_ \`${DB_PATH}\``);
       return textResult(lines.join('\n'));
+    }
+
+    if (name === 'memex_store_document') {
+      const content = typeof args.content === 'string' ? args.content : '';
+      const rawUrl = typeof args.url === 'string' ? args.url.trim() : '';
+      const explicitTitle = typeof args.title === 'string' ? args.title.trim() : '';
+      const refresh = args.refresh === true;
+      const tags = Array.isArray(args.tags)
+        ? Array.from(
+            new Set(
+              args.tags
+                .filter((t) => typeof t === 'string')
+                .map((t) => t.trim().toLowerCase())
+                .filter(Boolean)
+            )
+          )
+        : [];
+
+      if (!content.trim()) {
+        return jsonResult({
+          stored: false,
+          conversation_id: null,
+          title: null,
+          length: 0,
+          source: 'web',
+          warnings: [
+            {
+              type: 'empty-content',
+              blocking: true,
+              message:
+                'Content is empty. Pass the actual page text (you fetch it; memex stores it). ' +
+                'For URLs you can\'t fetch (Cloudflare-blocked), retry through https://r.jina.ai/<original-url>.',
+            },
+          ],
+        });
+      }
+
+      // Sniff for known failure patterns BEFORE storing
+      const warnings = detectIssues(content, rawUrl);
+
+      if (isBlocked(warnings)) {
+        return jsonResult({
+          stored: false,
+          conversation_id: null,
+          title: null,
+          length: content.length,
+          source: 'web',
+          url: rawUrl || null,
+          warnings,
+        });
+      }
+
+      // Build conversation_id: stable hash of canonical URL, or content hash for pastes
+      let canonical = '';
+      let convId;
+      let captured_via;
+      if (rawUrl) {
+        canonical = canonicalizeUrl(rawUrl);
+        const hash = createHash('sha256')
+          .update(canonical)
+          .digest('hex')
+          .slice(0, 12);
+        convId = `web-${hash}`;
+        captured_via = 'mcp-tool';
+      } else {
+        const hash = createHash('sha256')
+          .update(content)
+          .digest('hex')
+          .slice(0, 12);
+        convId = `web-paste-${hash}`;
+        captured_via = 'user-paste';
+      }
+
+      // Check if already ingested
+      const existing = db
+        .prepare(
+          `SELECT conversation_id, title, message_count FROM conversations WHERE conversation_id = ?`
+        )
+        .get(convId);
+
+      if (existing && !refresh) {
+        return jsonResult({
+          stored: false,
+          already_ingested: true,
+          conversation_id: existing.conversation_id,
+          title: existing.title,
+          length: content.length,
+          source: 'web',
+          url: rawUrl || null,
+          warnings: [
+            ...warnings,
+            {
+              type: 'already-ingested',
+              blocking: false,
+              message:
+                `This document is already in memex (conversation_id: ${existing.conversation_id}, title: "${existing.title}"). ` +
+                'Call again with refresh=true to overwrite with the new content. ' +
+                'Existing content can be retrieved via memex_get_conversation.',
+            },
+          ],
+        });
+      }
+
+      // Determine title (caller override → content extraction)
+      const title = explicitTitle || extractTitle(content, rawUrl);
+      const domain = rawUrl ? extractDomain(rawUrl) : null;
+      const now = Math.floor(Date.now() / 1000);
+
+      // msg_id is the ingest ts as string — unique per refetch, so refresh
+      // doesn't collide with the previous version's UNIQUE constraint.
+      const msgId = String(now);
+
+      const metadata = {
+        url: rawUrl || null,
+        canonical_url: canonical || null,
+        title,
+        fetched_via: 'agent',
+        captured_via,
+        domain: domain || null,
+        fetched_at: now,
+        tags,
+        content_length: content.length,
+        warnings_at_store: warnings.map((w) => w.type),
+      };
+
+      try {
+        // If refresh and a row already exists, drop the old message first so we
+        // don't carry stale content. (UNIQUE is (source, conversation_id, msg_id);
+        // a new msg_id wouldn't collide, but we want one message per URL by
+        // convention.)
+        if (existing && refresh) {
+          db.prepare(
+            `DELETE FROM messages WHERE source = 'web' AND conversation_id = ?`
+          ).run(convId);
+        }
+
+        insertMessage.run(
+          'web',
+          convId,
+          msgId,
+          'document',
+          domain || 'web',
+          content,
+          now,
+          JSON.stringify(metadata),
+          now, // edited_at = ts for refresh ordering
+          null // uuid — web docs don't have source uuids
+        );
+
+        upsertConversation.run(
+          convId,
+          'web',
+          title,
+          now,
+          now,
+          1,
+          null, // parent_conversation_id
+          null  // project_path
+        );
+      } catch (err) {
+        log('store-document error:', err.message);
+        return jsonResult({
+          stored: false,
+          conversation_id: null,
+          title: null,
+          length: content.length,
+          source: 'web',
+          url: rawUrl || null,
+          warnings: [
+            ...warnings,
+            {
+              type: 'storage-error',
+              blocking: true,
+              message: `Couldn't write to memex DB: ${err.message}`,
+            },
+          ],
+        });
+      }
+
+      return jsonResult({
+        stored: true,
+        conversation_id: convId,
+        title,
+        length: content.length,
+        source: 'web',
+        url: rawUrl || null,
+        domain,
+        refreshed: !!(existing && refresh),
+        warnings,
+      });
     }
 
     return textResult(`Unknown tool: ${name}`);

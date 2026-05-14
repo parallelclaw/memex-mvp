@@ -1,10 +1,10 @@
 ---
 name: install-memex
-description: Install memex (local-first MCP server for cross-agent AI memory) on the user's machine. Detects which MCP client is active, registers memex in its config, sets up the auto-capture daemon, and verifies end-to-end. Use when the user says "install memex", "set up memex", "add memex to this", or similar. Takes ~2 minutes; requires Node.js and shell access.
+description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~2 minutes — npm install, MCP config wiring, auto-capture daemon, history backfill. No cloud, no account, verbatim storage. Also indexes Obsidian notes and Telegram chats. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", or similar.
 version: 1.0.0
 metadata:
   openclaw:
-    emoji: "🧠"
+    emoji: "📚"
     homepage: https://memex.parallelclaw.ai
     requires:
       bins:

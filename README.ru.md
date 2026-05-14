@@ -105,6 +105,22 @@ sudo npm install -g memex-mvp
 
 После установки `memex-sync install` поднимет фоновый daemon (`~/.memex/{inbox,data}/` создадутся автоматически при первом запуске).
 
+### Установка через AI-скилл (Claude Code / OpenClaw)
+
+Если хочешь чтобы агент сам всё сделал — закинь [install-memex skill](skills/install-memex/) в `~/.claude/skills/`:
+
+```bash
+mkdir -p ~/.claude/skills
+curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/install-memex/SKILL.md \
+  -o ~/.claude/skills/install-memex/SKILL.md
+```
+
+Затем в Claude Code (или любом Skills-aware агенте) скажи:
+
+> установи memex
+
+…или `/install-memex`. Агент сам сделает `npm install`, пропишет MCP-config, поднимет daemon и проверит что всё работает — ~2 минуты.
+
 ### Подключение к Claude Code
 
 Сначала возьми **два абсолютных пути** в терминале:

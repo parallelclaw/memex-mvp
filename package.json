@@ -16,6 +16,7 @@
     "ingest.js",
     "lib/",
     "bot/",
+    "skills/",
     "HELP.md",
     "README.md",
     "LICENSE"

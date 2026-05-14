@@ -48,6 +48,24 @@ Or use one-shot `sudo npm install -g memex-mvp`.
 npx memex-mvp install
 ```
 
+### Install via AI skill (Claude Code / OpenClaw)
+
+If you'd rather have an AI agent walk you through everything, drop the
+[install-memex skill](skills/install-memex/) into `~/.claude/skills/`:
+
+```sh
+mkdir -p ~/.claude/skills
+curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/install-memex/SKILL.md \
+  -o ~/.claude/skills/install-memex/SKILL.md
+```
+
+Then in Claude Code (or any Skills-aware agent) just say:
+
+> install memex
+
+…or `/install-memex`. The agent handles `npm install`, MCP-config wiring,
+auto-capture daemon, and verification — ~2 minutes.
+
 ---
 
 ## Connect to your MCP client

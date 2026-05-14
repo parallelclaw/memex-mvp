@@ -80,15 +80,19 @@ numeric `id`. Save it.
 
 ### 4. Run it
 
+Once `memex-mvp` is installed (`npm install -g memex-mvp`), the `memex-bot` binary is on PATH:
+
 Foreground (debug):
 ```sh
-npx memex-bot
+memex-bot
 ```
 
 Or as a launchd autostart agent (macOS):
 ```sh
-npx memex-bot install
+memex-bot install
 ```
+
+If you skipped the global install, `npx memex-bot ...` also works.
 
 Then send a test message to your bot. Within a few seconds:
 1. A JSON file appears in `~/.memex/inbox/`.

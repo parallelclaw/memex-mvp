@@ -1382,9 +1382,36 @@ function scheduleTelegramStaging(srcPath) {
     tgStagingPending.delete(srcPath);
     if (!existsSync(srcPath)) return;
     try {
-      const { stageExport } = await import('./lib/telegram-pending.js');
+      const { stageExport, listPending } = await import('./lib/telegram-pending.js');
       const dest = stageExport(srcPath, { moveOrCopy: 'move' });
       log(`+ telegram-export staged → pending/: ${basename(dest)}`);
+
+      // Channel C: macOS native notification. Default OFF, opt-in via
+      //   `memex telegram notifications on [--show-titles]`. Dedup by path
+      //   hash so re-stages of the same export don't re-notify.
+      try {
+        const notify = await import('./lib/telegram-notify.js');
+        const state = notify.loadNotifyState();
+        if (state.notifications.enabled && !notify.notifShownFor(state, dest)) {
+          // Look up preview to know the chat name (only if user opted in)
+          const list = listPending();
+          const justStaged = list.find((e) => e.path === dest) || {};
+          const totalPending = list.length;
+          const showTitles = !!state.notifications.show_titles;
+          const title = `memex · ${totalPending} new Telegram chat${totalPending === 1 ? '' : 's'}`;
+          const body = showTitles && justStaged.chat_title
+            ? `"${justStaged.chat_title}" — ${justStaged.message_count?.toLocaleString?.() || '?'} msgs. Review with: memex telegram pending`
+            : `Review with: memex telegram pending`;
+          const fired = notify.fireMacosNotification(title, body, { subtitle: 'Ready to review' });
+          if (fired) {
+            notify.markNotifShown(state, [dest]);
+            notify.saveNotifyState(state);
+            log(`  notif fired (macOS, ${showTitles ? 'with' : 'no'} title)`);
+          }
+        }
+      } catch (e) {
+        log(`  notif skipped: ${e.message}`);
+      }
     } catch (e) {
       log(`! telegram-export stage failed (${basename(srcPath)}): ${e.message}`);
     }

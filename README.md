@@ -202,6 +202,13 @@ Telegram-export setup used to be 8 steps. v0.10+ collapses it to 2 (you click in
 
 Terminal equivalents: `memex telegram check / pending / import 1 3 5 / skip 2 / mode auto`. Full reference: `memex telegram --help`.
 
+**v0.10.1: 4-channel proactive notification.** You'll find out about pending exports from whichever channel reaches you first:
+
+1. **In the AI agent (active session)** — `memex_search` / `memex_recent` / `memex_overview` tool responses include a `telegram_pending` field with chat names. Agent surfaces it as a natural aside.
+2. **In the terminal** — any `memex` CLI command appends a 💡 tip line when pending > 0. Throttled to once per 6h.
+3. **macOS native notification** (opt-in) — daemon fires a banner when a new export is staged. `memex telegram notifications on` to enable. Default OFF for lock-screen privacy; add `--show-titles` if you want chat names in the banner.
+4. **Brian Chesky hook (next Claude Code session)** — `memex context` injection includes a "🆕 N exports awaiting review" block with chat names. Claude leads with the question before you type anything.
+
 ---
 
 ## What it captures

@@ -1279,6 +1279,25 @@ If the user wants the markdown text without writing a file (e.g. for
 copying into another app), call memex_export_markdown WITHOUT
 output_path — you'll get the rendered markdown inline and can show it.
 
+══ "telegram_pending" SIGNAL — surfaced in tool responses ══
+
+memex_search / memex_recent / memex_overview tool responses include a
+telegram_pending field (or appended "💡 N exports awaiting review"
+hint in markdown output) when there are Telegram exports waiting for
+the user's per-chat consent.
+
+When you see telegram_pending in a tool response:
+  • If the conversation is at a natural pause AND the user hasn't
+    already declined or seen this — surface it as a friendly aside,
+    NOT a derailment. Example:
+      "By the way, I noticed you have 3 Telegram exports ready to
+       review (Family, Work team, Mom). Want me to handle that
+       now or remember it for later?"
+  • Don't mention it mid-task or every single response — once per
+    session is plenty.
+  • If user says "later" or "skip" — drop it for this session.
+    The hint will reappear next session if still pending.
+
 ══ TELEGRAM CAPTURE (v0.10+ — proactive flow) ══
 
 memex can also index the user's Telegram chats. The daemon watches
@@ -2064,6 +2083,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       }
 
       if (format === 'json') {
+        const tgHint = getTelegramPendingHint();
         return jsonResult({
           query: args.query,
           count: rows.length,
@@ -2083,6 +2103,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             match_count: groupByConv ? r.match_count : undefined,
             archived: !!r.archived_at,
           })),
+          ...(tgHint.count > 0 ? { telegram_pending: { count: tgHint.count, hint: tgHint.hint_for_agent, preview_titles: tgHint.preview_titles } } : {}),
         });
       }
 
@@ -2103,8 +2124,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         .join('\n\n---\n\n');
 
       const headerSuffix = groupByConv ? ' (one hit per conversation)' : '';
+      const tgHint = getTelegramPendingHint();
       return textResult(
-        `Found ${rows.length} result(s)${headerSuffix} for "${args.query}":\n\n${formatted}`
+        `Found ${rows.length} result(s)${headerSuffix} for "${args.query}":\n\n${formatted}` +
+        (tgHint.hint_markdown || '')
       );
     }
 
@@ -2141,6 +2164,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       }
 
       if (format === 'json') {
+        const tgHint = getTelegramPendingHint();
         return jsonResult({
           count: rows.length,
           messages: rows.map((r) => ({
@@ -2152,6 +2176,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             conversation_id: r.conversation_id,
             text: truncate(r.text, 220),
           })),
+          ...(tgHint.count > 0 ? { telegram_pending: { count: tgHint.count, hint: tgHint.hint_for_agent, preview_titles: tgHint.preview_titles } } : {}),
         });
       }
 
@@ -2161,7 +2186,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           return `[${date}] **${r.sender}** (${r.source}): ${truncate(r.text, 220)}`;
         })
         .join('\n');
-      return textResult(formatted);
+      const tgHint = getTelegramPendingHint();
+      return textResult(formatted + (tgHint.hint_markdown || ''));
     }
 
     if (name === 'memex_get_conversation') {
@@ -3239,6 +3265,53 @@ function textResult(text) {
 function jsonResult(obj) {
   return { content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] };
 }
+
+// -------------------- Telegram-pending hint helper --------------------
+// Channel A: every memex tool that touches the user (search/recent/list)
+// appends a one-line hint when there are exports awaiting review. The
+// agent reading the response is told (via SERVER_INSTRUCTIONS) to surface
+// this proactively. Cheap — one filesystem stat + readdir on each call.
+//
+// Returns:
+//   { count, hint_markdown, hint_for_agent }
+// where hint_for_agent is the instruction text the agent will follow.
+
+function getTelegramPendingHint() {
+  try {
+    // Lazy dynamic import — preserves server cold-start performance for
+    // pure-MCP users who never touch Telegram.
+    const lib = telegramPendingLib;
+    if (!lib) return { count: 0 };
+    const list = lib.listPending();
+    if (!list || list.length === 0) return { count: 0 };
+    const namesPreview = list
+      .slice(0, 3)
+      .map((e) => e.chat_title || '(untitled)')
+      .filter(Boolean);
+    return {
+      count: list.length,
+      hint_markdown:
+        `\n\n---\n💡 _${list.length} Telegram export${list.length === 1 ? '' : 's'} awaiting your review_ ` +
+        `${namesPreview.length ? `(${namesPreview.join(', ')}${list.length > 3 ? ', …' : ''}) ` : ''}` +
+        `— call memex_telegram_pending to see all, or tell the user "I noticed you have N Telegram chats ready to import — want me to handle that?"`,
+      hint_for_agent:
+        `${list.length} Telegram export(s) in pending review. Mention to user if conversation is at a natural pause: ` +
+        `"By the way, I see ${list.length} Telegram chat${list.length === 1 ? '' : 's'} waiting — want me to import?"`,
+      preview_titles: namesPreview,
+    };
+  } catch (_) {
+    return { count: 0 };
+  }
+}
+
+// Lazy-loaded once at server startup. We do dynamic import inside an IIFE
+// so we don't change the top of server.js to await-import.
+let telegramPendingLib = null;
+(async () => {
+  try {
+    telegramPendingLib = await import('./lib/telegram-pending.js');
+  } catch (_) { /* tolerate */ }
+})();
 
 /**
  * Check the memex-sync daemon health.

@@ -73,7 +73,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 
 ---
 
-## Example 2 · EACCES recovery (macOS system Node)
+## Example 2 · EACCES recovery (macOS system Node) — recommend B by default
 
 > **User:** install memex
 >
@@ -84,14 +84,18 @@ Sample interactions when the user invokes this skill. These show typical happy p
 > npm error path: '/usr/local/lib/node_modules/memex-mvp'
 > ```
 >
-> Hit a permissions error — this is common on macOS when Node is installed system-wide. Two ways to fix:
+> Hit EACCES — your Node is installed in a system directory that npm can't write to without admin rights. Two fixes:
 >
-> **Option A** (quick, requires sudo password):
-> ```sh
-> sudo npm install -g memex-mvp
-> ```
+> **A)** Quick: `sudo npm install -g memex-mvp` — one-time, requires your password
 >
-> **Option B** (one-time setup, then future `npm install -g` works without sudo):
+> **B)** Permanent fix: I'll move npm's install location to your home directory. After this, no `npm install -g` will ever ask for sudo again, for any package. Five commands, one-time.
+>
+> I recommend **B** — it's a permanent improvement that benefits all your future Node tools, not just memex. **Proceed with B?**
+>
+> **User:** ok
+>
+> **Agent:** Running the 5 prefix-fix commands:
+>
 > ```sh
 > mkdir -p ~/.npm-global
 > npm config set prefix ~/.npm-global
@@ -100,11 +104,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 > npm install -g memex-mvp
 > ```
 >
-> Option B is the standard npm recommendation — solves this for every future global install. Option A is faster if you don't want to touch your shell config. Which do you prefer?
->
-> **User:** B
->
-> **Agent:** [runs the 5 commands in sequence, shows output for each] ✓ Done. Verifying:
+> ✓ Done. Verifying:
 >
 > ```
 > which memex → /Users/macbook/.npm-global/bin/memex
@@ -242,7 +242,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 
 - **Always discover first**, then ask for confirmation before any write action
 - **Show every command** before running it; show diffs for config edits
-- **Offer choices** at decision points (EACCES, daemon yes/no) rather than guessing
+- **Recommend the better default** with a clear reason (e.g. Option B for EACCES) instead of forcing the user to weigh both options blind. Fall back to alternatives only if explicitly chosen.
 - **Detect and adapt** to existing installs, missing prerequisites, partial setups
 - **Refuse gracefully** when running in a context where the install can't actually work (web-only agents)
 

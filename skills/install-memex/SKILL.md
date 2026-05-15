@@ -58,14 +58,19 @@ Do these in order. Show each command before running it. Stop and ask if anything
 npm install -g memex-mvp
 ```
 
-If you get `EACCES` (macOS system Node), tell the user to choose:
+If you get `EACCES` (macOS system Node), **recommend Option B (permanent prefix fix) by default** and proceed unless the user explicitly chooses sudo.
 
-**Option A** — one-shot sudo:
-```sh
-sudo npm install -g memex-mvp
-```
+Say to the user:
 
-**Option B** — fix prefix permanently (better long-term):
+> "Hit EACCES — your Node is installed in a system directory that npm can't write to without admin rights. Two fixes:
+>
+> **A)** Quick: `sudo npm install -g memex-mvp` — one-time, requires your password
+> **B)** Permanent fix: I'll move npm's install location to your home directory. After this, no `npm install -g` will ever ask for sudo again, for any package. Five commands, one-time.
+>
+> I recommend **B** — it's a permanent improvement that benefits all your future Node tools, not just memex. Proceed with B?"
+
+If the user agrees (or says anything like "ok", "yes", "default", "go", "B") — proceed with B without further questions:
+
 ```sh
 mkdir -p ~/.npm-global
 npm config set prefix ~/.npm-global
@@ -74,7 +79,19 @@ source ~/.zshrc
 npm install -g memex-mvp
 ```
 
-**Ask which the user prefers — don't guess.**
+If the user **explicitly** picks A (or says "sudo", "fast", "quick"), use sudo:
+
+```sh
+sudo npm install -g memex-mvp
+```
+
+After the install completes, verify with `which memex` (should print an absolute path) and `memex --version` (should print the version).
+
+**Important if Option B was used + user already had memex from a prior sudo install:** the old sudo-installed copy in `/usr/local/lib/node_modules/memex-mvp/` is now orphaned (PATH prefers the new home install). Mention this once:
+
+> "By the way, you have an older sudo-installed memex copy in `/usr/local/lib/`. It's harmless but takes ~60 MB. Clean it up when convenient: `sudo npm uninstall -g memex-mvp` — not urgent."
+
+Don't run that uninstall yourself — let the user decide when.
 
 If `node` or `npm` are missing, STOP and tell the user to install Node.js (recommend nvm.sh or `brew install node`). Don't try to install Node yourself.
 

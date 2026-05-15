@@ -14,7 +14,7 @@ metadata:
 
 # Install memex
 
-You are installing **memex** on this machine. Memex is a local-first MCP server that captures the user's AI conversations across Claude Code, Cowork (including subagents), Cursor, Obsidian, and Telegram exports into a searchable SQLite + FTS5 index that any MCP-compatible agent can query through 11 standard tools.
+You are installing **memex** on this machine. Memex is a local-first MCP server that captures the user's AI conversations across Claude Code, Cowork (including subagents), Cursor, Obsidian, and Telegram exports into a searchable SQLite + FTS5 index that any MCP-compatible agent can query through 18 standard tools (`memex_search`, `memex_recent`, `memex_overview`, `memex_store_document`, plus the `memex_telegram_*` family added in v0.10+).
 
 Repo: https://github.com/parallelclaw/memex-mvp
 Landing: https://memex.parallelclaw.ai

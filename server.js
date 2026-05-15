@@ -2508,18 +2508,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
       if (format === 'json') {
         const sync = getSyncStatus();
-        let telegramHint = null;
+        // Normalized telegram_pending field — same name across memex_search,
+        // memex_recent, memex_overview so the agent can reliably look for it.
+        // In overview we include extra context: indexed_chats and a tailored
+        // suggest message ("offer setup" for new users vs "review pending").
+        let telegramPending = null;
         try {
           const tgPending = await import('./lib/telegram-pending.js');
           const tgList = tgPending.listPending();
           const tgIndexed = db.prepare(`SELECT COUNT(*) AS c FROM conversations WHERE source = 'telegram'`).get().c;
-          telegramHint = {
-            pending_count: tgList.length,
+          const previewTitles = tgList.slice(0, 3).map((e) => e.chat_title).filter(Boolean);
+          telegramPending = {
+            count: tgList.length,
             indexed_chats: tgIndexed,
-            suggest: tgList.length > 0
-              ? 'Call memex_telegram_pending to review staged exports.'
+            preview_titles: previewTitles,
+            hint: tgList.length > 0
+              ? `${tgList.length} export(s) in pending review. Mention to user: "I see N Telegram chats ready to import — want me to handle that?". Call memex_telegram_pending for the full list.`
               : tgIndexed === 0
-                ? 'Offer to set up Telegram capture — call memex_telegram_check.'
+                ? 'User has zero Telegram chats indexed. Offer to set it up — call memex_telegram_check to see their environment.'
                 : null,
           };
         } catch (_) { /* ignore */ }
@@ -2530,7 +2536,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             last_capture_human: formatFreshness(sync.freshnessMs),
             advice: sync.advice,
           },
-          telegram_hint: telegramHint,
+          telegram_pending: telegramPending,
           total_messages: total,
           active_conversations: activeConv,
           archived_conversations: archivedConv,

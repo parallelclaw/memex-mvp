@@ -315,12 +315,15 @@ ${BOLD}Quick checks:${RESET}
   ${CYAN}memex overview${RESET}             corpus snapshot
   ${CYAN}memex-sync status${RESET}          daemon health
   ${CYAN}memex hook status${RESET}          auto-context hook state
+  ${CYAN}memex telegram check${RESET}       Telegram capture pipeline status (v0.10+)
 
 ${BOLD}Next:${RESET}
   1. ${YELLOW}Restart Claude Code${RESET} (Cmd+Q + reopen) so the SessionStart hook activates.
   2. Open Claude Code in any project. Ask: ${DIM}"what was I working on here?"${RESET}
      → Claude answers from auto-context, no tool calls needed. That's the moment.
-  3. Drop a Telegram chat export (JSON or HTML) into ~/.memex/inbox/ to ingest it.
+  3. ${BOLD}Want Telegram chats indexed too?${RESET} Export from Telegram Desktop (chat → ⋮ → Export
+     chat history → JSON or HTML). memex auto-detects in ~/Downloads/Telegram Desktop/
+     and asks per-chat consent. Run ${CYAN}memex telegram check${RESET} to verify setup.
 
 ${BOLD}Full guide:${RESET} memex help    ${DIM}|${RESET}    ${BOLD}Disable auto-context:${RESET} memex hook uninstall
 ${BOLD}Repo:${RESET}       https://github.com/parallelclaw/memex-mvp

@@ -18,7 +18,7 @@ End-to-end: **~60 seconds** via fast path, **~2 minutes** via manual flow, fully
 
 Memex is a **local-first MCP server** that captures every conversation you have with an AI — across **Claude Code, Cowork (including subagent transcripts), Cursor, Cline, Continue, Zed**, plus **Obsidian notes**, **Telegram chats**, and **web pages / AI chat shares** (v0.6+ via `memex_store_document` — agent fetches, memex stores verbatim) — into one searchable SQLite + FTS5 corpus.
 
-Any MCP-compatible agent can then query that corpus through 12 standard tools (`memex_search`, `memex_recent`, `memex_overview`, `memex_store_document`, …).
+Any MCP-compatible agent can then query that corpus through 18 standard tools (`memex_search`, `memex_recent`, `memex_overview`, `memex_store_document`, the `memex_telegram_*` family for v0.10+ chat capture, …).
 
 | Pain                                            | Memex                                |
 |-------------------------------------------------|--------------------------------------|

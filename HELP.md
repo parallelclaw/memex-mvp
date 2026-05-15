@@ -12,7 +12,7 @@
 - **Claude Cowork** (включая субагентов) — сессии из `~/Library/Application Support/Claude/local-agent-mode-sessions/`
 - **Cursor** — composer history из `state.vscdb`
 - **Obsidian** — заметки из настроенных vault'ов
-- **Telegram** — экспорты которые ты сам положишь в `~/.memex/inbox/`
+- **Telegram** — v0.10+: daemon сам ловит экспорты из `~/Downloads/Telegram Desktop/` → пакует в pending → ты per-chat подтверждаешь импорт (`memex telegram pending` + `memex telegram import 1 3 5`). Никакого ручного копирования
 
 Всё это лежит в **одном файле** `~/.memex/data/memex.db` и доступно через MCP-tools любому AI на твоём компьютере.
 
@@ -290,6 +290,11 @@ Memex по дефолту сортирует по **релевантности**
 | `memex_list_sources` | Что и сколько импортировано |
 | `memex_status` | Здоровье memex-sync daemon'a |
 | `memex_sources_status` | Какие источники включены/отключены |
+| `memex_telegram_check` *(v0.10+)* | Состояние Telegram-pipeline: Desktop установлен? login age? сколько pending? Возвращает `next_step` для агента |
+| `memex_telegram_pending` *(v0.10+)* | Список экспортов в `~/.memex/pending/` с chat name + msg count + дата range |
+| `memex_telegram_import` *(v0.10+)* | Импорт выбранных экспортов в memex.db (по индексу или title). Auto-allowlist |
+| `memex_telegram_skip` *(v0.10+)* | Пометить чаты как «не индексировать» — применяется к будущим re-export'ам |
+| `memex_telegram_mode` *(v0.10+)* | Get/set режим: `pick` (default), `auto`, `manual` |
 
 ---
 
@@ -316,6 +321,19 @@ memex get web-1582ab51a7b7                         # полный контент
 
 memex overview                                     # snapshot корпуса (+ capture streak v0.8.1+)
 memex projects                                     # уникальные project_paths
+
+# Telegram pipeline (v0.10+):
+memex telegram check                               # Desktop? 24h? watcher? pending?
+memex telegram pending                             # список pending экспортов
+memex telegram import 1 3 5                        # импорт по индексам или title'у
+memex telegram skip 4                              # не индексировать; запомнить
+memex telegram allow "Family"                      # auto-import на следующих re-export'ах
+memex telegram block "*bank*"                      # никогда не индексировать (glob)
+memex telegram mode auto                           # pick (default) / auto / manual
+memex telegram notifications on --show-titles      # macOS notif когда детектится новый export
+memex telegram scan                                # one-shot ре-скан Downloads
+memex telegram status                              # all decisions
+
 memex help                                         # эта инструкция в терминале
 memex --help                                       # справка по командам
 memex --version
@@ -395,12 +413,23 @@ npx memex-sync scan
 **memex поддерживает оба формата экспорта (v0.9+):**
 
 - **«Machine-readable JSON»** ← рекомендуется. Один файл `result.json`, чисто ингестится.
-- **«HTML»** ← тоже работает (с v0.9+). Получишь директорию `ChatExport_<chat>_<date>/` — кинь её **целиком** в inbox, memex авто-парсит.
+- **«HTML»** ← тоже работает (с v0.9+). Получишь директорию `ChatExport_<chat>_<date>/`.
 
-Шаги:
-1. Выбери формат (JSON — короче путь, HTML — если уже экспортировано).
-2. Сохрани в **`~/.memex/inbox/`** — для JSON это `result.json`, для HTML — вся директория `ChatExport_…`.
-3. Memex подхватит автоматически за ~1.5 секунды. Файл/директория уедет в `~/.memex/data/conversations/telegram/` (или `…/telegram-html/`) после ingest'a.
+**v0.10+ flow — privacy-first, без ручного копирования:**
+
+1. Сохрани экспорт куда обычно (по умолчанию `~/Downloads/Telegram Desktop/ChatExport_*`).
+2. Daemon **сам** детектит и переносит в `~/.memex/pending/`.
+3. Получишь уведомление (через 4 канала: tip в CLI, в auto-context хуке Claude, в response любого MCP-tool, optionally macOS native notification). Подробнее: `memex telegram notifications status`.
+4. Запусти `memex telegram pending` → увидишь список с превью.
+5. Импорт: `memex telegram import 1 3 5` (по индексу) или просто скажи AI агенту «импортируй family и work».
+6. Sensitive чаты можно пропустить: `memex telegram skip 4 7` — memex запомнит и не будет предлагать снова.
+
+**Старый flow тоже работает** (для совместимости): кинь `result.json` или `ChatExport_*/` прямо в `~/.memex/inbox/` — попадёт сразу в `memex.db` без pending review.
+
+**Modes** (`memex telegram mode <pick|auto|manual>`):
+- `pick` (default): всё через pending, ты явно подтверждаешь
+- `auto`: чаты из allow-list импортятся сами, новые — в pending
+- `manual`: watcher выключен, только ручной inbox
 
 Если ингест не произошёл — проверь `~/.memex/data/memex.log`. Для HTML-export'а парсер пишет actionable error если что-то не так (формат изменился у Telegram, директория повреждена, и т.д.).
 

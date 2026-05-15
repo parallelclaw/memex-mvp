@@ -233,6 +233,81 @@ test('truncates long titles', () => {
   assert(t.endsWith('…'), 'should end with ellipsis');
 });
 
+test('Jina prefix is stripped — H1 inside is used', () => {
+  const jinaOutput = [
+    'Title: Some App Shell Title',
+    '',
+    'URL Source: https://example.com/article',
+    '',
+    'Published Time: Fri, 15 May 2026 00:00:00 GMT',
+    '',
+    'Markdown Content:',
+    '# Real Article Title',
+    '',
+    'Body of article...',
+  ].join('\n');
+  const t = extractTitle(jinaOutput, 'https://example.com/article');
+  assertEq(t, 'Real Article Title');
+});
+
+test('Jina prefix is stripped — H2 used when no H1 (Perplexity case)', () => {
+  // Replicates the exact shape Jina returns for a Perplexity thread
+  const jinaOutput = [
+    'Title: Perplexity',
+    '',
+    'URL Source: https://www.perplexity.ai/search/abc',
+    '',
+    'Published Time: Fri, 15 May 2026 00:00:00 GMT',
+    '',
+    'Markdown Content:',
+    'New',
+    '',
+    '⌘K',
+    '',
+    'Computer',
+    '',
+    '## когда выйдет фильм день разоблачения',
+    '',
+    'Фильм «День разоблачения» выходит...',
+  ].join('\n');
+  const t = extractTitle(jinaOutput, 'https://www.perplexity.ai/search/abc');
+  assertEq(t, 'когда выйдет фильм день разоблачения');
+});
+
+test('Non-Jina content with H2 only — H2 used as fallback', () => {
+  const md = '## Subtopic heading\n\nBody...';
+  const t = extractTitle(md, null);
+  assertEq(t, 'Subtopic heading');
+});
+
+test('H1 still wins over H2 when both present', () => {
+  const md = '## Subtopic\n\n# Main heading\n\nBody...';
+  const t = extractTitle(md, null);
+  assertEq(t, 'Main heading');
+});
+
+test('Jina prefix detection — non-Jina content unaffected', () => {
+  // If first 500 chars don't contain "URL Source: http", treat as raw
+  const md = 'Title: Looks like Jina but is not\n\n# Real H1\n';
+  const t = extractTitle(md, null);
+  // Without "URL Source:" marker, prefix is NOT stripped, so first-line
+  // fromMarkdownH1 still picks up the H1
+  assertEq(t, 'Real H1');
+});
+
+test('Jina prefix without "Markdown Content:" line — falls back gracefully', () => {
+  // Some Jina edge cases may omit the marker — we should still try to extract
+  const malformed = [
+    'Title: Page',
+    'URL Source: https://example.com',
+    '',
+    '# Real H1',
+  ].join('\n');
+  const t = extractTitle(malformed, null);
+  // Even without strip, fromMarkdownH1 finds # Real H1
+  assertEq(t, 'Real H1');
+});
+
 // -----------------------------------------------------------------------------
 console.log('\nstore_document integration (in-memory DB):\n');
 

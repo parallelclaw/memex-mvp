@@ -348,7 +348,7 @@ Magic-фича. Когда ты открываешь Claude Code в проект
 
 **Технически:** SessionStart hook в `~/.claude/settings.json`. При старте каждой Claude Code сессии хук вызывает `memex context` → memex выдаёт markdown summary → Claude получает его как system message _до_ твоего первого вопроса.
 
-**Установка:** во время `memex-sync install` будет промпт `[Y/n]` — соглашайся (Y по default'у). Или установи позже:
+**Установка:** проще всего — `curl -fsSL https://memex.parallelclaw.ai/install.sh | bash` поставит memex + daemon + auto-context хук одной командой. Если ставил memex вручную — во время `memex-sync install` будет промпт `[Y/n]` (соглашайся, Y по default'у). Или установи хук позже:
 
 ```bash
 memex hook install         # добавить хук
@@ -378,7 +378,7 @@ memex context --freshness-days 30    # только последние 30 дне
 1. Вызови `memex_overview`. Внимание на статус-баннер сверху:
    - 🟢 daemon работает — всё ок, может ещё не успел проиндексировать
    - 🔴 daemon установлен но не работает — `launchctl load ~/Library/LaunchAgents/com.parallelclaw.memex.sync.plist`
-   - ⚪ daemon не установлен — `npx memex-sync install` из директории memex-mvp
+   - ⚪ daemon не установлен — самый простой способ: `curl -fsSL https://memex.parallelclaw.ai/install.sh | bash` (поставит сам всё). Или вручную: `memex-sync install`.
 
 ### Хочу проиндексировать существующие сессии (бэкфилл)
 

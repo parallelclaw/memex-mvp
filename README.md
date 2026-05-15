@@ -26,6 +26,23 @@ MCP server  →  Cursor · Cline · Claude Code · Continue · Zed · Codex · �
 
 ## Install in 60 seconds
 
+**One-line install (recommended):**
+
+```sh
+curl -fsSL https://memex.parallelclaw.ai/install.sh | bash
+```
+
+That single command:
+1. Verifies Node ≥ 20.
+2. Runs `npm install -g memex-mvp`, auto-fixing `EACCES` by moving npm's prefix to `~/.npm-global` (no `sudo` needed, ever).
+3. Installs the auto-capture daemon (`memex-sync install`) **with** the v0.8 Brian Chesky auto-context hook into `~/.claude/settings.json` (preserves existing hooks).
+4. Backfills history (`memex-sync scan`) so memex already knows about your past sessions.
+5. If `claude` (Claude Code CLI) is on PATH, runs `claude mcp add memex --scope user -- memex` to wire MCP automatically.
+
+Idempotent — safe to re-run. To inspect the script before piping to bash: `curl -fsSL https://memex.parallelclaw.ai/install.sh | less`.
+
+**Prefer manual install?**
+
 ```sh
 npm install -g memex-mvp
 memex-sync install      # macOS LaunchAgent for auto-capture

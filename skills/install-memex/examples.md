@@ -2,6 +2,52 @@
 
 Sample interactions when the user invokes this skill. These show typical happy paths and how the skill handles common edge cases.
 
+> **Note (v1.1+):** The skill now leads with the **fast-path one-liner** (`curl -fsSL https://memex.parallelclaw.ai/install.sh | bash`) after Discovery — see Example 0 below. The legacy five-step examples (1–5 below) stay as the fallback when the agent is inside a GUI client (Cursor / Cline / Continue / Zed — still need step 2 manually after the script), the user declines curl, or the script fails.
+
+---
+
+## Example 0 · Fast path on Claude Code CLI (v1.1+)
+
+> **User:** install memex
+>
+> **Agent:** 👋 You're running inside Claude Code CLI. Let me run a quick discovery first.
+>
+> ```
+> ✓ Found Claude Code data at ~/.claude/projects/ (14 sessions)
+> ✓ Found Cowork sessions (5 subagent transcripts)
+> ✗ Cursor data not found
+> ✗ Continue / Zed not found
+> ```
+>
+> After install, memex will auto-index conversations from: **Claude Code, Cowork**. You can drop Telegram exports into `~/.memex/inbox/` later if needed.
+>
+> The fast path is a single hosted bash script that does **npm install (with EACCES auto-fix), daemon setup, Brian Chesky auto-context hook, history backfill, and `claude mcp add memex`** all in one go. Idempotent. Want me to run:
+>
+> ```sh
+> curl -fsSL https://memex.parallelclaw.ai/install.sh | bash
+> ```
+>
+> **User:** ok
+>
+> **Agent:** [runs the curl command, streams output]
+>
+> ```
+> ▸ memex one-line installer
+> ▸ Node v20.11.1 — ok
+> ▸ Installing memex-mvp from npm...
+> ✓ memex 0.9.0 ready at /Users/you/.npm-global/bin/memex
+> ▸ Installing memex-sync (LaunchAgent + auto-context hook)...
+> ✓ daemon running (PID 41872)
+> ✓ Brian Chesky auto-context hook added to ~/.claude/settings.json
+> ▸ Backfilling history (memex-sync scan)...
+> ✓ 87 conversations indexed
+> ▸ Wiring MCP into Claude Code...
+> ✓ claude mcp add memex — done
+> ▸ All set. Quit Claude Code (Cmd+Q) and reopen any project. Memex will inject prior context before your first message.
+> ```
+>
+> All five steps done in ~25 seconds. Quit Claude Code (Cmd+Q) and reopen — when you open any project you've worked in, memex will inject relevant context before you even type. Try: `memex overview` from terminal to confirm.
+
 ---
 
 ## Example 1 · Happy path on a fresh Cursor install

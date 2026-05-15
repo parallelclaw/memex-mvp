@@ -7,13 +7,12 @@
 After you drop the skill into your agent (`~/.claude/skills/` for Claude Code, or your client's equivalent), saying **"install memex"** triggers a guided installation:
 
 1. **Discovery** — read-only checks for which MCP client you're using and what AI data already exists on your machine
-2. **`npm install -g memex-mvp`** — with EACCES fallbacks (one-shot sudo OR permanent prefix-fix; the agent asks you which)
-3. **MCP config merge** — adds a single absolute-path `command` entry into your client's `mcpServers` config. Never overwrites your other servers
-4. **`memex-sync install`** — registers the macOS LaunchAgent for live auto-capture
-5. **`memex-sync scan`** — one-time backfill of every session that already exists on disk
-6. **Restart hint + verification commands** — including the v0.7+ CLI fallback (`memex overview`, `memex search "foo"`) so you can verify memex works even if MCP didn't wire up cleanly
+2. **Fast path (v1.1+)** — `curl -fsSL https://memex.parallelclaw.ai/install.sh | bash`: one hosted bash script does npm install (with EACCES auto-fix to `~/.npm-global`), daemon setup, v0.8 auto-context hook, history backfill, and `claude mcp add memex` if Claude Code CLI is on PATH. Idempotent.
+3. **Fallback: manual five-step** — if curl fails, the user declines, or the agent is inside a GUI client (Cursor/Cline/Continue/Zed) where the MCP config still needs editing: `npm install -g memex-mvp` → MCP config merge → `memex-sync install` → `memex-sync scan`.
+4. **MCP config merge** (only needed for GUI clients) — adds a single absolute-path `command` entry into your client's `mcpServers` config. Never overwrites your other servers.
+5. **Restart hint + verification commands** — including the v0.7+ CLI fallback (`memex overview`, `memex search "foo"`) so you can verify memex works even if MCP didn't wire up cleanly.
 
-End-to-end: **~2 minutes**, fully observable (agent shows each command before running).
+End-to-end: **~60 seconds** via fast path, **~2 minutes** via manual flow, fully observable (agent shows each command before running).
 
 ## What is memex?
 

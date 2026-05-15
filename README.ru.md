@@ -83,6 +83,23 @@ MCP server (stdio JSON-RPC)
 
 ## Установка за 60 секунд
 
+**Установка в одну строку (рекомендуется):**
+
+```bash
+curl -fsSL https://memex.parallelclaw.ai/install.sh | bash
+```
+
+Эта команда сама делает:
+1. Проверяет Node ≥ 20.
+2. Запускает `npm install -g memex-mvp`, и если ловит `EACCES` — сама переносит npm prefix в `~/.npm-global` (sudo больше не нужен — никогда, ни для одного `npm install -g`).
+3. Поднимает auto-capture daemon (`memex-sync install`) **вместе с** Brian Chesky auto-context хуком (v0.8+) в `~/.claude/settings.json` (другие хуки не трогает).
+4. Бэкфиллит историю (`memex-sync scan`) — memex сразу знает о твоих прошлых сессиях.
+5. Если на машине найден Claude Code CLI (`claude`), вызывает `claude mcp add memex --scope user -- memex` — MCP прописывается автоматом.
+
+Идемпотентно — безопасно перезапускать. Хочешь сначала посмотреть скрипт: `curl -fsSL https://memex.parallelclaw.ai/install.sh | less`.
+
+**Или вручную:**
+
 ```bash
 npm install -g memex-mvp
 memex-sync install      # macOS LaunchAgent для auto-capture

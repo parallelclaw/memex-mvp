@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~2 minutes — npm install, MCP config wiring, auto-capture daemon, history backfill. No cloud, no account, verbatim storage. Also indexes Obsidian notes, Telegram chats, and any URL the user wants to save (web pages, Perplexity threads, AI chat shares — memex_store_document tool, v0.6+). Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", or similar.
-version: 1.0.0
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "📚"
@@ -48,7 +48,32 @@ Scan the user's setup so you can tailor advice and tell them exactly what memex 
    - "After install, memex will auto-index conversations from: [detected sources]"
 4. Wait for the user's "ok" before starting step 1.
 
-## Five-step install
+## Fast path — one-line installer (try this first)
+
+memex ships a hosted bash installer that does steps 1, 3, and 4 in a single run — and also wires up Claude Code's MCP entry if `claude` is on PATH. It's idempotent (safe to re-run), auto-fixes the `EACCES` case by moving npm's prefix to `~/.npm-global`, and prompts before enabling the auto-context hook.
+
+Show this command to the user, explain what it does, get their **explicit ok**, then run:
+
+```sh
+curl -fsSL https://memex.parallelclaw.ai/install.sh | bash
+```
+
+What the script does, in order:
+1. Checks Node ≥ 20.
+2. `npm install -g memex-mvp` — on EACCES, sets `npm config set prefix ~/.npm-global`, appends PATH to `~/.zshrc`, retries.
+3. `memex-sync install` with `--auto-context yes` (Brian Chesky hook into `~/.claude/settings.json` — preserves other hooks).
+4. `memex-sync scan` — backfills existing history.
+5. `claude mcp add memex --scope user -- memex` if Claude Code CLI is detected.
+
+After the script finishes:
+- If the user is in **Claude Code (CLI)** → install is complete. Skip straight to step 5 (verification + restart).
+- If the user is in **Cursor / Cline / Continue / Zed** → the npm install + daemon + auto-context + scan are done, but the GUI client's MCP config still needs the memex entry. **Skip step 1 (already installed)**, **skip step 3** (daemon already installed) and **skip step 4** (scan already ran). **Do step 2** (wire MCP into the GUI client's config) and **step 5** (verify + restart).
+
+If the script fails for any reason — non-zero exit, weird output, user uncomfortable piping curl to bash — fall back to the **Manual five-step install** below.
+
+To inspect what the script does first: `curl -fsSL https://memex.parallelclaw.ai/install.sh | less` (don't pipe to bash).
+
+## Manual five-step install (if the fast path didn't fit)
 
 Do these in order. Show each command before running it. Stop and ask if anything fails or looks wrong.
 
@@ -224,4 +249,4 @@ This is also useful for agents without native MCP support (OpenCode + Kimi, plai
 
 ## Begin
 
-Greet the user, confirm which MCP client you're running inside, and run the Discovery checks before any install actions.
+Greet the user, confirm which MCP client you're running inside, and run the Discovery checks before any install actions. After Discovery, **propose the fast path (curl one-liner) first** — it covers ~90% of cases in one shot. Only fall back to the manual five-step install if the user objects, the script fails, or you're inside a GUI client where you'll still need to do step 2 manually after the script runs.

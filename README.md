@@ -107,10 +107,12 @@ The same `memex` binary that runs as an MCP server also has a terminal mode for 
 ```sh
 memex search "Postgres migration"          # full-text search
 memex search "Q2 deck" --chat "Memex Bot"  # scope to one conversation by title
+memex search "JWT" --as-of 2026-05-01      # v0.8.1: time-travel — only msgs before date
+memex when "Brian Chesky"                   # v0.8.1: "when did we talk about X" — dates + chats
 memex recent --limit 5                      # last 5 messages across all sources
 memex list --source web                     # all saved URLs
 memex get web-1582ab51a7b7                  # full content of one conversation
-memex overview                              # snapshot of corpus
+memex overview                              # snapshot of corpus + v0.8.1: capture streak
 memex projects                              # distinct project_paths captured
 memex help                                  # full user guide (HELP.md)
 memex --help                                # command reference

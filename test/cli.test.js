@@ -262,6 +262,80 @@ test('search supports --sort date_desc', () => {
   }
 });
 
+// ---------- v0.8.1 — D8 search --as-of ----------
+
+test('search --as-of filters out newer messages', () => {
+  // Seed messages span 1700000000 (Nov 2023) → 1720000000 (Jul 2024).
+  // --as-of 2024-01-01 (~1704067200 UTC) should keep only the oldest.
+  const r = runCli(['search', 'launch', '--as-of', '2024-01-01', '--json']);
+  assertEq(r.code, 0);
+  const parsed = JSON.parse(r.stdout);
+  // ts 1700000000 (Nov 14, 2023) is BEFORE Jan 1, 2024 cutoff → kept
+  // ts 1710000000 (Mar 9, 2024) is AFTER cutoff → filtered out
+  for (const result of parsed.results) {
+    assert(result.ts < 1704067200, `expected ts < 2024-01-01 unix, got ${result.ts}`);
+  }
+});
+
+test('search --as-of with invalid date exits 2', () => {
+  const r = runCli(['search', 'foo', '--as-of', 'tomorrow']);
+  assertEq(r.code, 2);
+  assert(r.stderr.includes('Invalid --as-of'), `got: ${r.stderr}`);
+});
+
+// ---------- v0.8.1 — D5 memex when ----------
+
+test('when: chronological list of conversations matching keyword', () => {
+  const r = runCli(['when', 'launch']);
+  assertEq(r.code, 0);
+  assert(r.stdout.includes('mentioned in'));
+  // Should aggregate by conversation, not raw message hits
+  // Two distinct chats touch "launch": chat-tg-1 (telegram) + chat-cc-1 (claude-code)
+  assert(r.stdout.includes('telegram') && r.stdout.includes('claude-code'),
+    `expected both sources: ${r.stdout}`);
+});
+
+test('when --json returns structured per-conversation aggregation', () => {
+  const r = runCli(['when', 'launch', '--json']);
+  assertEq(r.code, 0);
+  const parsed = JSON.parse(r.stdout);
+  assert(parsed.count >= 2);
+  assert(parsed.results[0].match_count >= 1);
+  assert(parsed.results[0].latest_ts, 'should have latest_ts');
+});
+
+test('when: no results exits 0 with friendly message', () => {
+  // Use single word to avoid FTS5 treating hyphens as NOT operators
+  const r = runCli(['when', 'xyzqqnoresult']);
+  assertEq(r.code, 0);
+  assert(r.stdout.includes('No mentions'));
+});
+
+test('when: empty query exits 2', () => {
+  const r = runCli(['when', '']);
+  assertEq(r.code, 2);
+});
+
+// ---------- v0.8.1 — D6 capture streak ----------
+
+test('overview includes capture streak when there is recent activity', () => {
+  // Need a message with ts ≈ now for streak to register
+  const db = new Database(DB_PATH);
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare(`
+    INSERT INTO messages (source, conversation_id, msg_id, role, sender, text, ts)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run('telegram', 'chat-streak', 'streak-1', 'user', 'me', 'streak ping', now - 100);
+  db.close();
+
+  const r = runCli(['overview', '--json']);
+  assertEq(r.code, 0);
+  const parsed = JSON.parse(r.stdout);
+  assert(parsed.streak, 'streak block should be present');
+  assert(parsed.streak.streakDays >= 1, `expected streak >= 1, got: ${JSON.stringify(parsed.streak)}`);
+  assert(parsed.streak.todayMessages >= 1);
+});
+
 // ---------- Cleanup ----------
 rmSync(TEST_DIR, { recursive: true, force: true });
 

@@ -143,10 +143,12 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
 ```bash
 memex search "Postgres миграция"            # полнотекстовый поиск
 memex search "Q2 deck" --chat "Memex Bot"   # сузить до конкретного чата по title
+memex search "JWT" --as-of 2026-05-01       # v0.8.1: time-travel — только до даты
+memex when "Brian Chesky"                    # v0.8.1: «когда мы это обсуждали» — даты + чаты
 memex recent --limit 5                       # последние 5 сообщений из всех источников
 memex list --source web                      # все сохранённые URL'ы
 memex get web-1582ab51a7b7                   # полный контент одной conversation
-memex overview                               # snapshot корпуса
+memex overview                               # snapshot корпуса + v0.8.1: capture streak
 memex projects                               # уникальные project_paths
 memex help                                   # полное руководство (HELP.md)
 memex --help                                 # справка по командам

@@ -1530,10 +1530,12 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
         <h4 data-en="Try these commands" data-ru="Попробуй эти команды">Try these commands</h4>
 <pre><code>memex search "Postgres migration"
 memex search "Q2 deck" --chat "Memex Bot"
+memex search "JWT" --as-of 2026-05-01     # v0.8.1: time-travel
+memex when "Brian Chesky"                  # v0.8.1: "when did we talk about X"
 memex recent --limit 5
 memex list --source web
 memex get web-1582ab51a7b7
-memex overview
+memex overview                             # + capture streak (v0.8.1)
 memex --help
 memex --version
 

@@ -301,6 +301,10 @@ Memex по дефолту сортирует по **релевантности**
 memex search "Postgres миграция"                  # FTS5 поиск
 memex search "Q2 deck" --chat "Memex Bot"         # фильтр по title чата
 memex search "auth" --source claude-code --limit 5 --sort date_desc
+memex search "JWT" --as-of 2026-05-01             # time-travel (v0.8.1+) — только до даты
+
+memex when "Brian Chesky"                          # «когда мы об этом говорили»
+memex when "JWT decision" --limit 5                #  → chronological list of chats, без snippets
 
 memex recent --limit 5                             # последние сообщения
 memex recent --source telegram
@@ -310,7 +314,7 @@ memex list --source web                            # только сохранё
 
 memex get web-1582ab51a7b7                         # полный контент conversation
 
-memex overview                                     # snapshot корпуса
+memex overview                                     # snapshot корпуса (+ capture streak v0.8.1+)
 memex projects                                     # уникальные project_paths
 memex help                                         # эта инструкция в терминале
 memex --help                                       # справка по командам

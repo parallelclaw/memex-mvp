@@ -26,7 +26,7 @@
     "sync": "node ingest.js",
     "ingest": "node ingest.js",
     "bot": "node bot/index.js",
-    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js && node test/store-document.test.js && node test/cli.test.js",
+    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js && node test/store-document.test.js && node test/cli.test.js && node test/hook.test.js",
     "prepublishOnly": "npm test"
   },
   "engines": {

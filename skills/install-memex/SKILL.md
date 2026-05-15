@@ -122,16 +122,35 @@ If the config file doesn't exist, create the parent directory and write a minima
 
 **Verify:** re-read the file after save; confirm `memex` entry is present and `command` is an absolute path.
 
-### 3. Turn on live auto-capture
+### 3. Turn on live auto-capture + auto-context (v0.8+)
 
 ```sh
 memex-sync install
+```
+
+During `memex-sync install`, you'll see a prompt:
+
+```
+Auto-context (Brian Chesky mode):
+  When you open Claude Code in a project, memex can inject 500-1500 tokens
+  of relevant context so Claude knows what you were doing — without you
+  having to ask. Adds a SessionStart hook to ~/.claude/settings.json.
+  Other hooks (e.g. gstack) are preserved.
+
+  Enable? [Y/n]
+```
+
+**Answer Y unless the user has stated privacy concerns** about Claude seeing context from their other AI conversations. Auto-context is the "10/10 magic moment" of memex — without it the install ships at base capability. Other hooks (gstack, custom) are preserved untouched.
+
+For non-interactive flows (CI / scripts): pass `--auto-context yes` or `--yes`.
+
+```sh
 memex-sync status
 ```
 
 `status` should print "daemon installed", "running (PID …)", "watching N sessions".
 
-**Verify:** status output shows a non-zero PID.
+**Verify:** status output shows a non-zero PID. Also run `memex hook status` — should show `INSTALLED` if auto-context was accepted.
 
 ### 4. Backfill existing history
 
@@ -161,6 +180,7 @@ After restart, suggest they try any of:
 - "what projects has memex captured" → triggers `memex_list_projects`
 - "search memex for [recent topic]" → triggers `memex_search`
 - "save https://en.wikipedia.org/wiki/As_We_May_Think to memex" → triggers `memex_store_document` and teaches the user that URL-saving exists (v0.6+)
+- **Open Claude Code in any project the user worked on recently** — the SessionStart auto-context (v0.8+) should kick in and Claude will mention prior work _before_ the user types anything. This is the "Brian Chesky moment" — the magical-first-impression of memex.
 
 These confirm everything works end-to-end.
 

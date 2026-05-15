@@ -122,6 +122,28 @@ When called **without arguments** (`memex`), the binary still runs as an MCP std
 
 ---
 
+## Auto-context (v0.8+) — Claude already knows what you were doing
+
+After `memex-sync install`, you're prompted to enable **auto-context**. When yes, memex adds a SessionStart hook to `~/.claude/settings.json` so that **every time you open Claude Code in a project**, Claude gets injected with ~500-1500 tokens of relevant context — what you did recently in this project, which conversations touched it, which related topics came up. No prompts. No tool calls. Just memory.
+
+```sh
+# Adding/removing the hook outside the install flow:
+memex hook install        # add SessionStart hook (idempotent)
+memex hook uninstall      # remove only the memex entry, preserves other hooks
+memex hook status         # show current state
+
+# Inspecting what gets injected:
+memex context             # dry-run the hook output for the current dir
+memex context --pwd /path # for a different project
+memex context --no-source telegram  # exclude a source
+```
+
+The hook respects existing hooks (e.g. `gstack`, custom user hooks) — they're preserved untouched.
+
+**Currently only Claude Code has native SessionStart hooks.** For Cursor / Cline / Continue / Zed, MCP-tool-based fallback is on the v0.9.0 roadmap.
+
+---
+
 ## Save URLs into memex (v0.6+)
 
 Once memex is installed, any MCP-aware agent can also save **web pages, AI chat shares, and pasted text** into your memex memory — searchable from any other AI chat later. In Claude Code, Cursor, Cline, …:

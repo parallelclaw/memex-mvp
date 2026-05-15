@@ -1463,6 +1463,54 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
     </div>
 
     <div class="or-divider"
+         data-en="— and Claude already knows what you were doing —"
+         data-ru="— и Claude уже знает что ты делал —">
+      — and Claude already knows what you were doing —
+    </div>
+
+    <div class="manual-card">
+      <h3 data-en="Auto-context (v0.8+) — the magic moment"
+          data-ru="Auto-context (v0.8+) — magic moment">Auto-context (v0.8+) — the magic moment</h3>
+      <p class="manual-intro"
+         data-en="Open Claude Code in any project. Before you type anything, Claude already knows what you were working on. memex injects 500-1500 tokens of relevant context on every session start. No prompts, no searches, no tool calls — just memory."
+         data-ru="Открой Claude Code в любом проекте. До того как ты что-то напишешь — Claude уже знает что ты тут делал. memex автоматически инжектит 500-1500 токенов релевантного контекста при каждом старте сессии. Никаких вопросов, никаких tool-call'ов — просто память.">
+        Open Claude Code in any project. Before you type anything, Claude already knows what you were working on. memex injects 500-1500 tokens of relevant context on every session start. No prompts, no searches, no tool calls — just memory.
+      </p>
+
+      <div class="step">
+        <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+        <h4 data-en="How it gets installed" data-ru="Как ставится">How it gets installed</h4>
+<pre><code>memex-sync install
+# → prompt: "Auto-context (Brian Chesky mode): Enable? [Y/n]"
+# → answer Y</code></pre>
+        <p class="hint"
+           data-en="Bundled into the same command you already run for the auto-capture daemon. One [Y/n], not a separate step. Existing hooks (e.g. gstack) are preserved. Manage later with <code>memex hook install/uninstall/status</code>."
+           data-ru="Встроено в ту же команду которую ты и так запускаешь для auto-capture daemon. Один [Y/n], не отдельный шаг. Существующие хуки (e.g. gstack) сохраняются. Управлять потом: <code>memex hook install/uninstall/status</code>.">
+          Bundled into the same command you already run for the auto-capture daemon. One [Y/n], not a separate step. Existing hooks (e.g. gstack) are preserved. Manage later with <code>memex hook install/uninstall/status</code>.
+        </p>
+      </div>
+
+      <div class="step">
+        <span class="step-where" data-en="💬 In Claude Code" data-ru="💬 В Claude Code">💬 In Claude Code</span>
+        <h4 data-en="What you experience" data-ru="Что ты видишь">What you experience</h4>
+        <p data-en="Open Claude Code in a project where you worked last week. Without typing anything, ask:"
+           data-ru="Открываешь Claude Code в проекте над которым работал на прошлой неделе. Не вводя ничего, спрашиваешь:">
+          Open Claude Code in a project where you worked last week. Without typing anything, ask:
+        </p>
+<pre><code>"continue where I left off"</code></pre>
+        <p data-en="Claude responds with: <em>'Last week you fixed the JWT race condition, then started on the refresh-token rotation. Tester Bob hit a session-expiry edge case you didn't resolve. Want me to pick up there?'</em> — without any tool calls. That's the Brian Chesky moment."
+           data-ru="Claude отвечает: <em>«На прошлой неделе ты починил JWT race condition, потом начал refresh-token rotation. Tester Bob упёрся в session-expiry edge case — не разобрался. Продолжаем оттуда?»</em> — без единого tool-call'a. Это Brian Chesky moment.">
+          Claude responds with: <em>"Last week you fixed the JWT race condition, then started on the refresh-token rotation. Tester Bob hit a session-expiry edge case you didn't resolve. Want me to pick up there?"</em> — without any tool calls. That's the Brian Chesky moment.
+        </p>
+        <p class="hint"
+           data-en="Currently works in <strong>Claude Code</strong> and <strong>OpenClaw</strong> (they have native SessionStart hooks). For Cursor, Cline, Continue, Zed — MCP-tool fallback ships in v0.9.0."
+           data-ru="Сейчас работает в <strong>Claude Code</strong> и <strong>OpenClaw</strong> (у них есть native SessionStart хуки). Для Cursor, Cline, Continue, Zed — fallback через MCP-tool в v0.9.0.">
+          Currently works in <strong>Claude Code</strong> and <strong>OpenClaw</strong> (they have native SessionStart hooks). For Cursor, Cline, Continue, Zed — MCP-tool fallback ships in v0.9.0.
+        </p>
+      </div>
+    </div>
+
+    <div class="or-divider"
          data-en="— or query directly from the terminal —"
          data-ru="— или из терминала напрямую —">
       — or query directly from the terminal —

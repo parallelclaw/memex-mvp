@@ -61,6 +61,8 @@ import {
   vaultSlug,
   shouldSkipPath,
 } from './lib/parse-obsidian.js';
+import { installHook as installSessionStartHook } from './lib/hook/install.js';
+import { createInterface } from 'node:readline';
 import {
   CONFIG_PATH,
   KNOWN_SOURCES,
@@ -137,7 +139,12 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     console.error(`usage: memex-sync [install|uninstall|status|logs|serve]`);
     process.exit(2);
   }
-  handler();
+  // Handlers may be sync (most) or async (cmdInstall after v0.8 — needs readline
+  // for the auto-context prompt). Promise.resolve() normalises both.
+  Promise.resolve(handler()).catch((e) => {
+    console.error(`error in ${subcommand}: ${e.stack || e.message}`);
+    process.exit(1);
+  });
   // CLI handlers either exit themselves or fall through to daemon mode (cmdServe)
 } else if (subcommand === '--help' || subcommand === '-h') {
   console.log(`memex-sync — auto-capture daemon for memex memory
@@ -185,7 +192,7 @@ paths:
 
 // -------------------- CLI command handlers --------------------
 
-function cmdInstall() {
+async function cmdInstall() {
   if (platform() !== 'darwin') {
     console.error('install: macOS-only for now (LaunchAgent). Linux systemd-user support pending.');
     console.error('on Linux you can run: nohup memex-sync &');
@@ -243,6 +250,18 @@ function cmdInstall() {
   console.log(`  log:   ${LOG_PATH}`);
   console.log('');
 
+  // ── Auto-context prompt (v0.8+) ─────────────────────────────────────
+  // Bundle Claude Code SessionStart hook install into the same flow
+  // the user is already running. Single [Y/n] beats a separate command
+  // they'd never remember.
+  //
+  // Honor non-interactive flags / env for CI:
+  //   --auto-context yes    explicit opt-in
+  //   --auto-context no     explicit opt-out
+  //   --yes / -y            accept all defaults (yes)
+  //   $MEMEX_AUTO_CONTEXT=yes|no   env override
+  await maybeInstallAutoContextHook();
+
   // Show what daemon will actually capture, based on current config.
   const cfg = loadConfig();
   console.log('memex-sync will capture from these sources:');
@@ -275,6 +294,97 @@ function cmdInstall() {
   console.log(`config: ${CONFIG_PATH} (auto-created on first edit)`);
   console.log(`status: npx memex-sync status`);
   process.exit(0);
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Auto-context hook prompt — bundled into `memex-sync install` so the
+// user doesn't need to remember an extra `memex hook install` step.
+//
+// Decision priority:
+//   1. CLI flag --auto-context=yes|no  (explicit)
+//   2. CLI flag --yes / -y             (accept all defaults: yes)
+//   3. env MEMEX_AUTO_CONTEXT=yes|no    (for CI / scripts)
+//   4. Interactive [Y/n] prompt        (TTY only)
+//   5. Default: SKIP if no TTY (don't hang on stdin in non-TTY contexts)
+async function maybeInstallAutoContextHook() {
+  const argv = process.argv.slice(3); // drop ["node", "ingest.js", "install"]
+
+  // Parse flags
+  let explicit = null; // 'yes' | 'no' | null
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--auto-context') {
+      const v = (argv[++i] || '').toLowerCase();
+      if (v === 'yes' || v === 'y' || v === 'true') explicit = 'yes';
+      else if (v === 'no' || v === 'n' || v === 'false') explicit = 'no';
+    } else if (a === '--auto-context=yes') explicit = 'yes';
+    else if (a === '--auto-context=no') explicit = 'no';
+    else if (a === '--yes' || a === '-y') explicit = 'yes';
+  }
+
+  // Env fallback
+  if (explicit === null) {
+    const env = (process.env.MEMEX_AUTO_CONTEXT || '').toLowerCase();
+    if (env === 'yes' || env === 'y' || env === 'true' || env === '1') explicit = 'yes';
+    else if (env === 'no' || env === 'n' || env === 'false' || env === '0') explicit = 'no';
+  }
+
+  // Interactive prompt as last resort
+  if (explicit === null) {
+    if (!process.stdin.isTTY) {
+      // Non-interactive (CI, scripts, install-skill flows that don't pipe stdin):
+      // skip silently. User can run `memex hook install` later.
+      console.log('Auto-context hook: skipped (non-interactive). Enable with: memex hook install');
+      console.log('');
+      return;
+    }
+    explicit = await promptYesNo(
+      `Auto-context (Brian Chesky mode):\n` +
+      `  When you open Claude Code in a project, memex can inject 500-1500 tokens\n` +
+      `  of relevant context so Claude knows what you were doing — without you\n` +
+      `  having to ask. Adds a SessionStart hook to ~/.claude/settings.json.\n` +
+      `  Other hooks (e.g. gstack) are preserved.\n\n` +
+      `  Enable?`,
+      'yes' // default Y
+    );
+  }
+
+  if (explicit !== 'yes') {
+    console.log('Auto-context hook: skipped. Enable later with: memex hook install');
+    console.log('');
+    return;
+  }
+
+  const r = installSessionStartHook();
+  if (r.error) {
+    console.log(`Auto-context hook: ✗ ${r.error}`);
+    console.log('  (memex-sync daemon still works — only the auto-context hook failed)');
+    console.log('');
+    return;
+  }
+  if (r.alreadyPresent) {
+    console.log('Auto-context hook: already installed (no-op).');
+  } else {
+    console.log('Auto-context hook: ✓ installed.');
+    console.log(`  settings: ${r.settingsPath}`);
+    console.log(`  command:  ${r.command}`);
+    console.log('  Restart Claude Code (Cmd+Q + reopen) to activate.');
+  }
+  console.log('');
+}
+
+function promptYesNo(question, defaultAnswer) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const suffix = defaultAnswer === 'yes' ? ' [Y/n] ' : ' [y/N] ';
+    rl.question(question + suffix, (answer) => {
+      rl.close();
+      const v = (answer || '').trim().toLowerCase();
+      if (v === 'y' || v === 'yes') resolve('yes');
+      else if (v === 'n' || v === 'no') resolve('no');
+      else resolve(defaultAnswer); // empty enter → default
+    });
+  });
 }
 
 function cmdUninstall() {

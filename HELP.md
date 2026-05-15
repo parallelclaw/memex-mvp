@@ -338,6 +338,35 @@ memex get web-1582ab51a7b7 --json > backup.json
 
 ---
 
+## 🪄 Auto-context (v0.8+) — Brian Chesky moment
+
+Magic-фича. Когда ты открываешь Claude Code в проекте, Claude **сам** инжектит 500-1500 токенов контекста про этот проект — что ты делал недавно, какие conversations касались темы. Ты ещё ничего не спросил, а AI **уже знает**.
+
+**Технически:** SessionStart hook в `~/.claude/settings.json`. При старте каждой Claude Code сессии хук вызывает `memex context` → memex выдаёт markdown summary → Claude получает его как system message _до_ твоего первого вопроса.
+
+**Установка:** во время `memex-sync install` будет промпт `[Y/n]` — соглашайся (Y по default'у). Или установи позже:
+
+```bash
+memex hook install         # добавить хук
+memex hook uninstall       # удалить (только memex-запись, другие хуки сохраняются)
+memex hook status          # узнать текущее состояние
+```
+
+**Посмотреть что будет инжектиться** (dry-run в текущей директории):
+
+```bash
+memex context              # markdown как для хука
+memex context --json       # структурированный
+memex context --no-source telegram   # исключить telegram (privacy)
+memex context --freshness-days 30    # только последние 30 дней
+```
+
+**Privacy:** хук ничего не отправляет наружу — это локальная инъекция в локальную Claude-сессию. Но в context могут попасть фрагменты из любых indexed sources (включая Telegram). Чтобы исключить — добавь `--no-source telegram` в команду хука (правится в `~/.claude/settings.json`).
+
+**Где это пока не работает:** Cursor, Cline, Continue, Zed — у них нет native SessionStart hook'а. Fallback через MCP-tool — в roadmap v0.9.0. Сейчас auto-context работает только в **Claude Code и OpenClaw**.
+
+---
+
 ## Если что-то не работает
 
 ### Поиск пустой

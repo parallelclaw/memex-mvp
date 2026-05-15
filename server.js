@@ -49,6 +49,10 @@ import {
 } from './lib/store-doc/canonicalize.js';
 import { detectIssues, isBlocked } from './lib/store-doc/detect.js';
 import { extractTitle } from './lib/store-doc/extract-title.js';
+import {
+  detectTelegramHtml,
+  parseTelegramHtmlExport,
+} from './lib/parse-telegram-html.js';
 import { createHash } from 'node:crypto';
 import { runCli, CLI_SUBCOMMAND_NAMES } from './lib/cli/index.js';
 
@@ -325,9 +329,17 @@ const insertImport = db.prepare(`
 
 // -------------------- Importers --------------------
 
-/** Telegram Desktop JSON export (single chat or all_chats). */
-function importTelegram(filePath) {
-  const raw = JSON.parse(readFileSync(filePath, 'utf-8'));
+/**
+ * Telegram Desktop export importer. Accepts:
+ *   - filePath (string) — path to result.json
+ *   - rawObject (object) — already-parsed export, e.g. from parseTelegramHtmlExport
+ *
+ * Returns total imported message count.
+ */
+function importTelegram(filePathOrRaw) {
+  const raw = typeof filePathOrRaw === 'string'
+    ? JSON.parse(readFileSync(filePathOrRaw, 'utf-8'))
+    : filePathOrRaw;
 
   // Telegram Desktop produces either a single chat object or { chats: { list: [...] } }
   const chats = Array.isArray(raw.chats?.list)
@@ -670,9 +682,83 @@ function resolvePendingParents() {
 }
 
 /** Auto-detect format and import */
+/**
+ * Try to import a path as a Telegram HTML export (directory or single file).
+ * Returns imported message count, or 0 if not an HTML export.
+ *
+ * Side effects on success:
+ *   - Inserts an `imports` row tagged "telegram-html"
+ *   - Moves the source directory/file to ~/.memex/data/conversations/telegram-html/
+ *
+ * If it LOOKS like a Telegram HTML export but parsing failed, prints an
+ * actionable error pointing the user at the Desktop export menu — instead
+ * of silently ignoring. This was Tester 5's friction point.
+ */
+function importTelegramHtmlIfMatches(path) {
+  const detection = detectTelegramHtml(path);
+  if (!detection.type) return 0;
+
+  let parsed;
+  try {
+    parsed = parseTelegramHtmlExport(path);
+  } catch (err) {
+    log('telegram-html parse error:', basename(path), err.message);
+    parsed = null;
+  }
+
+  if (!parsed || parsed.chats.list[0].messages.length === 0) {
+    // Looked like Telegram HTML (had markers) but extraction yielded nothing.
+    // Print actionable error rather than silent ignore.
+    log('');
+    log('⚠ Detected Telegram HTML export at ' + basename(path) + ' but extracted 0 messages.');
+    log('  This usually means Telegram changed the HTML format, or the export is partial.');
+    log('  EASIEST FIX — re-export as JSON:');
+    log('    1. Open Telegram Desktop');
+    log('    2. Click the chat → ⋮ menu → "Export chat history"');
+    log('    3. Format: change "HTML" to "Machine-readable JSON"');
+    log('    4. Drop the new result.json into ~/.memex/inbox/');
+    log('');
+    log('  HTML export will be left in place — feel free to delete it once JSON works.');
+    return 0;
+  }
+
+  let imported = 0;
+  try {
+    imported = importTelegram(parsed);
+  } catch (err) {
+    log('telegram-html import error:', err.message);
+    return 0;
+  }
+
+  if (imported > 0) {
+    insertImport.run(
+      basename(path),
+      'telegram-html',
+      Math.floor(Date.now() / 1000),
+      imported
+    );
+    // Archive: move the whole directory (or file) so the watcher doesn't re-process
+    const targetDir = join(ARCHIVE, 'telegram-html');
+    mkdirSync(targetDir, { recursive: true });
+    const target = join(targetDir, basename(path));
+    try {
+      renameSync(path, target);
+    } catch (_) {}
+    log(`imported ${imported} messages from ${basename(path)} (telegram-html, ${detection.htmlFiles.length} chunk(s))`);
+  }
+  return imported;
+}
+
 function importFile(filePath) {
   if (!existsSync(filePath)) return 0;
   const stats = statSync(filePath);
+
+  // Telegram HTML export — can be either a directory (ChatExport_xxx/)
+  // or a bare messages.html file. We accept both. Detected via marker
+  // patterns inside the HTML, not file extension alone.
+  if (stats.isDirectory()) {
+    return importTelegramHtmlIfMatches(filePath);
+  }
   if (!stats.isFile()) return 0;
 
   const lower = filePath.toLowerCase();
@@ -692,6 +778,10 @@ function importFile(filePath) {
         imported = importTelegram(filePath);
         source = 'telegram';
       }
+    } else if (/\.html?$/i.test(lower)) {
+      // Single-file HTML drop (rare — usually a directory)
+      imported = importTelegramHtmlIfMatches(filePath);
+      if (imported > 0) source = 'telegram';
     } else if (lower.endsWith('.jsonl')) {
       // Filename prefix tells us which product the session came from.
       // cowork-   → Claude Cowork (incl. its subagents)
@@ -739,15 +829,30 @@ function importFile(filePath) {
 // dropping a partial file by hand — the watcher must not race the writer and
 // move the unfinished tmp into archive, which used to spam ENOENT into the
 // daemon's rename and corrupt the import accounting.
+// Watch INBOX top-level. Files: chokidar 'add' event. Directories:
+// chokidar 'addDir' event (v0.9+ inbox can also receive Telegram HTML
+// export DIRECTORIES like ChatExport_xxx/, not just JSON/JSONL files).
+//
+// `depth: 0` means we only get top-level entries — we DON'T want every
+// .html chunk inside ChatExport_xxx to fire 'add' separately. The
+// directory drop itself is what we react to; the HTML parser walks
+// inside.
 chokidar
   .watch(INBOX, {
     ignoreInitial: false,
     ignored: /\.tmp$/,
     awaitWriteFinish: { stabilityThreshold: 800 },
+    depth: 0,
   })
   .on('add', (filePath) => {
-    log('inbox detected:', basename(filePath));
+    log('inbox detected (file):', basename(filePath));
     importFile(filePath);
+  })
+  .on('addDir', (dirPath) => {
+    // Skip the inbox itself
+    if (dirPath === INBOX) return;
+    log('inbox detected (dir):', basename(dirPath));
+    importFile(dirPath);
   });
 
 // -------------------- MCP Server --------------------

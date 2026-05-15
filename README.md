@@ -172,7 +172,7 @@ Perplexity threads need to be made **Public** in the Share dialog first — meme
 | Cursor IDE chats      | Auto: reads Cursor's local SQLite session store                |
 | Continue / Zed        | Auto: filesystem watchers per platform                         |
 | Obsidian notes        | Auto: per-vault markdown watcher                               |
-| Telegram exports      | Manual: drop `result.json` (Telegram Desktop) into `~/.memex/inbox/` |
+| Telegram exports      | Manual: drop `result.json` (Telegram Desktop → Export → JSON) into `~/.memex/inbox/`. v0.9+: also accepts the **HTML** export directory (`ChatExport_*/`) — drop the whole folder, memex parses it. |
 | Telegram (live)       | Run [`memex-bot`](bot/README.md) — captures messages you send/forward to your private bot |
 | **Web pages, AI chat shares, pasted text** | From any MCP agent: *"save https://... to memex"*. Agent fetches; memex stores verbatim. Cloudflare-protected pages (Perplexity, npm.com, Twitter, Medium, …) handled via the agent's r.jina.ai fallback. See [HELP.md §8](HELP.md) |
 

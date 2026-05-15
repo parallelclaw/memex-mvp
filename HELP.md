@@ -390,9 +390,24 @@ npx memex-sync scan
 
 ### Telegram-чаты не появляются
 
-1. В Telegram **Desktop** (не mobile!): чат → меню → **Export chat history** → **Format: JSON**
-2. Кинь `result.json` в `~/.memex/inbox/`
-3. Memex подхватит автоматически за ~1.5 сек
+В Telegram **Desktop** (не mobile!): чат → меню (⋮ или ☰) → **Export chat history**.
+
+**memex поддерживает оба формата экспорта (v0.9+):**
+
+- **«Machine-readable JSON»** ← рекомендуется. Один файл `result.json`, чисто ингестится.
+- **«HTML»** ← тоже работает (с v0.9+). Получишь директорию `ChatExport_<chat>_<date>/` — кинь её **целиком** в inbox, memex авто-парсит.
+
+Шаги:
+1. Выбери формат (JSON — короче путь, HTML — если уже экспортировано).
+2. Сохрани в **`~/.memex/inbox/`** — для JSON это `result.json`, для HTML — вся директория `ChatExport_…`.
+3. Memex подхватит автоматически за ~1.5 секунды. Файл/директория уедет в `~/.memex/data/conversations/telegram/` (или `…/telegram-html/`) после ingest'a.
+
+Если ингест не произошёл — проверь `~/.memex/data/memex.log`. Для HTML-export'а парсер пишет actionable error если что-то не так (формат изменился у Telegram, директория повреждена, и т.д.).
+
+**Что НЕ работает:**
+- ❌ Мобильный экспорт (Telegram mobile не экспортирует структурированно)
+- ❌ Скриншоты чатов
+- ❌ Только-медиа чаты (без текста парсятся как `[photo]`/`[voice]` placeholders, но без content)
 
 ### Хочу подключить новый Obsidian-vault
 

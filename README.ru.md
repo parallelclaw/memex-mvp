@@ -241,8 +241,7 @@ which node  # → путь до бинарника node (например /Users
 | **Claude Cowork** | `cowork-*.jsonl` (через filename prefix), включая subagents | ✅ работает |
 | **Cursor IDE** (Composer + Chat) | SQLite `state.vscdb` в `~/Library/Application Support/Cursor/` | ✅ работает (poll каждые 5 мин) |
 | **Obsidian** vault notes | `.md` файлы + YAML frontmatter | ✅ работает (FSEvents, hash-based dedupe) |
-| **Telegram (JSON export)** | `result.json` из Desktop export | ✅ работает |
-| **Telegram (HTML export)** | директория `ChatExport_*` из Desktop (v0.9+) | ✅ работает — кидай всю папку в inbox |
+| **Telegram (JSON / HTML export)** | `result.json` или `ChatExport_*/` из Telegram Desktop | ✅ работает — **v0.10+: авто-детект.** Daemon следит за `~/Downloads/Telegram Desktop/`, экспорты сами попадают в pending, юзер per-chat подтверждает |
 | **Telegram (live)** | бот `memex-bot` ловит твои сообщения / форварды | ✅ работает |
 | **Web-страницы, AI-share'ы, paste'ы** | `memex_store_document` — агент fetch'ит, memex хранит verbatim (v0.6+) | ✅ работает |
 | Claude.ai web export | будет в v0.7 | — |

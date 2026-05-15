@@ -1279,6 +1279,45 @@ If the user wants the markdown text without writing a file (e.g. for
 copying into another app), call memex_export_markdown WITHOUT
 output_path — you'll get the rendered markdown inline and can show it.
 
+══ TELEGRAM CAPTURE (v0.10+ — proactive flow) ══
+
+memex can also index the user's Telegram chats. The daemon watches
+~/Downloads/Telegram Desktop/ for new exports, stages them in
+~/.memex/pending/, and waits for the user's per-chat consent.
+
+YOU (the agent) should lead this proactively in two situations:
+
+  (A) memex_overview shows "🆕 Telegram exports awaiting review" OR
+      the user has zero Telegram conversations indexed — offer it:
+        "I noticed memex can also remember your Telegram chats.
+         Want me to set it up? It's about 2 minutes."
+
+  (B) The user asks anything Telegram-adjacent ("my Telegram", "что я
+      писал жене", "find that link from the work chat") — but search
+      returns nothing from source='telegram'. Same offer.
+
+Flow:
+  1. memex_telegram_check — see if Desktop is installed, login age,
+     watcher status, pending count, suggested next_step.
+  2. Walk the user through whatever next_step says:
+     - no Desktop → give the download URL from the check result
+     - <24h since login → tell user exactly how many hours to wait
+     - ready → show export click-path: chat → ⋮ → Export → HTML/JSON
+  3. memex_telegram_pending — list staged exports with chat names +
+     msg counts + date ranges. PRESENT THIS AS A NUMBERED LIST.
+  4. Ask user which to import. Accept indices ("1 3 5") or titles
+     ("family, work") or natural language ("import all except bank").
+  5. memex_telegram_import { indices: [...] } or { titles: [...] }.
+     The chat goes into the allow-list automatically — future
+     re-exports of the same chat will auto-merge.
+  6. For sensitive chats user doesn't want: memex_telegram_skip.
+
+PRIVACY IS THE CORE PROMISE. Never auto-import without explicit
+consent. If the list has obvious sensitive chats (Bank, Therapist,
+Tinder, etc.), call them out and ask before including. Don't be
+patronising — most users WILL want their family + work chats; just
+make the choice explicit, not implicit.
+
 ══ COWORK SUBAGENTS ══
 
 Cowork main sessions can spawn subagent helpers (delegated via tool
@@ -1724,6 +1763,112 @@ const TOOLS = [
         },
       },
       required: ['content'],
+    },
+  },
+  // ---------------------------------------------------------------------
+  // Telegram capture flow (v0.10+) — proactive agent-driven import path.
+  //
+  // The whole point is that the AGENT, not the user, drives setup. When
+  // the user mentions Telegram OR memex_overview shows pending exports,
+  // call memex_telegram_check first to see where we are, then walk them
+  // through: install Desktop → wait 24h → export → pick chats → import.
+  // ---------------------------------------------------------------------
+  {
+    name: 'memex_telegram_check',
+    description:
+      'Show the state of memex\'s Telegram-capture pipeline: is Telegram Desktop installed, ' +
+      'when did the user log in (the 24h export-block window), how many exports are sitting ' +
+      'in pending review, what mode the watcher is in. ALWAYS call this first when the user ' +
+      'asks about Telegram, or when memex_overview shows pending Telegram exports. The output ' +
+      'tells you what the next conversational step should be:\n\n' +
+      '  • desktop.installed=false → user has no Telegram Desktop. Give them the right download link\n' +
+      '    (telegram.org/dl/macos for darwin, telegram.org/dl/desktop for linux). Mac App Store version\n' +
+      '    works but is sandboxed — direct download is more reliable.\n' +
+      '  • login.export_allowed=false → user just logged in. Telegram blocks export for 24h.\n' +
+      '    Tell them WHEN they can export (compute from first_login_at).\n' +
+      '  • pending_count>0 → call memex_telegram_pending and present the chats for selection.\n' +
+      '  • everything green → walk through the export click-path: open chat → ⋮ → Export chat history → HTML or JSON.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'memex_telegram_pending',
+    description:
+      'List Telegram exports the daemon has detected in ~/Downloads/Telegram Desktop/ and staged ' +
+      'in ~/.memex/pending/ awaiting the user\'s decision. Each entry carries: index (1-based), ' +
+      'chat_title, chat_type ("personal_chat" / "private_group"), message_count, date range, ' +
+      'senders_sample (up to 6 distinct names), size_bytes.\n\n' +
+      'PRESENT THESE TO THE USER as a clean numbered list with chat name, msg count, date range, ' +
+      'and (if useful) sender preview. Then ask which to import. The user might say:\n' +
+      '  • "import 1 3 5" → call memex_telegram_import with indices [1,3,5]\n' +
+      '  • "import all except bank" → call memex_telegram_import with all indices minus the bank entry\n' +
+      '  • "import family, work, mom" → resolve titles to indices, call memex_telegram_import\n' +
+      '  • "skip therapist, bank" → call memex_telegram_skip with those entries\n\n' +
+      'NEVER auto-import without explicit user consent. Privacy is the core promise of memex.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'memex_telegram_import',
+    description:
+      'Import selected Telegram exports from pending/ into memex.db. Specify entries by INDEX ' +
+      '(from memex_telegram_pending) OR by chat title (substring match). Each imported chat is ' +
+      'auto-added to the user\'s allow-list — future re-exports of the same chat will auto-merge ' +
+      '(only new messages are added; dedup via UNIQUE(msg_id)).\n\n' +
+      'Returns: { imported: [{ title, totalImported, chats: [...] }, ...] }. Show the user the ' +
+      'titles + counts. After import, suggest a smoke-test: `memex search "<keyword from chat>"`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        indices: {
+          type: 'array',
+          items: { type: 'integer' },
+          description: 'Indices from memex_telegram_pending output (1-based).',
+        },
+        titles: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Chat titles (substring, case-insensitive) — alternative to indices.',
+        },
+        all: {
+          type: 'boolean',
+          default: false,
+          description: 'Import everything in pending/. Use with care; confirm with user first if list is long.',
+        },
+      },
+    },
+  },
+  {
+    name: 'memex_telegram_skip',
+    description:
+      'Mark pending Telegram exports as "skip permanently" — removes them from pending/ AND adds ' +
+      'the chat title to the skip-list. Future re-exports of the same chat will be auto-skipped, ' +
+      'NOT staged in pending/. Use when the user says "don\'t index my therapist / bank / etc."\n\n' +
+      'To undo: memex_telegram_unskip (not yet exposed; use CLI `memex telegram unskip <title>`).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        indices: { type: 'array', items: { type: 'integer' } },
+        titles: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
+  {
+    name: 'memex_telegram_mode',
+    description:
+      'Get or set the Telegram capture mode. Three modes:\n' +
+      '  • "pick"   (default) — daemon stages exports to pending/; user reviews each\n' +
+      '  • "auto"   — allow-listed chats auto-import on re-export; new chats still go to pending/\n' +
+      '  • "manual" — watcher OFF; user manually drops files into ~/.memex/inbox/\n\n' +
+      'Call without "mode" arg to read the current setting. Recommend "auto" only AFTER the user has ' +
+      'done their initial pick (i.e. they\'ve already curated their allow-list).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['pick', 'auto', 'manual'],
+          description: 'Omit to read current mode; pass to change.',
+        },
+      },
     },
   },
 ];
@@ -2337,6 +2482,21 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
       if (format === 'json') {
         const sync = getSyncStatus();
+        let telegramHint = null;
+        try {
+          const tgPending = await import('./lib/telegram-pending.js');
+          const tgList = tgPending.listPending();
+          const tgIndexed = db.prepare(`SELECT COUNT(*) AS c FROM conversations WHERE source = 'telegram'`).get().c;
+          telegramHint = {
+            pending_count: tgList.length,
+            indexed_chats: tgIndexed,
+            suggest: tgList.length > 0
+              ? 'Call memex_telegram_pending to review staged exports.'
+              : tgIndexed === 0
+                ? 'Offer to set up Telegram capture — call memex_telegram_check.'
+                : null,
+          };
+        } catch (_) { /* ignore */ }
         return jsonResult({
           sync_status: {
             daemon_installed: sync.installed || sync.legacyInstalled,
@@ -2344,6 +2504,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             last_capture_human: formatFreshness(sync.freshnessMs),
             advice: sync.advice,
           },
+          telegram_hint: telegramHint,
           total_messages: total,
           active_conversations: activeConv,
           archived_conversations: archivedConv,
@@ -2414,6 +2575,36 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const t = r.title || r.conversation_id;
         lines.push(`- ${date} · **${r.source}** · ${t} (${r.message_count} msgs)`);
       }
+      // ───── Telegram-capture proactive hint (v0.10+) ─────
+      // If the daemon has staged Telegram exports awaiting decision, surface
+      // a banner so the agent leads with it. Don't break if the lib fails.
+      try {
+        const tgPending = await import('./lib/telegram-pending.js');
+        const tgPendingList = tgPending.listPending();
+        if (tgPendingList.length > 0) {
+          lines.push('', '### 🆕 Telegram exports awaiting review');
+          lines.push(
+            `${tgPendingList.length} export(s) found in ~/Downloads/Telegram Desktop/ and staged.`,
+            `Tell the user: "I found N Telegram exports — want me to review and import them?"`,
+            `Then call \`memex_telegram_pending\` to see the list, and \`memex_telegram_import\` for the ones the user picks.`
+          );
+        } else {
+          // If they have ZERO telegram conversations indexed AT ALL, gently mention
+          // the capability so the agent can offer it. Once even one TG chat is
+          // in the DB, suppress this hint (the user clearly knows about it).
+          const tgIndexedCount = db.prepare(`SELECT COUNT(*) AS c FROM conversations WHERE source = 'telegram'`).get().c;
+          if (tgIndexedCount === 0) {
+            lines.push('', '### 💡 Tip: index your Telegram chats too');
+            lines.push(
+              'memex can also remember your Telegram conversations.',
+              'If the user has any chats worth indexing, you can offer:',
+              '> "Want me to also set up Telegram-export capture? I\'ll guide you through it — about 2 minutes."',
+              'On yes: call `memex_telegram_check` to see the user\'s setup and walk them through.'
+            );
+          }
+        }
+      } catch (_) { /* never fail overview because of TG */ }
+
       lines.push(
         '',
         '_Use memex_search next to query specific topics, or memex_get_conversation with one of the conversation_ids above._'
@@ -2852,6 +3043,187 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         refreshed: !!(existing && refresh),
         warnings,
       });
+    }
+
+    // ============================================================
+    //  TELEGRAM CAPTURE FLOW (v0.10+)
+    // ============================================================
+    if (name === 'memex_telegram_check') {
+      const discovery = await import('./lib/telegram-discovery.js');
+      const decisions = await import('./lib/telegram-decisions.js');
+      const pending = await import('./lib/telegram-pending.js');
+      const desktop = discovery.detectTelegramDesktop();
+      const login = discovery.detectFirstLogin();
+      const dlPaths = discovery.defaultDownloadsPaths();
+      const found = discovery.discoverExports(dlPaths);
+      const state = decisions.loadDecisions();
+      const pendingCount = pending.listPending().length;
+
+      // Pick the right download link based on platform
+      const downloadUrl =
+        desktop.platform === 'darwin' ? 'https://telegram.org/dl/macos'
+        : desktop.platform === 'linux' ? 'https://telegram.org/dl/desktop'
+        : desktop.platform === 'win32' ? 'https://telegram.org/dl/win64'
+        : 'https://telegram.org/dl';
+
+      // Suggested next step (human-readable hint for the agent)
+      let next_step = null;
+      if (!desktop.installed) {
+        next_step = `Install Telegram Desktop from ${downloadUrl}, then log in.`;
+      } else if (!login.logged_in) {
+        next_step = 'Open Telegram Desktop and log in with your phone number.';
+      } else if (!login.export_allowed) {
+        const wait = 24 - (login.hours_since_login || 0);
+        next_step = `Telegram blocks export for the first 24h after login. Wait ~${wait}h, then export.`;
+      } else if (pendingCount > 0) {
+        next_step = `${pendingCount} export(s) ready for review — call memex_telegram_pending.`;
+      } else {
+        next_step = 'Ready to export. Open any chat in Telegram → ⋮ menu → "Export chat history" → pick HTML or JSON → Export. memex will detect it automatically.';
+      }
+
+      return jsonResult({
+        desktop,
+        login,
+        download_url: downloadUrl,
+        watcher: {
+          watching_paths: dlPaths,
+          exports_in_downloads: found.length,
+        },
+        pending_count: pendingCount,
+        decisions: {
+          mode: state.mode,
+          allowed_count: state.allowed_chats.length,
+          skipped_count: state.skipped_chats.length,
+          blocked_count: state.blocked_patterns.length,
+        },
+        next_step,
+      });
+    }
+
+    if (name === 'memex_telegram_pending') {
+      const pending = await import('./lib/telegram-pending.js');
+      const list = pending.listPending();
+      return jsonResult({
+        count: list.length,
+        entries: list.map((e) => ({
+          index: e.index,
+          chat_title: e.chat_title,
+          chat_type: e.chat_type,
+          message_count: e.message_count,
+          date_first: e.date_first,
+          date_last: e.date_last,
+          senders_sample: e.senders_sample,
+          size_bytes: e.size_bytes,
+          kind: e.kind,
+        })),
+      });
+    }
+
+    if (name === 'memex_telegram_import') {
+      const pending = await import('./lib/telegram-pending.js');
+      const decisions = await import('./lib/telegram-decisions.js');
+      const { importTelegramRaw } = await import('./lib/import-telegram.js');
+      const { parseTelegramHtmlExport } = await import('./lib/parse-telegram-html.js');
+
+      const list = pending.listPending();
+      const wantAll = args.all === true;
+      const wantIndices = Array.isArray(args.indices) ? args.indices : [];
+      const wantTitles = Array.isArray(args.titles) ? args.titles : [];
+
+      let targets = [];
+      if (wantAll) {
+        targets = list.slice();
+      } else {
+        const seen = new Set();
+        for (const idx of wantIndices) {
+          const m = list.find((e) => e.index === idx);
+          if (m && !seen.has(m.path)) { targets.push(m); seen.add(m.path); }
+        }
+        for (const t of wantTitles) {
+          const needle = String(t).toLowerCase();
+          for (const e of list) {
+            if (e.chat_title && e.chat_title.toLowerCase().includes(needle) && !seen.has(e.path)) {
+              targets.push(e); seen.add(e.path);
+            }
+          }
+        }
+      }
+
+      if (targets.length === 0) {
+        return jsonResult({ imported: [], error: 'No matching pending entries. Call memex_telegram_pending first.' });
+      }
+
+      const state = decisions.loadDecisions();
+      const results = [];
+      for (const t of targets) {
+        try {
+          let raw;
+          if (t.kind === 'html-dir') {
+            raw = parseTelegramHtmlExport(t.path);
+          } else {
+            raw = JSON.parse(readFileSync(t.path, 'utf-8'));
+          }
+          if (!raw) { results.push({ title: t.chat_title, path: t.path, error: 'parse-failed' }); continue; }
+          const r = importTelegramRaw(db, raw);
+          const title = raw.chats?.list?.[0]?.name || t.chat_title || 'Telegram chat';
+          decisions.allowChat(state, title);
+          pending.removePending(t.path);
+          results.push({ title, totalImported: r.totalImported, chats: r.chats });
+        } catch (e) {
+          results.push({ title: t.chat_title, path: t.path, error: e.message });
+        }
+      }
+      decisions.saveDecisions(state);
+      return jsonResult({ imported: results });
+    }
+
+    if (name === 'memex_telegram_skip') {
+      const pending = await import('./lib/telegram-pending.js');
+      const decisions = await import('./lib/telegram-decisions.js');
+      const list = pending.listPending();
+      const wantIndices = Array.isArray(args.indices) ? args.indices : [];
+      const wantTitles = Array.isArray(args.titles) ? args.titles : [];
+
+      const state = decisions.loadDecisions();
+      const skipped = [];
+      const seen = new Set();
+
+      for (const idx of wantIndices) {
+        const m = list.find((e) => e.index === idx);
+        if (m && !seen.has(m.path)) {
+          if (m.chat_title) decisions.skipChat(state, m.chat_title);
+          pending.removePending(m.path);
+          skipped.push(m.chat_title || 'Untitled');
+          seen.add(m.path);
+        }
+      }
+      for (const t of wantTitles) {
+        const needle = String(t).toLowerCase();
+        for (const e of list) {
+          if (e.chat_title && e.chat_title.toLowerCase().includes(needle) && !seen.has(e.path)) {
+            decisions.skipChat(state, e.chat_title);
+            pending.removePending(e.path);
+            skipped.push(e.chat_title);
+            seen.add(e.path);
+          }
+        }
+      }
+      decisions.saveDecisions(state);
+      return jsonResult({ skipped });
+    }
+
+    if (name === 'memex_telegram_mode') {
+      const decisions = await import('./lib/telegram-decisions.js');
+      const state = decisions.loadDecisions();
+      if (args.mode) {
+        try {
+          decisions.setMode(state, args.mode);
+          decisions.saveDecisions(state);
+        } catch (e) {
+          return jsonResult({ error: e.message });
+        }
+      }
+      return jsonResult({ mode: state.mode });
     }
 
     return textResult(`Unknown tool: ${name}`);

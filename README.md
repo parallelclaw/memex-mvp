@@ -180,6 +180,30 @@ Perplexity threads need to be made **Public** in the Share dialog first — meme
 
 ---
 
+## Telegram chats (v0.10+) — agent walks you through it
+
+Telegram-export setup used to be 8 steps. v0.10+ collapses it to 2 (you click in Telegram; you pick which chats to keep). The rest is automatic.
+
+**How it works:**
+1. The daemon watches `~/Downloads/Telegram Desktop/` in the background. **No setup needed** — already on after install.
+2. You export a chat from Telegram Desktop (chat → ⋮ → Export chat history → HTML or JSON).
+3. memex detects the export, **moves it to `~/.memex/pending/`** (NOT into your DB yet).
+4. Your AI agent (or you in terminal) calls `memex_telegram_pending` — sees a numbered list with chat name, msg count, date range.
+5. You pick which to import. Sensitive ones (Bank, Therapist, Tinder) — skip. memex remembers and won't ask again.
+6. Future re-exports of allowed chats auto-merge. Skipped ones stay out.
+
+**The agent leads.** Just say *"set up Telegram for memex"* (or **install memex** in a fresh session — the install-memex skill v1.2+ proactively offers it). The agent will:
+- Check if Telegram Desktop is installed (give you the right download link if not)
+- Check the 24h post-login export-block window (tell you when you can export)
+- Show the click-path in Telegram
+- Wait for your export, then present the picker
+
+**Three modes:** `pick` (default — review each export), `auto` (allowed chats auto-import; new ones go to pending), `manual` (watcher off — drop files yourself).
+
+Terminal equivalents: `memex telegram check / pending / import 1 3 5 / skip 2 / mode auto`. Full reference: `memex telegram --help`.
+
+---
+
 ## What it captures
 
 | Source                | How it gets in                                                 |
@@ -189,7 +213,7 @@ Perplexity threads need to be made **Public** in the Share dialog first — meme
 | Cursor IDE chats      | Auto: reads Cursor's local SQLite session store                |
 | Continue / Zed        | Auto: filesystem watchers per platform                         |
 | Obsidian notes        | Auto: per-vault markdown watcher                               |
-| Telegram exports      | Manual: drop `result.json` (Telegram Desktop → Export → JSON) into `~/.memex/inbox/`. v0.9+: also accepts the **HTML** export directory (`ChatExport_*/`) — drop the whole folder, memex parses it. |
+| Telegram exports      | **v0.10+: auto.** Daemon watches `~/Downloads/Telegram Desktop/`. Each new ChatExport appears in `memex telegram pending` — review chat-by-chat, import the ones you want. Privacy-first: nothing lands in the DB without your `memex telegram import <indices>`. Allow-list remembers your decisions so future re-exports auto-merge. JSON + HTML both supported. (Legacy path still works: drop into `~/.memex/inbox/`.) |
 | Telegram (live)       | Run [`memex-bot`](bot/README.md) — captures messages you send/forward to your private bot |
 | **Web pages, AI chat shares, pasted text** | From any MCP agent: *"save https://... to memex"*. Agent fetches; memex stores verbatim. Cloudflare-protected pages (Perplexity, npm.com, Twitter, Medium, …) handled via the agent's r.jina.ai fallback. See [HELP.md §8](HELP.md) |
 
@@ -214,6 +238,11 @@ All sources land in the same FTS5 corpus, searchable by one `memex_search` call.
 | `memex_status`                | Daemon health: PID, last capture, watched files                          |
 | `memex_sources_status`        | Which sources are captured + the exact CLI to opt out                    |
 | `memex_help`                  | Returns the full user guide with concrete use cases                      |
+| `memex_telegram_check`        | v0.10+: Detect Telegram Desktop, login age (24h block), pending count, suggested next step |
+| `memex_telegram_pending`      | v0.10+: List exports staged for review with chat name + msg count + dates |
+| `memex_telegram_import`       | v0.10+: Import selected exports into memex.db (by index or title) — auto-allowlists |
+| `memex_telegram_skip`         | v0.10+: Mark chats as "never index" — applies to future re-exports too  |
+| `memex_telegram_mode`         | v0.10+: Get/set capture mode: pick (default) · auto · manual            |
 
 Detailed search parameters (filters, sort, format) live in [HELP.md](HELP.md).
 

@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~2 minutes — npm install, MCP config wiring, auto-capture daemon, history backfill. No cloud, no account, verbatim storage. Also indexes Obsidian notes, Telegram chats, and any URL the user wants to save (web pages, Perplexity threads, AI chat shares — memex_store_document tool, v0.6+). Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", or similar.
-version: 1.1.0
+version: 1.2.0
 metadata:
   openclaw:
     emoji: "📚"
@@ -66,14 +66,14 @@ What the script does, in order:
 5. `claude mcp add memex --scope user -- memex` if Claude Code CLI is detected.
 
 After the script finishes:
-- If the user is in **Claude Code (CLI)** → install is complete. Skip straight to step 5 (verification + restart).
-- If the user is in **Cursor / Cline / Continue / Zed** → the npm install + daemon + auto-context + scan are done, but the GUI client's MCP config still needs the memex entry. **Skip step 1 (already installed)**, **skip step 3** (daemon already installed) and **skip step 4** (scan already ran). **Do step 2** (wire MCP into the GUI client's config) and **step 5** (verify + restart).
+- If the user is in **Claude Code (CLI)** → install is complete. Skip straight to step 6 (verification + restart). Also do step 5 (offer Telegram capture).
+- If the user is in **Cursor / Cline / Continue / Zed** → the npm install + daemon + auto-context + scan are done, but the GUI client's MCP config still needs the memex entry. **Skip step 1 (already installed)**, **skip step 3** (daemon already installed) and **skip step 4** (scan already ran). **Do step 2** (wire MCP into the GUI client's config), **step 5** (offer Telegram), and **step 6** (verify + restart).
 
-If the script fails for any reason — non-zero exit, weird output, user uncomfortable piping curl to bash — fall back to the **Manual five-step install** below.
+If the script fails for any reason — non-zero exit, weird output, user uncomfortable piping curl to bash — fall back to the **Manual install** below.
 
 To inspect what the script does first: `curl -fsSL https://memex.parallelclaw.ai/install.sh | less` (don't pipe to bash).
 
-## Manual five-step install (if the fast path didn't fit)
+## Manual install (if the fast path didn't fit)
 
 Do these in order. Show each command before running it. Stop and ask if anything fails or looks wrong.
 
@@ -213,7 +213,30 @@ Tags older conversations with their `project_path` so `memex_list_projects` work
 
 **Verify:** after scan, `memex-sync status` shows a non-zero "ingested" count.
 
-### 5. Tell the user what to do next
+### 5. Offer Telegram-export capture (v0.10+)
+
+After the core install is done, **proactively** ask:
+
+> "Memex can also remember your Telegram chats — work, family, group chats, whatever you want indexed. Want me to set that up too? It's about 2 minutes."
+
+If yes, run `memex_telegram_check` (MCP tool) or `memex telegram check` (CLI). The result tells you the user's state and the next step. Walk them through:
+
+  - **No Telegram Desktop?** → Give the download URL from the check output. Wait for them to install + log in.
+  - **Logged in <24h ago?** → Tell them: "Telegram blocks export for the first 24h. Wait ~X hours, then come back."
+  - **Ready to export?** → Show the click-path: open chat → ⋮ menu (top-right) → "Export chat history" → format HTML or JSON → Export.
+
+After the user exports, memex's daemon **auto-detects** the file in ~/Downloads/Telegram Desktop/ and stages it in pending review. Then:
+
+  - Call `memex_telegram_pending` to list staged exports (chat name, msg count, date range).
+  - **Present as a numbered list**, ask which to import. Accept indices, titles, or natural language.
+  - Call `memex_telegram_import` with selected indices/titles. The chat is added to the allow-list — future re-exports auto-merge.
+  - For sensitive chats user doesn't want (Bank, Therapist, etc.), call `memex_telegram_skip`.
+
+**Privacy is the core promise. Never auto-import. Always get explicit per-chat consent on the first round.**
+
+If the user declines Telegram setup ("not now" / "skip"): say "OK, I'll skip Telegram. You can run `memex telegram setup` anytime later." Don't push.
+
+### 6. Tell the user what to do next
 
 Tell the user to fully quit and reopen the MCP client (Cmd+Q on macOS) so it picks up the new memex tools.
 
@@ -249,4 +272,4 @@ This is also useful for agents without native MCP support (OpenCode + Kimi, plai
 
 ## Begin
 
-Greet the user, confirm which MCP client you're running inside, and run the Discovery checks before any install actions. After Discovery, **propose the fast path (curl one-liner) first** — it covers ~90% of cases in one shot. Only fall back to the manual five-step install if the user objects, the script fails, or you're inside a GUI client where you'll still need to do step 2 manually after the script runs.
+Greet the user, confirm which MCP client you're running inside, and run the Discovery checks before any install actions. After Discovery, **propose the fast path (curl one-liner) first** — it covers ~90% of cases in one shot. After the core install completes, **proactively offer Telegram-export capture (step 5)** unless the user has already declined. Only fall back to the manual flow if the user objects, the script fails, or you're inside a GUI client where you'll still need to do step 2 manually after the script runs.

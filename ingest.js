@@ -1332,6 +1332,65 @@ if (!ANY_ONESHOT_MODE && OBSIDIAN_ENABLED) {
   }
 }
 
+// -------------------- Telegram Downloads watcher (v0.10+) --------------------
+// Watches ~/Downloads/Telegram Desktop/ for new ChatExport_* folders or
+// result.json files. On detection, moves them to ~/.memex/pending/ so the
+// user can review with `memex telegram pending` before any data lands in
+// memex.db. Privacy-first — nothing is auto-imported here.
+const TG_DOWNLOADS_ENABLED = isSourceEnabled('telegram-downloads', CONFIG);
+// Default Telegram Desktop export location is identical across platforms:
+// ~/Downloads/Telegram Desktop/. Config can override via sources.telegram-downloads.paths.
+const TG_DOWNLOADS_PATHS = (() => {
+  if (!TG_DOWNLOADS_ENABLED) return [];
+  const configured = (CONFIG.sources?.['telegram-downloads']?.paths) || [];
+  const defaults = [join(homedir(), 'Downloads', 'Telegram Desktop')];
+  const all = (configured.length ? configured : defaults).map((p) =>
+    p.startsWith('~') ? join(homedir(), p.slice(1)) : p
+  );
+  return all.filter((p) => existsSync(p));
+})();
+
+if (!ANY_ONESHOT_MODE && TG_DOWNLOADS_ENABLED && TG_DOWNLOADS_PATHS.length) {
+  for (const dlPath of TG_DOWNLOADS_PATHS) {
+    log(`watching telegram-downloads: ${dlPath}`);
+    const w = chokidar
+      .watch(dlPath, {
+        ignoreInitial: false,
+        awaitWriteFinish: { stabilityThreshold: 2000, pollInterval: 400 },
+        depth: 0,
+      })
+      .on('addDir', (p) => {
+        if (p === dlPath) return; // root itself
+        if (!basename(p).toLowerCase().startsWith('chatexport_')) return;
+        scheduleTelegramStaging(p);
+      })
+      .on('add', (p) => {
+        if (basename(p).toLowerCase() === 'result.json') {
+          scheduleTelegramStaging(p);
+        }
+      })
+      .on('error', (e) => log(`watcher error (telegram-downloads): ${e.message}`));
+    watchers.push(w);
+  }
+}
+
+const tgStagingPending = new Map();
+function scheduleTelegramStaging(srcPath) {
+  if (tgStagingPending.has(srcPath)) clearTimeout(tgStagingPending.get(srcPath));
+  // Use a longer debounce — exports can take several seconds to finish writing
+  tgStagingPending.set(srcPath, setTimeout(async () => {
+    tgStagingPending.delete(srcPath);
+    if (!existsSync(srcPath)) return;
+    try {
+      const { stageExport } = await import('./lib/telegram-pending.js');
+      const dest = stageExport(srcPath, { moveOrCopy: 'move' });
+      log(`+ telegram-export staged → pending/: ${basename(dest)}`);
+    } catch (e) {
+      log(`! telegram-export stage failed (${basename(srcPath)}): ${e.message}`);
+    }
+  }, 5000));
+}
+
 // Synchronous one-shot walk for scan-obsidian / scan modes.
 function scanObsidian() {
   if (OBSIDIAN_VAULTS.length === 0) {

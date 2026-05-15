@@ -1461,6 +1461,43 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
         </p>
       </div>
     </div>
+
+    <div class="or-divider"
+         data-en="— or query directly from the terminal —"
+         data-ru="— или из терминала напрямую —">
+      — or query directly from the terminal —
+    </div>
+
+    <div class="manual-card">
+      <h3 data-en="Terminal CLI (v0.7+) — when MCP isn't available"
+          data-ru="Терминальный CLI (v0.7+) — когда MCP не настроен">Terminal CLI (v0.7+) — when MCP isn't available</h3>
+      <p class="manual-intro"
+         data-en="The same <code>memex</code> binary that runs as an MCP server also has a terminal mode. Useful when MCP isn't wired up in your agent, when you want to debug, or when piping into shell scripts."
+         data-ru="Тот же бинарь <code>memex</code>, который работает как MCP-сервер, имеет terminal-режим. Полезно когда MCP не подключился к агенту, когда нужно дебажить, или пайпить в shell-скрипты.">
+        The same <code>memex</code> binary that runs as an MCP server also has a terminal mode. Useful when MCP isn't wired up in your agent, when you want to debug, or when piping into shell scripts.
+      </p>
+
+      <div class="step">
+        <span class="step-where" data-en="📟 Terminal" data-ru="📟 Терминал">📟 Terminal</span>
+        <h4 data-en="Try these commands" data-ru="Попробуй эти команды">Try these commands</h4>
+<pre><code>memex search "Postgres migration"
+memex search "Q2 deck" --chat "Memex Bot"
+memex recent --limit 5
+memex list --source web
+memex get web-1582ab51a7b7
+memex overview
+memex --help
+memex --version
+
+# JSON for shell pipelines
+memex search "TODO" --json | jq '.results[].snippet'</code></pre>
+        <p class="hint"
+           data-en="DB opens read-only — safe to run while <code>memex-sync</code> daemon is writing. When called without arguments (<code>memex</code>), the binary still runs as MCP stdio server — that's the mode Claude Code, Cursor, Cline launch via their config files. CLI and MCP modes coexist in one package."
+           data-ru="БД открывается read-only — безопасно пока daemon пишет. Без аргументов (<code>memex</code>) — это MCP stdio-сервер, как его и вызывают Claude Code, Cursor, Cline. CLI и MCP режимы в одном пакете.">
+          DB opens read-only — safe to run while <code>memex-sync</code> daemon is writing. When called without arguments (<code>memex</code>), the binary still runs as MCP stdio server — that's the mode Claude Code, Cursor, Cline launch via their config files. CLI and MCP modes coexist in one package.
+        </p>
+      </div>
+    </div>
   </div>
 </section>
 

@@ -100,6 +100,28 @@ For a fully-automated install across all detected MCP clients, see [the AI-drive
 
 ---
 
+## Terminal CLI (v0.7+) — query memex without MCP
+
+The same `memex` binary that runs as an MCP server also has a terminal mode for direct queries. Useful when MCP isn't wired up, when you want to pipe results into shell scripts, or when debugging MCP-config issues:
+
+```sh
+memex search "Postgres migration"          # full-text search
+memex search "Q2 deck" --chat "Memex Bot"  # scope to one conversation by title
+memex recent --limit 5                      # last 5 messages across all sources
+memex list --source web                     # all saved URLs
+memex get web-1582ab51a7b7                  # full content of one conversation
+memex overview                              # snapshot of corpus
+memex projects                              # distinct project_paths captured
+memex help                                  # full user guide (HELP.md)
+memex --help                                # command reference
+```
+
+Every query supports `--json` for machine-readable output: `memex search foo --json | jq '.results[].snippet'`. The DB is opened **read-only** — safe to run while `memex-sync` daemon is writing.
+
+When called **without arguments** (`memex`), the binary still runs as an MCP stdio server (the way Claude Code / Cursor / Cline launch it). CLI mode and MCP mode are the same package — no extra install.
+
+---
+
 ## Save URLs into memex (v0.6+)
 
 Once memex is installed, any MCP-aware agent can also save **web pages, AI chat shares, and pasted text** into your memex memory — searchable from any other AI chat later. In Claude Code, Cursor, Cline, …:

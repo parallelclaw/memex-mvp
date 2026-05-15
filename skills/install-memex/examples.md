@@ -207,6 +207,37 @@ Sample interactions when the user invokes this skill. These show typical happy p
 
 ---
 
+---
+
+## Example 7 · MCP didn't connect — agent recommends CLI fallback (v0.7+)
+
+> **User:** ok, I installed memex. but when I ask Claude "show me what memex has", nothing happens.
+>
+> **Agent:** Could be a MCP-config issue with your Claude client — let's verify memex itself is healthy first, separately from MCP:
+>
+> ```sh
+> memex overview
+> ```
+>
+> ```
+> memex corpus snapshot
+>
+> Total: 1,247 messages in 23 conversations
+>
+> By source:
+>   claude-code           742 msgs · 18 chats · 2026-04-06 → 2026-05-15
+>   claude-cowork         312 msgs ·  4 chats · 2026-04-06 → 2026-05-07
+>   ...
+> ```
+>
+> Memex itself is healthy — your data is there. The problem is the MCP wiring in your Claude client.
+>
+> Try `memex search "recent topic you discussed"` directly in the terminal — if that returns hits, you've got a fully-working memex; it's just not exposed to your Claude session yet.
+>
+> Then check your Claude MCP config (`~/.claude/config.json` or equivalent) — the `memex` entry should have an absolute path. Run `which memex` to get it, and verify it's there. If you need to re-do the wiring, ask me again — I'll re-run step 2 of the install.
+
+---
+
 ## What these examples illustrate about the skill's behavior
 
 - **Always discover first**, then ask for confirmation before any write action

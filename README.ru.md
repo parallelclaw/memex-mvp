@@ -136,6 +136,32 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
 
 Полное руководство и edge cases (private Perplexity, paywall, login-walls): [HELP.md §8](HELP.md).
 
+### Терминальный CLI (v0.7+) — запросы к memex без MCP
+
+Тот же бинарь `memex`, который работает как MCP-сервер, имеет **terminal-режим** для прямых запросов. Полезно когда MCP не настроен, когда хочешь пайпить результаты в shell-скрипты, или дебажить MCP-конфиг:
+
+```bash
+memex search "Postgres миграция"            # полнотекстовый поиск
+memex search "Q2 deck" --chat "Memex Bot"   # сузить до конкретного чата по title
+memex recent --limit 5                       # последние 5 сообщений из всех источников
+memex list --source web                      # все сохранённые URL'ы
+memex get web-1582ab51a7b7                   # полный контент одной conversation
+memex overview                               # snapshot корпуса
+memex projects                               # уникальные project_paths
+memex help                                   # полное руководство (HELP.md)
+memex --help                                 # справка по командам
+```
+
+У каждого query-subcommand'a есть `--json` для machine-readable вывода: `memex search foo --json | jq '.results[].snippet'`. БД открывается **read-only** — безопасно запускать пока daemon пишет.
+
+При запуске **без аргументов** (`memex`) бинарь по-прежнему работает как MCP stdio server (как и вызывают его Claude Code / Cursor / Cline из своих конфигов). CLI-режим и MCP-режим — один и тот же пакет, без дополнительной установки.
+
+**Использовать CLI, когда:**
+- MCP-интеграция не подцепилась к твоему агенту → `memex overview` подтвердит что сам memex здоров
+- Агент без MCP-поддержки, но с shell-доступом
+- Хочешь пайпить результаты: `memex search foo --json | jq ...`
+- Хочешь сдампить полный transcript в stdout для context'a
+
 ### Подключение к Claude Code
 
 Сначала возьми **два абсолютных пути** в терминале:

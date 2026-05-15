@@ -50,6 +50,31 @@ import {
 import { detectIssues, isBlocked } from './lib/store-doc/detect.js';
 import { extractTitle } from './lib/store-doc/extract-title.js';
 import { createHash } from 'node:crypto';
+import { runCli, CLI_SUBCOMMAND_NAMES } from './lib/cli/index.js';
+
+// -------------------- CLI subcommand dispatch --------------------
+// When invoked with a recognized subcommand (search, recent, list, get,
+// overview, projects, help, --help, --version) — run a one-shot query
+// and exit. When invoked WITHOUT any argument (the way MCP clients
+// always call this binary), fall through to MCP-stdio mode below.
+//
+// This runs BEFORE any DB/watcher side-effects so the CLI doesn't open
+// the DB in write mode unnecessarily.
+{
+  const sub = process.argv[2];
+  if (sub && CLI_SUBCOMMAND_NAMES.includes(sub)) {
+    await runCli(sub, process.argv.slice(3));
+    process.exit(0);
+  }
+  if (sub && !sub.startsWith('-')) {
+    // Unknown positional subcommand — fail fast with help, don't drift
+    // into MCP mode (which would just hang waiting for stdin).
+    console.error(`Unknown subcommand: ${sub}`);
+    console.error(`Run 'memex --help' for usage.`);
+    process.exit(2);
+  }
+  // No args (or only flags we don't recognize) → MCP mode
+}
 
 // -------------------- Paths --------------------
 const HOME = homedir();
@@ -958,6 +983,38 @@ memex_get_conversation call.
 Archived conversations are hidden from default list/search but stay
 fully indexed. Pass include_archived: true on search/list to include
 them. Visibility flag only — never deletes data.
+
+══ CLI FALLBACK — when MCP isn't available ══
+
+If you're running in an agent where memex MCP tools aren't wired up
+(or wired up but not responding), memex ALSO ships a terminal CLI on
+the same \`memex\` binary. Use this as a fallback before resorting to
+raw SQLite. Available subcommands:
+
+  memex search "<query>" [--source X] [--chat X] [--sort MODE] [--limit N] [--json]
+  memex recent           [--limit N] [--source X] [--json]
+  memex list             [--source X] [--limit N] [--json]
+  memex get <id>         [--json]
+  memex overview         [--json]
+  memex projects
+  memex help             prints the full HELP.md user guide
+  memex --help           command reference
+
+The --json flag on every query subcommand returns structured JSON
+for parsing. The DB is opened read-only — safe to run while the
+auto-capture daemon is writing.
+
+WHEN TO USE THE CLI:
+  • You suspect MCP integration is broken — \`memex overview\` confirms
+    memex itself is healthy independent of MCP wiring
+  • You're in an agent without MCP support but with shell access
+  • You want to pipe results: \`memex search foo --json | jq ...\`
+  • You want to dump a full conversation to stdout for context
+
+DON'T fall back to raw SQLite queries against memex.db when the CLI
+exists — the CLI handles edge cases (FTS5 syntax sanitization,
+date formatting, snippet highlighting, archive filtering) that raw
+SQL doesn't, and the schema may change between versions.
 
 ══ DOCUMENT INGESTION (web pages, articles, AI chat shares) ══
 

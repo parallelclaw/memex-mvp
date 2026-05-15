@@ -293,6 +293,51 @@ Memex по дефолту сортирует по **релевантности**
 
 ---
 
+## 💻 Терминальный CLI (v0.7+) — когда MCP не работает
+
+Если MCP-интеграция не подцепилась к твоему агенту (или ты в агенте без MCP-поддержки, но с shell-доступом) — у memex есть **terminal-режим** на том же бинаре. Один пакет, два режима.
+
+```bash
+memex search "Postgres миграция"                  # FTS5 поиск
+memex search "Q2 deck" --chat "Memex Bot"         # фильтр по title чата
+memex search "auth" --source claude-code --limit 5 --sort date_desc
+
+memex recent --limit 5                             # последние сообщения
+memex recent --source telegram
+
+memex list                                         # все conversations
+memex list --source web                            # только сохранённые URL'ы
+
+memex get web-1582ab51a7b7                         # полный контент conversation
+
+memex overview                                     # snapshot корпуса
+memex projects                                     # уникальные project_paths
+memex help                                         # эта инструкция в терминале
+memex --help                                       # справка по командам
+memex --version
+```
+
+**Все query-команды поддерживают `--json`** для пайпов и скриптов:
+
+```bash
+memex search "TODO" --json | jq '.results[].snippet'
+memex list --source telegram --json | jq -r '.conversations[].title'
+memex get web-1582ab51a7b7 --json > backup.json
+```
+
+**БД открывается read-only** — безопасно запускать пока daemon-writer работает.
+
+**Когда использовать CLI вместо MCP:**
+
+- MCP-интеграция в твоём агенте не подключилась → `memex overview` подтвердит что сам memex здоров, проблема в MCP-config'е клиента
+- Агент без MCP-поддержки (OpenCode + Kimi, любые CLI-only агенты), но с shell-доступом
+- Shell-скрипты / автоматизация
+- Дебаг: «вижу ли я свою историю напрямую?»
+
+**`memex` (без аргументов)** — это MCP stdio-сервер. Это поведение по умолчанию для Claude Code / Cursor / Cline через их MCP-config'и. CLI-команды активируются только при наличии распознанного subcommand'a.
+
+---
+
 ## Если что-то не работает
 
 ### Поиск пустой

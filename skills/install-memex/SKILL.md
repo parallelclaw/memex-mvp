@@ -164,6 +164,17 @@ After restart, suggest they try any of:
 
 These confirm everything works end-to-end.
 
+**CLI fallback (v0.7+):** if the MCP integration doesn't pick up in the user's client for any reason, tell them they can verify memex from the terminal directly — same binary, no MCP needed:
+
+```sh
+memex overview      # confirms memex itself is healthy
+memex search "foo"  # FTS search from CLI
+memex list          # list conversations
+memex --help        # command reference
+```
+
+This is also useful for agents without native MCP support (OpenCode + Kimi, plain shell scripts, CI pipelines) — they can shell out to `memex` directly.
+
 ## Safety rules — read before starting
 
 - If `node` or `npm` aren't installed, stop and tell the user to install Node.js (recommend nvm.sh or `brew install node`). Don't try to install Node yourself.

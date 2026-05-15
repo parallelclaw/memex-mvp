@@ -11,7 +11,7 @@ After you drop the skill into your agent (`~/.claude/skills/` for Claude Code, o
 3. **MCP config merge** — adds a single absolute-path `command` entry into your client's `mcpServers` config. Never overwrites your other servers
 4. **`memex-sync install`** — registers the macOS LaunchAgent for live auto-capture
 5. **`memex-sync scan`** — one-time backfill of every session that already exists on disk
-6. **Restart hint + verification commands**
+6. **Restart hint + verification commands** — including the v0.7+ CLI fallback (`memex overview`, `memex search "foo"`) so you can verify memex works even if MCP didn't wire up cleanly
 
 End-to-end: **~2 minutes**, fully observable (agent shows each command before running).
 

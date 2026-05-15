@@ -175,6 +175,119 @@ test('non-Telegram path returns null', () => {
   assertEq(r, null);
 });
 
+// ---------- v0.9.1 regression fixes ----------
+console.log('\nv0.9.1 regressions (European date / page_header title / group chat detection):\n');
+
+// Helper: write a minimal Telegram HTML export with custom content
+function writeHtml(html) {
+  const tmp = mkdtempSync(join(tmpdir(), 'memex-html-test-'));
+  const dir = join(tmp, 'ChatExport_Test');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'messages.html'), html);
+  return { tmp, dir };
+}
+
+test('European date format (DD.MM.YYYY) parses correctly', () => {
+  // Russian / German / etc. locale Telegram exports use DD.MM.YYYY
+  const html = `<html><head><title>Exported Data</title></head><body>
+    <div class="page_header"><div class="text bold">Test Chat</div></div>
+    <div class="history">
+      <div class="message default" id="message100">
+        <div class="body">
+          <div class="pull_right date details" title="20.03.2026 14:08:43 UTC+03:00"></div>
+          <div class="from_name">Oleg</div>
+          <div class="text">hello</div>
+        </div>
+      </div>
+    </div>
+  </body></html>`;
+  const { tmp, dir } = writeHtml(html);
+  try {
+    const r = parseTelegramHtmlExport(dir);
+    const msg = r.chats.list[0].messages[0];
+    // 2026-03-20 14:08:43 UTC+03:00 → 2026-03-20 11:08:43 UTC → 1774004923
+    assertEq(msg.date_unixtime, '1774004923');
+    assert(msg.date.startsWith('2026-03-20T14:08:43'), `iso date: ${msg.date}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('page_header chat name preferred over <title> boilerplate', () => {
+  // Real-world: Telegram puts "Exported Data" in <title> but real name in page_header
+  const html = `<html><head><title>Exported Data</title></head><body>
+    <div class="page_header"><div class="text bold">Ранние адоптеры Ouroboros</div></div>
+    <div class="history">
+      <div class="message default" id="message1">
+        <div class="body">
+          <div class="pull_right date details" title="20.03.2026 14:08:43 UTC+03:00"></div>
+          <div class="from_name">Oleg</div>
+          <div class="text">hi</div>
+        </div>
+      </div>
+    </div>
+  </body></html>`;
+  const { tmp, dir } = writeHtml(html);
+  try {
+    const r = parseTelegramHtmlExport(dir);
+    assertEq(r.chats.list[0].name, 'Ранние адоптеры Ouroboros');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('chat_type = private_group when 3+ distinct senders', () => {
+  const mkMsg = (id, who) =>
+    `<div class="message default" id="message${id}">
+       <div class="body">
+         <div class="pull_right date details" title="20.03.2026 14:0${id}:00 UTC+00:00"></div>
+         <div class="from_name">${who}</div>
+         <div class="text">m${id}</div>
+       </div>
+     </div>`;
+  const html = `<html><head><title>Exported Data</title></head><body>
+    <div class="page_header"><div class="text bold">Group</div></div>
+    <div class="history">
+      ${mkMsg(1, 'Alice')}
+      ${mkMsg(2, 'Bob')}
+      ${mkMsg(3, 'Carol')}
+    </div>
+  </body></html>`;
+  const { tmp, dir } = writeHtml(html);
+  try {
+    const r = parseTelegramHtmlExport(dir);
+    assertEq(r.chats.list[0].type, 'private_group');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('chat_type = personal_chat when ≤2 distinct senders', () => {
+  const mkMsg = (id, who) =>
+    `<div class="message default" id="message${id}">
+       <div class="body">
+         <div class="pull_right date details" title="20.03.2026 14:0${id}:00 UTC+00:00"></div>
+         <div class="from_name">${who}</div>
+         <div class="text">m${id}</div>
+       </div>
+     </div>`;
+  const html = `<html><head><title>Exported Data</title></head><body>
+    <div class="page_header"><div class="text bold">DM</div></div>
+    <div class="history">
+      ${mkMsg(1, 'Alice')}
+      ${mkMsg(2, 'Bob')}
+      ${mkMsg(3, 'Alice')}
+    </div>
+  </body></html>`;
+  const { tmp, dir } = writeHtml(html);
+  try {
+    const r = parseTelegramHtmlExport(dir);
+    assertEq(r.chats.list[0].type, 'personal_chat');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 // ---------- Integration: parse → importTelegram round-trip ----------
 console.log('\nintegration with importTelegram shape:\n');
 

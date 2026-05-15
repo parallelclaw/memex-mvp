@@ -84,9 +84,15 @@
     padding: 6px 14px; border-radius: 999px;
     background: var(--accent-bg); color: var(--accent-light);
     font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
-    margin-bottom: 26px;
+    margin-bottom: 12px;
     border: 1px solid rgba(95, 182, 205, 0.25);
   }
+  .hero-badges {
+    display: flex; justify-content: center; flex-wrap: wrap;
+    gap: 8px; margin-bottom: 26px;
+  }
+  .hero-badges a { display: inline-flex; line-height: 0; }
+  .hero-badges img { height: 20px; }
   h1 {
     font-size: clamp(36px, 6vw, 60px);
     font-weight: 900; letter-spacing: -0.035em;
@@ -605,7 +611,23 @@
 
 <section class="hero">
   <div class="hero-inner">
-    <div class="pill" data-en="Cross-AI · Local-first · v0.3" data-ru="Cross-AI · Local-first · v0.3">Cross-AI · Local-first · v0.3</div>
+    <div class="pill" data-en="Cross-AI · Local-first · MIT" data-ru="Cross-AI · Local-first · MIT">Cross-AI · Local-first · MIT</div>
+
+    <div class="hero-badges" aria-label="Project stats">
+      <a href="https://www.npmjs.com/package/memex-mvp" target="_blank" rel="noopener" aria-label="npm version">
+        <img src="https://img.shields.io/npm/v/memex-mvp.svg?label=npm&color=cb3837" alt="npm version" />
+      </a>
+      <a href="https://www.npmjs.com/package/memex-mvp" target="_blank" rel="noopener" aria-label="npm weekly downloads">
+        <img src="https://img.shields.io/npm/dw/memex-mvp.svg?label=downloads&color=2ea44f" alt="npm downloads" />
+      </a>
+      <a href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener" aria-label="GitHub stars">
+        <img src="https://img.shields.io/github/stars/parallelclaw/memex-mvp?style=flat&color=eab308&logo=github" alt="GitHub stars" />
+      </a>
+      <a href="https://github.com/parallelclaw/memex-mvp/blob/main/LICENSE" target="_blank" rel="noopener" aria-label="MIT license">
+        <img src="https://img.shields.io/npm/l/memex-mvp.svg?color=3b82f6" alt="MIT license" />
+      </a>
+    </div>
+
     <h1>
       <span data-en="A single store" data-ru="Единое хранилище">A single store</span><br>
       <span class="accent" data-en="for all your AI and Telegram chats" data-ru="для всех твоих AI и Telegram чатов">for all your AI and Telegram chats</span>

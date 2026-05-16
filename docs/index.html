@@ -9,26 +9,35 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* === ParallelClaw brand palette (memex.parallelclaw.ai inherits from parent).
+     Mint accent #6ee7b7 + blue secondary #60a5fa over a cool dark base. */
   :root {
-    --bg: #0d0e12;
-    --bg-soft: #1a1c24;
-    --bg-card: rgba(255,255,255,0.03);
-    --text: #e8e6e1;
-    --text-soft: #98968e;
-    --text-muted: #5d5b54;
-    --accent: #5fb6cd;
-    --accent-light: #82d0e6;
-    --accent-bg: rgba(95, 182, 205, 0.12);
-    --green: #7cc28e;
-    --red-soft: #c66;
-    --amber: #d8a86b;
-    --border: rgba(255,255,255,0.07);
+    --bg: #0f1115;
+    --bg-soft: #151922;
+    --bg-card: rgba(255,255,255,0.05);
+    --text: #f5f7fb;
+    --text-soft: #dbe4f3;
+    --text-muted: #a6b0c3;
+    --accent: #6ee7b7;
+    --accent-light: #a7f3d0;
+    --accent-2: #60a5fa;
+    --accent-bg: rgba(110, 231, 183, 0.12);
+    --green: #6ee7b7;
+    --red-soft: #f87171;
+    --amber: #fbbf24;
+    --border: rgba(255,255,255,0.10);
+    --shadow: 0 20px 60px rgba(0,0,0,0.35);
+    --radius: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--bg);
+    background:
+      radial-gradient(circle at 10% 10%, rgba(110,231,183,0.10), transparent 30%),
+      radial-gradient(circle at 90% 20%, rgba(96,165,250,0.10), transparent 25%),
+      linear-gradient(180deg, #0d1016 0%, #11151c 100%);
+    background-attachment: fixed;
     color: var(--text);
     line-height: 1.55;
     font-size: 16px;
@@ -40,17 +49,45 @@
 
   nav {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(13, 14, 18, 0.92);
-    backdrop-filter: saturate(180%) blur(12px);
-    border-bottom: 1px solid var(--border);
+    background: rgba(15, 17, 21, 0.72);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .nav-inner {
-    max-width: 1100px; margin: 0 auto;
+    max-width: 1120px; margin: 0 auto;
     padding: 14px 24px;
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
   }
-  .logo { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; color: var(--text); }
-  .logo .accent { color: var(--accent); }
+  /* Brand block — ParallelClaw SVG icon + memex wordmark + tagline */
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .brand-svg { width: 32px; height: auto; display: block; flex-shrink: 0; }
+  .brand-text {
+    display: flex; flex-direction: column;
+    line-height: 1;
+  }
+  .brand-wordmark {
+    font-weight: 800; font-size: 17px;
+    letter-spacing: -0.04em;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .brand-wordmark .accent { color: var(--accent); }
+  .brand-tagline {
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .brand-tagline a { color: var(--text-muted); border-bottom: 1px dotted var(--text-muted); }
+  .brand-tagline a:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+  @media (max-width: 540px) {
+    .brand-tagline { display: none; }
+  }
   .nav-links { display: flex; align-items: center; gap: 8px; }
   .lang-toggle {
     display: inline-flex; align-items: center;
@@ -72,10 +109,10 @@
   }
   .gh-btn:hover { text-decoration: none; background: var(--accent); }
 
-  /* Hero */
+  /* Hero — sits over body's radial-gradient background, so we keep this transparent
+     and just rely on the body for the brand mood. */
   .hero {
     padding: 80px 24px 56px;
-    background: linear-gradient(180deg, #0d0e12 0%, #131523 100%);
     border-bottom: 1px solid var(--border);
   }
   .hero-inner { max-width: 880px; margin: 0 auto; text-align: center; }
@@ -85,7 +122,7 @@
     background: var(--accent-bg); color: var(--accent-light);
     font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
     margin-bottom: 12px;
-    border: 1px solid rgba(95, 182, 205, 0.25);
+    border: 1px solid rgba(110, 231, 183, 0.25);
   }
   .hero-badges {
     display: flex; justify-content: center; flex-wrap: wrap;
@@ -110,8 +147,8 @@
   /* Hero install block */
   .hero-install {
     max-width: 680px; margin: 0 auto 18px;
-    background: linear-gradient(180deg, rgba(95,182,205,0.10) 0%, rgba(95,182,205,0.02) 100%);
-    border: 1px solid rgba(95,182,205,0.3); border-radius: 14px;
+    background: linear-gradient(180deg, rgba(110,231,183,0.10) 0%, rgba(110,231,183,0.02) 100%);
+    border: 1px solid rgba(110,231,183,0.3); border-radius: 14px;
     padding: 20px 24px;
     text-align: left;
   }
@@ -125,7 +162,7 @@
   }
   .hero-curl {
     display: flex; align-items: center;
-    background: #0b1620; border: 1px solid rgba(95,182,205,0.35);
+    background: #0b1620; border: 1px solid rgba(110,231,183,0.35);
     border-radius: 10px;
     padding: 10px 12px;
     margin: 10px 0 8px;
@@ -144,13 +181,13 @@
     flex-shrink: 0;
     display: inline-flex; align-items: center; gap: 5px;
     padding: 5px 10px;
-    background: rgba(95,182,205,0.18); color: var(--accent-light);
-    border: 1px solid rgba(95,182,205,0.4); border-radius: 6px;
+    background: rgba(110,231,183,0.18); color: var(--accent-light);
+    border: 1px solid rgba(110,231,183,0.4); border-radius: 6px;
     font-size: 12px; font-weight: 600;
     cursor: pointer;
     transition: background 0.15s ease;
   }
-  .btn-curl-copy:hover { background: rgba(95,182,205,0.30); }
+  .btn-curl-copy:hover { background: rgba(110,231,183,0.30); }
   .hero-curl-hint {
     font-size: 12px; color: var(--text-soft);
     margin: 0 0 12px;
@@ -205,7 +242,7 @@
 
   /* ===== Telegram feature section (v0.10 flagship) ===== */
   .telegram-feature {
-    background: linear-gradient(180deg, transparent 0%, rgba(95,182,205,0.05) 50%, transparent 100%);
+    background: linear-gradient(180deg, transparent 0%, rgba(110,231,183,0.05) 50%, transparent 100%);
   }
   .tg-pre-header {
     text-align: center;
@@ -239,11 +276,11 @@
     top: -14px; left: 18px;
     width: 30px; height: 30px;
     background: var(--accent);
-    color: white;
+    color: var(--bg);
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 14px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
   }
   .tg-step-icon {
     font-size: 30px;
@@ -331,7 +368,7 @@
     border-right: 3px solid var(--accent-light);
   }
   .chat-bubble.ai {
-    background: rgba(95,182,205,0.08);
+    background: rgba(110,231,183,0.08);
     border-left: 3px solid var(--accent);
   }
   .chat-who {
@@ -377,9 +414,9 @@
     color: var(--text-soft);
     line-height: 1.65;
     padding: 14px 22px;
-    background: rgba(95,182,205,0.04);
+    background: rgba(110,231,183,0.04);
     border-radius: 10px;
-    border: 1px solid rgba(95,182,205,0.15);
+    border: 1px solid rgba(110,231,183,0.15);
   }
   .tg-privacy code {
     background: var(--bg-soft);
@@ -529,7 +566,7 @@
   }
   .gap-cell-memex {
     color: var(--text);
-    background: rgba(95, 182, 205, 0.04);
+    background: rgba(110, 231, 183, 0.04);
   }
   .gap-cell-header {
     font-weight: 800; font-size: 12.5px;
@@ -592,10 +629,10 @@
     text-transform: uppercase;
   }
   .comparison thead th.memex-col {
-    color: var(--accent); background: rgba(95, 182, 205, 0.08);
+    color: var(--accent); background: rgba(110, 231, 183, 0.08);
   }
   .comparison tbody td.memex-col {
-    background: rgba(95, 182, 205, 0.04);
+    background: rgba(110, 231, 183, 0.04);
     color: var(--text); font-weight: 600;
   }
   .comparison tbody td:first-child {
@@ -751,7 +788,7 @@
     font-weight: 400; transition: transform 0.2s;
   }
   .faq-item[open] > summary::after { content: '−'; }
-  .faq-item > summary:hover { background: rgba(95,182,205,0.04); }
+  .faq-item > summary:hover { background: rgba(110,231,183,0.04); }
   .faq-body { padding: 0 22px 22px; color: var(--text-soft); font-size: 14.5px; line-height: 1.6; }
   .faq-body p { margin-bottom: 10px; }
   .faq-body p:last-child { margin-bottom: 0; }
@@ -767,7 +804,7 @@
     max-width: 720px; margin: 0 auto;
     border-left: 3px solid var(--accent);
     padding: 14px 24px;
-    background: rgba(95, 182, 205, 0.04);
+    background: rgba(110, 231, 183, 0.04);
     border-radius: 0 10px 10px 0;
     font-size: 15px; line-height: 1.65;
     color: var(--text-soft);
@@ -786,8 +823,8 @@
   /* AI-installer (full) */
   .ai-install {
     max-width: 760px; margin: 0 auto 32px;
-    background: linear-gradient(180deg, rgba(95,182,205,0.08) 0%, rgba(95,182,205,0.02) 100%);
-    border: 1px solid rgba(95,182,205,0.3); border-radius: 14px;
+    background: linear-gradient(180deg, rgba(110,231,183,0.08) 0%, rgba(110,231,183,0.02) 100%);
+    border: 1px solid rgba(110,231,183,0.3); border-radius: 14px;
     padding: 28px 32px;
     position: relative;
   }
@@ -911,7 +948,42 @@
 
 <nav>
   <div class="nav-inner">
-    <div class="logo">me<span class="accent">mex</span></div>
+    <a href="#top" class="brand" aria-label="memex — by ParallelClaw">
+      <!-- ParallelClaw mascot: claw creature + lightning bolt (sourced from parallelclaw.ai brand) -->
+      <svg class="brand-svg" viewBox="0 0 180 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="memex-claw-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#6ee7b7"/>
+            <stop offset="100%" stop-color="#60a5fa"/>
+          </linearGradient>
+          <linearGradient id="memex-bolt-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fef08a"/>
+            <stop offset="50%" stop-color="#fbbf24"/>
+            <stop offset="100%" stop-color="#f59e0b"/>
+          </linearGradient>
+          <filter id="memex-bolt-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g transform="translate(10,5)">
+          <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#memex-claw-grad)"/>
+          <path d="M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z" fill="url(#memex-claw-grad)"/>
+          <path d="M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z" fill="url(#memex-claw-grad)"/>
+          <path d="M45 15 Q35 5 30 8" stroke="url(#memex-claw-grad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M75 15 Q85 5 90 8" stroke="url(#memex-claw-grad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <circle cx="45" cy="35" r="6" fill="#0d1016"/>
+          <circle cx="75" cy="35" r="6" fill="#0d1016"/>
+          <circle cx="46" cy="34" r="2" fill="#6ee7b7"/>
+          <circle cx="76" cy="34" r="2" fill="#6ee7b7"/>
+        </g>
+        <path d="M130 5 L108 55 L128 55 L100 115 L152 55 L130 55 L158 5 L130 5Z" fill="url(#memex-bolt-grad)" filter="url(#memex-bolt-glow)" transform="rotate(-8 130 60)"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-wordmark">me<span class="accent">mex</span></span>
+        <span class="brand-tagline">by <a href="https://parallelclaw.ai/" target="_blank" rel="noopener">ParallelClaw</a></span>
+      </span>
+    </a>
     <div class="nav-links">
       <div class="lang-toggle">
         <button data-lang="en" onclick="setLang('en')">EN</button>

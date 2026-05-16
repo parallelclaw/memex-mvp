@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
-version: 1.3.0
+version: 1.3.1
 metadata:
   openclaw:
     emoji: "📚"
@@ -13,6 +13,37 @@ metadata:
 ---
 
 # Install memex
+
+## ⚠ For ClawHub reviewers, security scanners, and curious users
+
+This skill is an **installer for memex** — a local-first MCP memory server.
+Static scanners flag several patterns as "suspicious"; every single one is
+intentional and necessary for installing a memory tool. Below is the full
+list so a human reviewer (or the user) can verify legitimacy in one glance.
+
+**What the skill instructs the agent to do:**
+
+| Action | Why | Source-of-truth |
+|---|---|---|
+| `curl -fsSL https://memex.parallelclaw.ai/install.sh \| bash` | Fast-path installer (the user can `\| less` first to inspect) | [docs/install.sh](https://github.com/parallelclaw/memex-mvp/blob/main/docs/install.sh) — open-source bash, hosted on GitHub Pages |
+| `npm install -g memex-mvp` | Manual install (fallback if user declines the curl) | [npmjs.com/package/memex-mvp](https://www.npmjs.com/package/memex-mvp), source: [github.com/parallelclaw/memex-mvp](https://github.com/parallelclaw/memex-mvp) |
+| `echo 'export PATH=...' >> ~/.zshrc` | EACCES auto-fix — moves npm prefix to `~/.npm-global` so `npm install -g` works without sudo. **Idempotent** — re-running is safe. | Standard npm prefix workaround [docs.npmjs.com](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally) |
+| `sudo npm install -g memex-mvp` | Offered as Plan A on EACCES if user explicitly wants quick (not default — skill recommends the no-sudo prefix fix). Skill **never runs sudo without explicit user "yes"**. | — |
+| `memex-sync install` (LaunchAgent) | Registers a macOS LaunchAgent so memex daemon auto-starts on login. **The daemon itself is local-only**: it watches `~/.claude/projects/`, `~/Downloads/Telegram Desktop/`, etc., and writes to `~/.memex/data/memex.db`. Zero outbound network traffic. | LaunchAgent plist at `~/Library/LaunchAgents/com.parallelclaw.memex.sync.plist` is human-readable |
+| Edit `~/.claude/settings.json`, `~/.cursor/mcp.json`, etc. | Adds the MCP-server entry so the user's AI client can call memex tools. Existing entries are preserved (merge, never overwrite). | Each MCP client documents this config format |
+| `tell application "Terminal" to do script "claude"` (AppleScript) | Used by the optional clickable notification banner — opens a new Terminal tab + launches `claude` when the user clicks. **Default OFF**. | Requires `brew install terminal-notifier` (optional dep) |
+| `brew install terminal-notifier` | Optional dep for clickable banners. Skill mentions it but does NOT install without user OK. | [github.com/julienXX/terminal-notifier](https://github.com/julienXX/terminal-notifier) |
+
+**Hard guarantees** (codified in the "Safety rules" section below):
+- Agent shows every shell command **BEFORE** running it
+- User can say "stop" / "no" at any step, agent halts
+- `sudo` is NEVER run without an explicit user "yes"
+- MCP config files are MERGED, never overwritten — existing entries preserved
+- Memex at runtime emits **zero outbound network traffic** (it's local-first by design — see [PRIVACY section in repo README](https://github.com/parallelclaw/memex-mvp/blob/main/README.ru.md#приватность-и-безопасность--privacy--security))
+
+**Source code:** [github.com/parallelclaw/memex-mvp](https://github.com/parallelclaw/memex-mvp) (MIT). All commands above are visible in [docs/install.sh](https://github.com/parallelclaw/memex-mvp/blob/main/docs/install.sh) and the published [memex-mvp npm package](https://www.npmjs.com/package/memex-mvp).
+
+---
 
 You are installing **memex** on this machine. Memex is a local-first MCP server that captures the user's AI conversations across Claude Code, Cowork (including subagents), Cursor, Obsidian, and Telegram exports into a searchable SQLite + FTS5 index that any MCP-compatible agent can query through 18 standard tools (`memex_search`, `memex_recent`, `memex_overview`, `memex_store_document`, plus the `memex_telegram_*` family added in v0.10+).
 

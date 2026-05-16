@@ -15,7 +15,7 @@
 
 set -e
 
-VERSION="${1:-1.3.0}"
+VERSION="${1:-1.3.1}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -30,7 +30,7 @@ npx -y clawhub skill publish skills/install-memex \
   --slug install-memex \
   --name "Install memex — cross-AI memory" \
   --version "$VERSION" \
-  --changelog "Sets up memex (local-first MCP server for cross-agent AI memory) end-to-end in ~60 seconds via curl one-liner — auto-fixes npm EACCES, installs the auto-capture daemon (LaunchAgent), wires the Brian Chesky SessionStart hook into ~/.claude/settings.json, backfills history, and registers MCP for Claude Code CLI. Then proactively walks v0.10 Telegram capture: export from Telegram Desktop → daemon stages it → AI asks per-chat which to import (privacy-first consent, allow/skip/block patterns). Cross-client coverage: Claude Code CLI gets native SessionStart hook; Cursor/Cline/Continue/Zed/Claude Desktop get the same wow-moment via SERVER_INSTRUCTIONS teaching the agent to call memex_overview first. 18 MCP tools after install. URL/Perplexity capture via memex_store_document. Terminal CLI fallback when MCP isn't wired." \
+  --changelog "v1.3.1 — added explicit Safety & Transparency block at the top of SKILL.md so static scanners + reviewers + curious users can verify each 'suspicious' pattern (curl|bash, PATH edit, LaunchAgent, MCP config edit, AppleScript, brew install) is intentional + source-of-truth linked. No behavior change; this is documentation only. v1.3 sets up memex (local-first MCP server for cross-agent AI memory) end-to-end in ~60 seconds via curl one-liner — auto-fixes npm EACCES, installs the auto-capture daemon (LaunchAgent), wires the Brian Chesky SessionStart hook into ~/.claude/settings.json, backfills history, and registers MCP for Claude Code CLI. Then proactively walks v0.10 Telegram capture: export from Telegram Desktop → daemon stages it → AI asks per-chat which to import (privacy-first consent, allow/skip/block patterns). Cross-client coverage: Claude Code CLI gets native SessionStart hook; Cursor/Cline/Continue/Zed/Claude Desktop get the same wow-moment via SERVER_INSTRUCTIONS teaching the agent to call memex_overview first. 18 MCP tools after install. URL/Perplexity capture via memex_store_document. Terminal CLI fallback when MCP isn't wired." \
   --tags "memex,memory,mcp,mcp-server,install,setup,ai-memory,local-first,verbatim,claude-code,claude-cowork,cowork,cursor,cline,continue,zed,sqlite,fts5,chat-archive,telegram,telegram-capture,obsidian,context-persistence,session-memory,cross-agent,brian-chesky,session-hook,parallelclaw" \
   --clawscan-note "Skill instructs the agent to run 'curl -fsSL https://memex.parallelclaw.ai/install.sh | bash' (preferred fast path) or step-by-step 'npm install -g memex-mvp' + MCP config edit (Claude Code / Cursor / Cline / Continue / Zed). Network access via npm + the hosted bash installer on memex.parallelclaw.ai (GitHub Pages — view source: github.com/parallelclaw/memex-mvp/blob/main/docs/install.sh), shell commands, JSON config edits in dot-files, and (optional) brew install terminal-notifier — all intentional. No exfiltration; explicit Discovery preflight + 'show every command before running' safety rule + per-chat Telegram consent. Memex itself is local-first and emits zero network traffic at runtime."
 

@@ -722,27 +722,6 @@
   .usecase-more > summary:hover { background: var(--bg-soft); }
   .usecase-grid-more { margin-top: 14px; }
 
-  /* How-it-works diagram (collapsible) */
-  .diagram-details {
-    max-width: 880px; margin: 0 auto;
-  }
-  .diagram-details > summary {
-    cursor: pointer;
-    list-style: none;
-    color: var(--accent-light);
-    font-size: 14px;
-    padding: 12px 18px;
-    background: var(--bg-card);
-    border: 1px dashed var(--border);
-    border-radius: 10px;
-    text-align: center;
-  }
-  .diagram-details > summary::-webkit-details-marker { display: none; }
-  .diagram-details > summary::before { content: '+ '; opacity: 0.7; }
-  .diagram-details[open] > summary::before { content: '− '; opacity: 0.7; }
-  .diagram-details > summary:hover { background: var(--bg-soft); }
-  .diagram-details > .diagram { margin-top: 14px; }
-
   /* Install alternatives collapsible */
   .install-alternatives {
     margin-top: 30px;
@@ -1358,15 +1337,22 @@
 
 <section class="section">
   <div class="section-inner">
-    <h2 class="section-title" data-en="How it works" data-ru="Как это работает">How it works</h2>
-    <p class="section-sub" data-en="One folder. One database. Any agent can ask."
-                            data-ru="Одна папка. Одна база. Любой агент может спросить.">
-      One folder. One database. Any agent can ask.
+    <h2 class="section-title" data-en="FAQ" data-ru="FAQ">FAQ</h2>
+    <p class="section-sub"
+       data-en="Common questions about scope, devices, and privacy."
+       data-ru="Частые вопросы — про охват, устройства и приватность.">
+      Common questions about scope, devices, and privacy.
     </p>
 
-    <details class="diagram-details">
-      <summary data-en="See the architecture diagram (paths, daemon flow, dedup, MCP server)"
-               data-ru="Архитектурная диаграмма (пути, поток daemon'a, dedup, MCP-сервер)">See the architecture diagram (paths, daemon flow, dedup, MCP server)</summary>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary data-en="How does memex work under the hood?"
+                 data-ru="Как memex работает технически?">How does memex work under the hood?</summary>
+        <div class="faq-body">
+          <p data-en="One folder per source. One SQLite database. Any MCP-compatible agent can query it. The diagram below walks through the full pipeline — from filesystem watchers to MCP tool calls."
+             data-ru="Одна папка под каждый источник. Одна SQLite-база. Любой MCP-совместимый агент может её спрашивать. Диаграмма ниже показывает весь pipeline — от файловых watchers до MCP-tool-вызовов.">
+            Одна папка под каждый источник. Одна SQLite-база. Любой MCP-совместимый агент может её спрашивать. Диаграмма ниже показывает весь pipeline — от файловых watchers до MCP-tool-вызовов.
+          </p>
 <div class="diagram">~/Downloads/Telegram Desktop/   <span class="comment">← v0.10+ daemon auto-stages exports</span>
 ~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
 ~/Library/.../local-agent-mode  <span class="comment">← Cowork sessions (incl. subagents)</span>
@@ -1388,20 +1374,9 @@ any client:
 
 <span class="comment">your agent calls memex_overview() at session start, then memex_search()
 on every topic the user references — no prompting needed</span></div>
-    </details>
-  </div>
-</section>
+        </div>
+      </details>
 
-<section class="section">
-  <div class="section-inner">
-    <h2 class="section-title" data-en="FAQ" data-ru="FAQ">FAQ</h2>
-    <p class="section-sub"
-       data-en="Common questions about scope, devices, and privacy."
-       data-ru="Частые вопросы — про охват, устройства и приватность.">
-      Common questions about scope, devices, and privacy.
-    </p>
-
-    <div class="faq-list">
       <details class="faq-item">
         <summary data-en="I just installed memex — what do I do now?"
                  data-ru="Только установил memex — что дальше?">I just installed memex — what do I do now?</summary>

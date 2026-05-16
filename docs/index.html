@@ -65,10 +65,6 @@
     text-decoration: none;
   }
   .brand-svg { width: 32px; height: auto; display: block; flex-shrink: 0; }
-  .brand-text {
-    display: flex; flex-direction: column;
-    line-height: 1;
-  }
   .brand-wordmark {
     font-weight: 800; font-size: 17px;
     letter-spacing: -0.04em;
@@ -76,18 +72,6 @@
     white-space: nowrap;
   }
   .brand-wordmark .accent { color: var(--accent); }
-  .brand-tagline {
-    font-size: 10.5px;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-top: 4px;
-  }
-  .brand-tagline a { color: var(--text-muted); border-bottom: 1px dotted var(--text-muted); }
-  .brand-tagline a:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
-  @media (max-width: 540px) {
-    .brand-tagline { display: none; }
-  }
   .nav-links { display: flex; align-items: center; gap: 8px; }
   .lang-toggle {
     display: inline-flex; align-items: center;
@@ -958,10 +942,7 @@
         </g>
         <path d="M130 5 L108 55 L128 55 L100 115 L152 55 L130 55 L158 5 L130 5Z" fill="url(#memex-bolt-grad)" filter="url(#memex-bolt-glow)" transform="rotate(-8 130 60)"/>
       </svg>
-      <span class="brand-text">
-        <span class="brand-wordmark">me<span class="accent">mex</span></span>
-        <span class="brand-tagline">by <a href="https://parallelclaw.ai/" target="_blank" rel="noopener">ParallelClaw</a></span>
-      </span>
+      <span class="brand-wordmark">me<span class="accent">mex</span></span>
     </a>
     <div class="nav-links">
       <div class="lang-toggle">
@@ -978,20 +959,12 @@
 
 <section class="hero">
   <div class="hero-inner">
-    <div class="pill" data-en="Cross-AI · Local-first · MIT" data-ru="Cross-AI · Local-first · MIT">Cross-AI · Local-first · MIT</div>
-
     <div class="hero-badges" aria-label="Project stats">
       <a href="https://www.npmjs.com/package/memex-mvp" target="_blank" rel="noopener" aria-label="npm version">
         <img src="https://img.shields.io/npm/v/memex-mvp.svg?label=npm&color=cb3837" alt="npm version" />
       </a>
       <a href="https://www.npmjs.com/package/memex-mvp" target="_blank" rel="noopener" aria-label="npm weekly downloads">
         <img src="https://img.shields.io/npm/dw/memex-mvp.svg?label=downloads&color=2ea44f" alt="npm downloads" />
-      </a>
-      <a href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener" aria-label="GitHub stars">
-        <img src="https://img.shields.io/github/stars/parallelclaw/memex-mvp?style=flat&color=eab308&logo=github" alt="GitHub stars" />
-      </a>
-      <a href="https://github.com/parallelclaw/memex-mvp/blob/main/LICENSE" target="_blank" rel="noopener" aria-label="MIT license">
-        <img src="https://img.shields.io/npm/l/memex-mvp.svg?color=3b82f6" alt="MIT license" />
       </a>
     </div>
 
@@ -1242,23 +1215,6 @@
       </div>
 
       <div class="usecase">
-        <h3 data-en="🔄 'Where did I leave this project?'"
-            data-ru="🔄 «Где я остановился в этом проекте?»">🔄 «Где я остановился в этом проекте?»</h3>
-        <p class="usecase-context"
-           data-en="Returning to a project after a break — instead of digging through git log and notes:"
-           data-ru="Возвращаешься к проекту после паузы — вместо копания в git log и заметках:">
-          Возвращаешься к проекту после паузы — вместо копания в git log и заметках:
-        </p>
-        <div class="usecase-prompt" data-en="I'm back on the memex project after two weeks. Via memex_list_projects and memex_recent show me where I stopped. What was done? What's still open?"
-                                  data-ru="Возвращаюсь к проекту memex после двух недель. Через memex_list_projects и memex_recent покажи где я остановился. Что сделано, что осталось?">Возвращаюсь к проекту memex после двух недель. Через memex_list_projects и memex_recent покажи где я остановился. Что сделано, что осталось?</div>
-        <p class="usecase-result"
-           data-en="→ Agent reconstructs the picture from your recent sessions in that project_path."
-           data-ru="→ Агент собирает картину из последних сессий по этому project_path.">
-          → Агент собирает картину из последних сессий по этому project_path.
-        </p>
-      </div>
-
-      <div class="usecase">
         <h3 data-en="🔗 Save research from Perplexity, articles, AI chat shares"
             data-ru="🔗 Сохранить research из Perplexity, статьи, AI-share'ы">🔗 Сохранить research из Perplexity, статьи, AI-share'ы</h3>
         <p class="usecase-context"
@@ -1277,9 +1233,26 @@
     </div>
 
     <details class="usecase-more">
-      <summary data-en="3 more scenarios — deck analysis · exact-wording recall · pattern discovery"
-               data-ru="Ещё 3 сценария — анализ deck'a · точная цитата · поиск паттернов">3 more scenarios — deck analysis · exact-wording recall · pattern discovery</summary>
+      <summary data-en="4 more scenarios — project resume · deck analysis · exact-wording recall · pattern discovery"
+               data-ru="Ещё 4 сценария — возврат к проекту · анализ deck'a · точная цитата · поиск паттернов">4 more scenarios — project resume · deck analysis · exact-wording recall · pattern discovery</summary>
       <div class="usecase-grid usecase-grid-more">
+        <div class="usecase">
+          <h3 data-en="🔄 'Where did I leave this project?'"
+              data-ru="🔄 «Где я остановился в этом проекте?»">🔄 «Где я остановился в этом проекте?»</h3>
+          <p class="usecase-context"
+             data-en="Returning to a project after a break — instead of digging through git log and notes:"
+             data-ru="Возвращаешься к проекту после паузы — вместо копания в git log и заметках:">
+            Возвращаешься к проекту после паузы — вместо копания в git log и заметках:
+          </p>
+          <div class="usecase-prompt" data-en="I'm back on the memex project after two weeks. Via memex_list_projects and memex_recent show me where I stopped. What was done? What's still open?"
+                                    data-ru="Возвращаюсь к проекту memex после двух недель. Через memex_list_projects и memex_recent покажи где я остановился. Что сделано, что осталось?">Возвращаюсь к проекту memex после двух недель. Через memex_list_projects и memex_recent покажи где я остановился. Что сделано, что осталось?</div>
+          <p class="usecase-result"
+             data-en="→ Agent reconstructs the picture from your recent sessions in that project_path. <em>(Note: Brian Chesky auto-context hook fires this without you asking — this scenario is for the explicit case.)</em>"
+             data-ru="→ Агент собирает картину из последних сессий по этому project_path. <em>(Примечание: Brian Chesky auto-context хук делает это сам — этот сценарий для случая когда явно спрашиваешь.)</em>">
+            → Агент собирает картину из последних сессий по этому project_path. <em>(Примечание: Brian Chesky auto-context хук делает это сам — этот сценарий для случая когда явно спрашиваешь.)</em>
+          </p>
+        </div>
+
         <div class="usecase">
           <h3 data-en="📊 Analyze a deck from a work Telegram chat"
               data-ru="📊 Pitch-deck из рабочего Telegram-чата + контекст обсуждения">📊 Pitch-deck из рабочего Telegram-чата + контекст обсуждения</h3>

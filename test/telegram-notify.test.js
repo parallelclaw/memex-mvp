@@ -9,7 +9,9 @@ import {
   notifShownFor,
   markNotifShown,
   setNotificationsEnabled,
+  setClickTarget,
   formatTelegramTip,
+  VALID_CLICK_TARGETS,
 } from '../lib/telegram-notify.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,7 +37,9 @@ test('loadNotifyState: empty file returns defaults', () => {
     const s = loadNotifyState(p);
     assertEq(s.cli_tip_last_shown_at, null);
     assertEq(s.notif_shown_for_ids, []);
-    assertEq(s.notifications, { enabled: false, show_titles: false });
+    assertEq(s.notifications.enabled, false);
+    assertEq(s.notifications.show_titles, false);
+    assertEq(s.notifications.click_target, 'auto');
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 
@@ -52,7 +56,8 @@ test('saveNotifyState + loadNotifyState round-trip', () => {
     const r = loadNotifyState(p);
     assert(r.cli_tip_last_shown_at, 'cli_tip should be set');
     assert(r.notif_shown_for_ids.length === 1);
-    assertEq(r.notifications, { enabled: true, show_titles: true });
+    assertEq(r.notifications.enabled, true);
+    assertEq(r.notifications.show_titles, true);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 
@@ -119,9 +124,11 @@ test('markNotifShown: caps memory at 200', () => {
 test('setNotificationsEnabled: toggle ON without changing show_titles', () => {
   const s = loadNotifyState('/nonexistent');
   setNotificationsEnabled(s, true);
-  assertEq(s.notifications, { enabled: true, show_titles: false });
+  assertEq(s.notifications.enabled, true);
+  assertEq(s.notifications.show_titles, false);
   setNotificationsEnabled(s, false);
-  assertEq(s.notifications, { enabled: false, show_titles: false });
+  assertEq(s.notifications.enabled, false);
+  assertEq(s.notifications.show_titles, false);
 });
 
 test('setNotificationsEnabled: explicit show_titles', () => {
@@ -173,6 +180,45 @@ test('formatTelegramTip: handles missing message_count', () => {
   const tip = formatTelegramTip([{ chat_title: 'X' }]);
   assert(tip.includes('X'));
   assert(tip.includes('?'));
+});
+
+// ---------- v0.10.4: click_target ----------
+
+test('default state has click_target=auto', () => {
+  const s = loadNotifyState('/nonexistent');
+  assertEq(s.notifications.click_target, 'auto');
+});
+
+test('setClickTarget: accepts valid values', () => {
+  const s = loadNotifyState('/nonexistent');
+  for (const t of VALID_CLICK_TARGETS) {
+    setClickTarget(s, t);
+    assertEq(s.notifications.click_target, t);
+  }
+});
+
+test('setClickTarget: throws on invalid value', () => {
+  const s = loadNotifyState('/nonexistent');
+  let threw = false;
+  try { setClickTarget(s, 'banana'); } catch (e) { threw = true; }
+  assert(threw, 'invalid target should throw');
+});
+
+test('VALID_CLICK_TARGETS exports the expected set', () => {
+  assertEq(VALID_CLICK_TARGETS, ['auto', 'claude-cli', 'claude-desktop', 'terminal', 'none']);
+});
+
+test('saveNotifyState + loadNotifyState round-trip preserves click_target', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'memex-notify-ct-'));
+  try {
+    const p = join(tmp, '.tg-tip-state.json');
+    const s = loadNotifyState(p);
+    setClickTarget(s, 'terminal');
+    saveNotifyState(s, p);
+
+    const r = loadNotifyState(p);
+    assertEq(r.notifications.click_target, 'terminal');
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

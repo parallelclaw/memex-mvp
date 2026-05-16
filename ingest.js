@@ -1386,27 +1386,42 @@ function scheduleTelegramStaging(srcPath) {
       const dest = stageExport(srcPath, { moveOrCopy: 'move' });
       log(`+ telegram-export staged → pending/: ${basename(dest)}`);
 
-      // Channel C: macOS native notification. Default OFF, opt-in via
-      //   `memex telegram notifications on [--show-titles]`. Dedup by path
-      //   hash so re-stages of the same export don't re-notify.
+      // Channel C: macOS native notification (v0.10.4+ — clickable).
+      // Default OFF, opt-in via `memex telegram notifications on`. Dedup
+      // by path hash so re-stages of same export don't re-notify.
+      //
+      // Click behavior priority (auto): Claude Code CLI → Claude Desktop
+      // → Terminal. terminal-notifier required for click-through; without
+      // it banner is shown via osascript (informative text, no click).
       try {
         const notify = await import('./lib/telegram-notify.js');
+        const clickLib = await import('./lib/notify-click-action.js');
         const state = notify.loadNotifyState();
         if (state.notifications.enabled && !notify.notifShownFor(state, dest)) {
-          // Look up preview to know the chat name (only if user opted in)
           const list = listPending();
           const justStaged = list.find((e) => e.path === dest) || {};
           const totalPending = list.length;
           const showTitles = !!state.notifications.show_titles;
-          const title = `memex · ${totalPending} new Telegram chat${totalPending === 1 ? '' : 's'}`;
-          const body = showTitles && justStaged.chat_title
-            ? `"${justStaged.chat_title}" — ${justStaged.message_count?.toLocaleString?.() || '?'} msgs. Review with: memex telegram pending`
-            : `Review with: memex telegram pending`;
-          const fired = notify.fireMacosNotification(title, body, { subtitle: 'Ready to review' });
-          if (fired) {
+          const env = clickLib.detectEnvironment();
+          const target = clickLib.pickTarget(state.notifications.click_target || 'auto', env);
+          const clickable = !!env.terminal_notifier && target !== 'none';
+          const cta = clickLib.bannerCallToAction(target, clickable);
+
+          const title = 'memex';
+          const subtitle = `${totalPending} new Telegram chat${totalPending === 1 ? '' : 's'} ready to review`;
+          const message = showTitles && justStaged.chat_title
+            ? `"${justStaged.chat_title}" — ${(justStaged.message_count || 0).toLocaleString()} msgs · ${cta}`
+            : `${cta}`;
+
+          const r = clickLib.fireClickableNotification({
+            title, subtitle, message,
+            target: state.notifications.click_target || 'auto',
+            env,
+          });
+          if (r.backend !== 'noop') {
             notify.markNotifShown(state, [dest]);
             notify.saveNotifyState(state);
-            log(`  notif fired (macOS, ${showTitles ? 'with' : 'no'} title)`);
+            log(`  notif fired (${r.backend}, target=${r.target}, titles=${showTitles ? 'yes' : 'no'})`);
           }
         }
       } catch (e) {

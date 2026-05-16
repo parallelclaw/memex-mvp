@@ -206,7 +206,7 @@ Terminal equivalents: `memex telegram check / pending / import 1 3 5 / skip 2 / 
 
 1. **In the AI agent (active session)** — `memex_search` / `memex_recent` / `memex_overview` tool responses include a `telegram_pending` field with chat names. Agent surfaces it as a natural aside.
 2. **In the terminal** — any `memex` CLI command appends a 💡 tip line when pending > 0. Throttled to once per 6h.
-3. **macOS native notification** (opt-in) — daemon fires a banner when a new export is staged. `memex telegram notifications on` to enable. Default OFF for lock-screen privacy; add `--show-titles` if you want chat names in the banner.
+3. **macOS native notification** (opt-in) — daemon fires a banner when a new export is staged. `memex telegram notifications on` to enable. Default OFF for lock-screen privacy; add `--show-titles` if you want chat names in the banner. **v0.10.4+ clickable:** if `terminal-notifier` is installed (`brew install terminal-notifier`), clicking the banner opens — in priority order — Claude Code CLI in a fresh Terminal (Brian Chesky moment via SessionStart hook), Claude Desktop, or Terminal with `memex telegram pending` queued. Override priority via `memex telegram notifications target <auto|claude-cli|claude-desktop|terminal|none>`.
 4. **Brian Chesky hook (next Claude Code session)** — `memex context` injection includes a "🆕 N exports awaiting review" block with chat names. Claude leads with the question before you type anything.
 
 ---

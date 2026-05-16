@@ -331,6 +331,9 @@ memex telegram allow "Family"                      # auto-import на следу
 memex telegram block "*bank*"                      # никогда не индексировать (glob)
 memex telegram mode auto                           # pick (default) / auto / manual
 memex telegram notifications on --show-titles      # macOS notif когда детектится новый export
+memex telegram notifications target claude-cli     # клик по баннеру → откроет Claude Code CLI
+memex telegram open-pending                        # открыть pending в лучшем доступном клиенте
+memex telegram open-pending --in terminal          # forcefully в Terminal с командой
 memex telegram scan                                # one-shot ре-скан Downloads
 memex telegram status                              # all decisions
 

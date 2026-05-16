@@ -113,12 +113,25 @@ test('allowChat moves from skipped to allowed', () => {
   assert(state.skipped_chats.every((c) => c.title.toLowerCase() !== 'maybe'));
 });
 
-test('skipChat moves from allowed to skipped', () => {
+// v0.10.3 — semantics change: skipChat on an already-allowed chat is a no-op
+// for decisions (the user has committed to this chat). This stops the
+// "import X then skip duplicate-snapshot-of-X" flow from accidentally
+// downgrading X out of the allow-list.
+test('skipChat: preserves allow when chat already allowed (v0.10.3+)', () => {
   const state = loadDecisions('/nonexistent');
-  allowChat(state, 'Changed');
-  skipChat(state, 'Changed');
-  assertEq(decideForChat(state, 'Changed'), 'skip');
-  assert(state.allowed_chats.every((c) => c.title.toLowerCase() !== 'changed'));
+  allowChat(state, 'Family');
+  skipChat(state, 'Family');
+  // Decision is still "allow" — user already said yes to this chat
+  assertEq(decideForChat(state, 'Family'), 'import');
+  assert(state.allowed_chats.some((c) => c.title === 'Family'), 'Family still in allowed_chats');
+  assert(!state.skipped_chats.some((c) => c.title === 'Family'), 'Family NOT in skipped_chats');
+});
+
+test('skipChat: adds to skipped if chat not previously allowed', () => {
+  const state = loadDecisions('/nonexistent');
+  skipChat(state, 'NewChat');
+  assertEq(decideForChat(state, 'NewChat'), 'skip');
+  assert(state.skipped_chats.some((c) => c.title === 'NewChat'));
 });
 
 test('unskipChat: removes from skipped', () => {

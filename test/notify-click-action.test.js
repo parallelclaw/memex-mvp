@@ -138,6 +138,7 @@ test('fireClickableNotification non-darwin → noop', () => {
   const r = fireClickableNotification({
     title: 'test', message: 'm',
     env: mkEnv({ platform: 'linux' }),
+    dryRun: true,
   });
   assertEq(r.backend, 'noop');
 });
@@ -149,6 +150,7 @@ test('fireClickableNotification with TN + claude-cli → terminal-notifier backe
     title: 't', message: 'm',
     target: 'auto',
     env: mkEnv(),
+    dryRun: true,
   });
   assertEq(r.backend, 'terminal-notifier');
   assertEq(r.target, 'claude-cli');
@@ -160,6 +162,7 @@ test('fireClickableNotification without TN → osascript backend (no click)', ()
     title: 't', message: 'm',
     target: 'auto',
     env: mkEnv({ tn: false }),
+    dryRun: true,
   });
   assertEq(r.backend, 'osascript');
   assertEq(r.target, 'none');
@@ -172,10 +175,45 @@ test('fireClickableNotification with target=none + TN → still terminal-notifie
     title: 't', message: 'm',
     target: 'none',
     env: mkEnv(),
+    dryRun: true,
   });
   // With TN installed but no click_command, we fall to osascript branch
   assertEq(r.backend, 'osascript');
   assertEq(r.target, 'none');
+});
+
+// ---------- v0.10.6: dryRun mode ----------
+
+test('dryRun:true returns shape without spawning real notification', () => {
+  // We can't directly assert no-spawn, but we can confirm the return
+  // shape is identical between dry and not-dry for the same input.
+  const r = fireClickableNotification({
+    title: 'dry', message: 'msg',
+    target: 'auto',
+    env: mkEnv(),
+    dryRun: true,
+  });
+  assertEq(r.backend, 'terminal-notifier');
+  assertEq(r.target, 'claude-cli');
+  assert(r.click_command.includes('claude'));
+});
+
+test('MEMEX_NO_FIRE env also suppresses spawn', () => {
+  const prev = process.env.MEMEX_NO_FIRE;
+  process.env.MEMEX_NO_FIRE = '1';
+  try {
+    const r = fireClickableNotification({
+      title: 'env-noop', message: 'm',
+      target: 'auto',
+      env: mkEnv(),
+    });
+    // Same shape as dryRun explicit
+    assertEq(r.backend, 'terminal-notifier');
+    assertEq(r.target, 'claude-cli');
+  } finally {
+    if (prev === undefined) delete process.env.MEMEX_NO_FIRE;
+    else process.env.MEMEX_NO_FIRE = prev;
+  }
 });
 
 // ---------- AppleScript injection guard ----------

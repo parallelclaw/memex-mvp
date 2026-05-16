@@ -202,6 +202,17 @@
   .btn-tertiary:hover { color: var(--accent-light); text-decoration: none; }
 
   .cta-meta { font-size: 13px; color: var(--text-muted); margin-top: 18px; }
+  .hero-feature-flash {
+    font-size: 14px; color: var(--text-soft);
+    margin-top: 20px; margin-bottom: 0;
+    line-height: 1.55;
+    padding: 10px 14px;
+    background: rgba(95,182,205,0.08);
+    border-left: 3px solid var(--accent-light);
+    border-radius: 4px;
+    text-align: left;
+  }
+  .hero-feature-flash strong { color: var(--accent-light); }
 
   /* Section base */
   .section {
@@ -451,6 +462,68 @@
     font-size: 13.5px; line-height: 1.55;
   }
   .usecase-result strong { color: var(--text-soft); font-weight: 600; }
+  .usecase-more {
+    max-width: 880px; margin: 18px auto 0;
+  }
+  .usecase-more > summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--accent-light);
+    font-size: 14px;
+    padding: 12px 18px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    transition: background 0.15s ease;
+    text-align: center;
+  }
+  .usecase-more > summary::-webkit-details-marker { display: none; }
+  .usecase-more > summary::before { content: '+ '; opacity: 0.7; }
+  .usecase-more[open] > summary::before { content: '− '; opacity: 0.7; }
+  .usecase-more > summary:hover { background: var(--bg-soft); }
+  .usecase-grid-more { margin-top: 14px; }
+
+  /* How-it-works diagram (collapsible) */
+  .diagram-details {
+    max-width: 880px; margin: 0 auto;
+  }
+  .diagram-details > summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--accent-light);
+    font-size: 14px;
+    padding: 12px 18px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    text-align: center;
+  }
+  .diagram-details > summary::-webkit-details-marker { display: none; }
+  .diagram-details > summary::before { content: '+ '; opacity: 0.7; }
+  .diagram-details[open] > summary::before { content: '− '; opacity: 0.7; }
+  .diagram-details > summary:hover { background: var(--bg-soft); }
+  .diagram-details > .diagram { margin-top: 14px; }
+
+  /* Install alternatives collapsible */
+  .install-alternatives {
+    margin-top: 30px;
+  }
+  .install-alternatives > summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--accent-light);
+    font-size: 14px;
+    padding: 14px 20px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    text-align: center;
+    transition: background 0.15s ease;
+  }
+  .install-alternatives > summary::-webkit-details-marker { display: none; }
+  .install-alternatives > summary::before { content: '+ '; opacity: 0.7; }
+  .install-alternatives[open] > summary::before { content: '− '; opacity: 0.7; }
+  .install-alternatives > summary:hover { background: var(--bg-soft); }
 
   /* FAQ collapsibles */
   .faq-list { max-width: 760px; margin: 0 auto; }
@@ -674,9 +747,9 @@
       <span class="accent" data-en="for all your AI and Telegram chats" data-ru="для всех твоих AI и Telegram чатов">for all your AI and Telegram chats</span>
     </h1>
     <p class="lede"
-       data-en="A local MCP that captures every word of your conversations with AI (Claude Code, Cowork, OpenClaw, Cursor) and selected Telegram chats on your machine. Search across everything at once. Your history survives even if Claude blocks your account."
-       data-ru="Локальный MCP, дословно сохраняющий все разговоры с AI (Claude Code, Cowork, OpenClaw, Cursor) и выбранные чаты в Telegram на твоём компьютере. Поиск по всему сразу. Твоя история не пропадёт даже при блокировке Claude-аккаунта.">
-       A local MCP that captures every word of your conversations with AI (Claude Code, Cowork, OpenClaw, Cursor) and selected Telegram chats on your machine. Search across everything at once. Your history survives even if Claude blocks your account.
+       data-en="A local memory layer that captures everything you say to AI — and to selected Telegram chats. One file on your laptop. Any agent (Claude, Cursor, Cline, …) reads from the same memory. Survives provider bans by design."
+       data-ru="Локальная память для всего что ты говоришь AI — и выбранных Telegram-чатов. Один файл на твоём ноутбуке. Любой агент (Claude, Cursor, Cline, …) читает из одной памяти. Не зависит от провайдера by design.">
+       Локальная память для всего что ты говоришь AI — и выбранных Telegram-чатов. Один файл на твоём ноутбуке. Любой агент (Claude, Cursor, Cline, …) читает из одной памяти. Не зависит от провайдера by design.
     </p>
 
     <div class="hero-install">
@@ -712,6 +785,12 @@
            data-ru="↓ или вручную">↓ or install manually</a>
       </div>
     </div>
+
+    <p class="hero-feature-flash"
+       data-en="✨ <strong>v0.10:</strong> export a chat from Telegram Desktop — memex auto-detects it, AI proactively asks which to import. Privacy-first: nothing indexed without per-chat consent."
+       data-ru="✨ <strong>v0.10:</strong> экспортируешь чат из Telegram Desktop — memex сам ловит его, AI проактивно спрашивает что импортить. Privacy-first: ничего не индексируется без явного согласия на каждый чат.">
+      ✨ <strong>v0.10:</strong> экспортируешь чат из Telegram Desktop — memex сам ловит его, AI проактивно спрашивает что импортить. Privacy-first: ничего не индексируется без явного согласия на каждый чат.
+    </p>
 
     <p class="cta-meta"
        data-en="MIT · Survives provider bans by design · No cloud · No API keys"
@@ -749,23 +828,6 @@
       </div>
 
       <div class="usecase">
-        <h3 data-en="📊 Analyze a deck from a work Telegram chat"
-            data-ru="📊 Pitch-deck из рабочего Telegram-чата + контекст обсуждения">📊 Pitch-deck из рабочего Telegram-чата + контекст обсуждения</h3>
-        <p class="usecase-context"
-           data-en="A colleague sent a pitch deck in Telegram two months ago, then the team commented in chat. Now you're prepping a presentation for leadership:"
-           data-ru="Маркетолог два месяца назад прислал deck про Q2 launch в Telegram, потом команда комментировала. Сейчас готовишь презентацию руководству:">
-          Маркетолог два месяца назад прислал deck про Q2 launch в Telegram, потом команда комментировала. Сейчас готовишь презентацию руководству:
-        </p>
-        <div class="usecase-prompt" data-en="Via memex_search find the deck about Q2 launch in my chat with marketing (around two months back) and all the discussion around it. Open the file itself (path is in the message metadata), and synthesize: 1) key theses from the deck, 2) team comments from the chat, 3) open questions left for the next meeting."
-                                  data-ru="Через memex_search найди в моём чате с маркетологом deck про Q2 launch (около двух месяцев назад) и всё обсуждение вокруг него. Открой сам файл (путь у memex в metadata) и сведи: 1) ключевые тезисы deck'a, 2) комментарии команды из чата, 3) открытые вопросы для следующей встречи.">Через memex_search найди в моём чате с маркетологом deck про Q2 launch (около двух месяцев назад) и всё обсуждение вокруг него. Открой сам файл (путь у memex в metadata) и сведи: 1) ключевые тезисы deck'a, 2) комментарии команды из чата, 3) открытые вопросы для следующей встречи.</div>
-        <p class="usecase-result"
-           data-en="→ Memex locates the deck + surrounding hour-long discussion, agent reads the PDF, returns a ready basis for your presentation. <strong>Slide content + team voice — fused in one synthesis.</strong>"
-           data-ru="→ Memex находит deck + часовое обсуждение вокруг него, агент читает PDF, выдаёт готовую basis для твоей презентации. <strong>Содержание deck'a + голос команды — слиты в один синтез.</strong>">
-          → Memex находит deck + часовое обсуждение вокруг него, агент читает PDF, выдаёт готовую basis для твоей презентации. <strong>Содержание deck'a + голос команды — слиты в один синтез.</strong>
-        </p>
-      </div>
-
-      <div class="usecase">
         <h3 data-en="🌉 One AI sees another AI's history"
             data-ru="🌉 Один AI видит историю другого">🌉 Один AI видит историю другого</h3>
         <p class="usecase-context"
@@ -779,23 +841,6 @@
            data-en="→ Cursor reads the Claude Code session through MCP. <strong>Context crosses between AIs without re-explanation.</strong>"
            data-ru="→ Cursor через MCP читает сессию Claude Code. <strong>Контекст переходит между AI без повторных объяснений.</strong>">
           → Cursor через MCP читает сессию Claude Code. <strong>Контекст переходит между AI без повторных объяснений.</strong>
-        </p>
-      </div>
-
-      <div class="usecase">
-        <h3 data-en="🔍 Recall the exact wording from March"
-            data-ru="🔍 Найти что именно ты сказал в марте">🔍 Найти что именно ты сказал в марте</h3>
-        <p class="usecase-context"
-           data-en="You decided something about pricing two months ago and can't remember the wording:"
-           data-ru="Решал что-то про pricing два месяца назад и не помнишь точную формулировку:">
-          Решал что-то про pricing два месяца назад и не помнишь точную формулировку:
-        </p>
-        <div class="usecase-prompt" data-en="In March I made a decision about pricing. Find the exact wording in my AI sessions."
-                                  data-ru="В марте я что-то решал про pricing. Найди дословную формулировку в моих сессиях с AI.">В марте я что-то решал про pricing. Найди дословную формулировку в моих сессиях с AI.</div>
-        <p class="usecase-result"
-           data-en="→ <code>memex_search(\"pricing\")</code> returns the original messages — not a paraphrase, the exact quote with date and source session."
-           data-ru="→ <code>memex_search(\"pricing\")</code> возвращает оригинальные сообщения — не пересказ, точную цитату с датой и из какой сессии.">
-          → <code>memex_search("pricing")</code> возвращает оригинальные сообщения — не пересказ, точную цитату с датой и из какой сессии.
         </p>
       </div>
 
@@ -817,23 +862,6 @@
       </div>
 
       <div class="usecase">
-        <h3 data-en="💡 Discover patterns across all AI conversations"
-            data-ru="💡 Найти паттерны во всех твоих AI-разговорах">💡 Найти паттерны во всех твоих AI-разговорах</h3>
-        <p class="usecase-context"
-           data-en="Curious where a topic surfaces across your stack:"
-           data-ru="Любопытно где конкретная тема всплывала в твоём стеке:">
-          Любопытно где конкретная тема всплывала в твоём стеке:
-        </p>
-        <div class="usecase-prompt" data-en="Find all mentions of Postgres in my AI sessions via memex_search. In what context? What was I solving? What problems came up?"
-                                  data-ru="Через memex_search найди все упоминания Postgres в моих сессиях с AI. В каком контексте? Что я решал? Какие проблемы всплывали?">Через memex_search найди все упоминания Postgres в моих сессиях с AI. В каком контексте? Что я решал? Какие проблемы всплывали?</div>
-        <p class="usecase-result"
-           data-en="→ One query → agent sees every mention across all tools, groups by theme."
-           data-ru="→ 1 запрос → агент видит все упоминания через все инструменты и сводит в темы.">
-          → 1 запрос → агент видит все упоминания через все инструменты и сводит в темы.
-        </p>
-      </div>
-
-      <div class="usecase">
         <h3 data-en="🔗 Save research from Perplexity, articles, AI chat shares"
             data-ru="🔗 Сохранить research из Perplexity, статьи, AI-share'ы">🔗 Сохранить research из Perplexity, статьи, AI-share'ы</h3>
         <p class="usecase-context"
@@ -850,6 +878,63 @@
         </p>
       </div>
     </div>
+
+    <details class="usecase-more">
+      <summary data-en="3 more scenarios — deck analysis · exact-wording recall · pattern discovery"
+               data-ru="Ещё 3 сценария — анализ deck'a · точная цитата · поиск паттернов">3 more scenarios — deck analysis · exact-wording recall · pattern discovery</summary>
+      <div class="usecase-grid usecase-grid-more">
+        <div class="usecase">
+          <h3 data-en="📊 Analyze a deck from a work Telegram chat"
+              data-ru="📊 Pitch-deck из рабочего Telegram-чата + контекст обсуждения">📊 Pitch-deck из рабочего Telegram-чата + контекст обсуждения</h3>
+          <p class="usecase-context"
+             data-en="A colleague sent a pitch deck in Telegram two months ago, then the team commented. Prepping for leadership:"
+             data-ru="Маркетолог два месяца назад прислал deck про Q2 launch в Telegram, потом команда комментировала. Готовишь презентацию руководству:">
+            Маркетолог два месяца назад прислал deck про Q2 launch в Telegram, потом команда комментировала. Готовишь презентацию руководству:
+          </p>
+          <div class="usecase-prompt" data-en="Via memex_search find the deck about Q2 launch in my chat with marketing (around two months back) and all the discussion around it. Open the file itself (path is in the message metadata), and synthesize: 1) key theses, 2) team comments, 3) open questions."
+                                    data-ru="Через memex_search найди в моём чате с маркетологом deck про Q2 launch (около двух месяцев назад) и всё обсуждение вокруг него. Открой сам файл (путь у memex в metadata) и сведи: 1) тезисы deck'a, 2) комментарии команды, 3) открытые вопросы.">Через memex_search найди в моём чате с маркетологом deck про Q2 launch (около двух месяцев назад) и всё обсуждение вокруг него. Открой сам файл (путь у memex в metadata) и сведи: 1) тезисы deck'a, 2) комментарии команды, 3) открытые вопросы.</div>
+          <p class="usecase-result"
+             data-en="→ Memex locates the deck + surrounding discussion, agent reads the PDF, returns a ready basis for your presentation."
+             data-ru="→ Memex находит deck + обсуждение вокруг него, агент читает PDF, выдаёт готовую basis для презентации.">
+            → Memex находит deck + обсуждение вокруг него, агент читает PDF, выдаёт готовую basis для презентации.
+          </p>
+        </div>
+
+        <div class="usecase">
+          <h3 data-en="🔍 Recall the exact wording from March"
+              data-ru="🔍 Найти что именно ты сказал в марте">🔍 Найти что именно ты сказал в марте</h3>
+          <p class="usecase-context"
+             data-en="You decided something about pricing two months ago and can't remember the wording:"
+             data-ru="Решал что-то про pricing два месяца назад и не помнишь точную формулировку:">
+            Решал что-то про pricing два месяца назад и не помнишь точную формулировку:
+          </p>
+          <div class="usecase-prompt" data-en="In March I made a decision about pricing. Find the exact wording in my AI sessions."
+                                    data-ru="В марте я что-то решал про pricing. Найди дословную формулировку в моих сессиях с AI.">В марте я что-то решал про pricing. Найди дословную формулировку в моих сессиях с AI.</div>
+          <p class="usecase-result"
+             data-en="→ <code>memex_search(\"pricing\")</code> returns original messages — not a paraphrase, exact quote with date and source session."
+             data-ru="→ <code>memex_search(\"pricing\")</code> возвращает оригинальные сообщения — точную цитату с датой и из какой сессии.">
+            → <code>memex_search("pricing")</code> возвращает оригинальные сообщения — точную цитату с датой и из какой сессии.
+          </p>
+        </div>
+
+        <div class="usecase">
+          <h3 data-en="💡 Discover patterns across all AI conversations"
+              data-ru="💡 Найти паттерны во всех твоих AI-разговорах">💡 Найти паттерны во всех твоих AI-разговорах</h3>
+          <p class="usecase-context"
+             data-en="Curious where a topic surfaces across your stack:"
+             data-ru="Любопытно где тема всплывала в твоём стеке:">
+            Любопытно где тема всплывала в твоём стеке:
+          </p>
+          <div class="usecase-prompt" data-en="Find all mentions of Postgres in my AI sessions via memex_search. In what context? What was I solving?"
+                                    data-ru="Через memex_search найди все упоминания Postgres в моих сессиях с AI. В каком контексте? Что я решал?">Через memex_search найди все упоминания Postgres в моих сессиях с AI. В каком контексте? Что я решал?</div>
+          <p class="usecase-result"
+             data-en="→ One query → agent sees every mention across all tools, groups by theme."
+             data-ru="→ 1 запрос → агент видит все упоминания через все инструменты, группирует по темам.">
+            → 1 запрос → агент видит все упоминания через все инструменты, группирует по темам.
+          </p>
+        </div>
+      </div>
+    </details>
   </div>
 </section>
 
@@ -860,25 +945,32 @@
                             data-ru="Одна папка. Одна база. Любой агент может спросить.">
       One folder. One database. Any agent can ask.
     </p>
-<div class="diagram">~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
+
+    <details class="diagram-details">
+      <summary data-en="See the architecture diagram (paths, daemon flow, dedup, MCP server)"
+               data-ru="Архитектурная диаграмма (пути, поток daemon'a, dedup, MCP-сервер)">See the architecture diagram (paths, daemon flow, dedup, MCP server)</summary>
+<div class="diagram">~/Downloads/Telegram Desktop/   <span class="comment">← v0.10+ daemon auto-stages exports</span>
+~/.claude/projects/             <span class="comment">← Claude Code sessions</span>
 ~/Library/.../local-agent-mode  <span class="comment">← Cowork sessions (incl. subagents)</span>
-~/.memex/inbox/                 <span class="comment">← Telegram exports drop here</span>
+~/.memex/inbox/                 <span class="comment">← legacy: drop result.json manually</span>
         <span class="arrow">↓</span>                       <span class="comment">memex-sync daemon · FSEvents · ~1.5s debounce</span>
+~/.memex/pending/               <span class="comment">← v0.10+ TG exports staged here for per-chat consent</span>
 ~/.memex/staging/               <span class="comment">← atomic tmp writes</span>
         <span class="arrow">↓</span>                       <span class="comment">chokidar inbox watcher</span>
-parser                          <span class="comment">Claude JSONL / Cowork / Cursor / Obsidian / Telegram JSON</span>
+parser                          <span class="comment">JSONL / state.vscdb / Obsidian / Telegram JSON+HTML</span>
         <span class="arrow">↓</span>
 SQLite + FTS5                   <span class="comment">~/.memex/data/memex.db · UNIQUE(msg_id) dedup</span>
         <span class="arrow">↓</span>
-MCP server                      <span class="comment">stdio JSON-RPC · 11 tools · proactive instructions</span>
+MCP server                      <span class="comment">stdio JSON-RPC · 18 tools · proactive instructions</span>
         <span class="arrow">↓</span>
 any client:
-  • Claude Code  <span class="comment">→ ~/.claude/config.json</span>
+  • Claude Code  <span class="comment">→ ~/.claude/config.json · + SessionStart hook for Brian Chesky moment</span>
   • Cursor       <span class="comment">→ ~/.cursor/mcp.json</span>
   • Cline · Continue · Zed · ...
 
 <span class="comment">your agent calls memex_overview() at session start, then memex_search()
 on every topic the user references — no prompting needed</span></div>
+    </details>
   </div>
 </section>
 
@@ -1224,9 +1316,9 @@ on every topic the user references — no prompting needed</span></div>
   <div class="section-inner">
     <h2 class="section-title" data-en="Install" data-ru="Установка">Install</h2>
     <p class="section-sub"
-       data-en="Two paths. Pick the one that fits."
-       data-ru="Два пути. Выбери тот что удобнее.">
-      Two paths. Pick the one that fits.
+       data-en="Quickest: curl one-liner at the top of the page. Or — let an AI agent do it for you. Other paths (manual, skill, CLI mode) are below."
+       data-ru="Быстрее всего — curl одной строкой в самом верху страницы. Или — пусть AI-агент поставит сам. Другие пути (вручную, skill, CLI-режим) — ниже.">
+      Быстрее всего — curl одной строкой в самом верху страницы. Или — пусть AI-агент поставит сам. Другие пути (вручную, skill, CLI-режим) — ниже.
     </p>
 
     <div class="ai-install">
@@ -1471,6 +1563,10 @@ FAST PATH (попробуй сначала это). У memex есть hosted bas
 Начни с приветствия, подтверди в каком MCP-клиенте я тебя запустил, и сделай Discovery-проверки перед любыми install-действиями. После Discovery — предложи сначала FAST PATH (curl one-liner), он покрывает ~90% случаев одним запуском. Возвращайся на ручную установку из 5 шагов только если я отказался, скрипт упал, или ты внутри GUI-клиента (Cursor/Cline/Continue/Zed) где после скрипта всё равно нужно дописать MCP-конфиг (шаг 2).</pre>
     </div>
 
+    <details class="install-alternatives">
+      <summary data-en="Other install paths — manual · AI skill · auto-context · terminal-only mode"
+               data-ru="Другие пути установки — вручную · AI skill · auto-context · только в терминале">Other install paths — manual · AI skill · auto-context · terminal-only mode</summary>
+
     <div class="or-divider"
          data-en="— or do it yourself —"
          data-ru="— или сделай вручную —">
@@ -1665,6 +1761,7 @@ memex search "TODO" --json | jq '.results[].snippet'</code></pre>
         </p>
       </div>
     </div>
+    </details>
   </div>
 </section>
 

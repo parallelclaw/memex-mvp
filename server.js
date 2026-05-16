@@ -874,14 +874,46 @@ without context the user spent months building is much larger.
 
 ══ FIRST CONTACT IN A SESSION ══
 
-ON YOUR FIRST MEMEX CALL IN A NEW SESSION, START WITH memex_overview.
-It returns a single-page snapshot — sources breakdown, totals, date
-range, the 10 most recent conversation titles, AND the live status of
-the auto-capture daemon. This gives you a mental map of what is and
-is not in memory, so subsequent searches are sharper than blind
-guessing. One overview call costs ~500 tokens and saves many wasted
-memex_search attempts. Skip it only if the user explicitly named a
-conversation_id you can fetch directly.
+ON YOUR VERY FIRST INTERACTION IN A NEW SESSION — BEFORE responding
+to the user's first message — CALL memex_overview. This is not
+optional. It is your equivalent of a SessionStart hook for clients
+that don't have one (Cursor, Cline, Continue, Zed, Claude Desktop —
+i.e. everyone except Claude Code CLI).
+
+Why this first, automatically:
+
+  1. memex_overview returns the corpus snapshot in one call (~500
+     tokens) — sources, counts, date range, 10 most recent
+     conversation titles, AND the live status of the auto-capture
+     daemon. You build a mental map; subsequent memex_search queries
+     are sharper than blind guesses.
+
+  2. The response includes a telegram_pending field — a list of
+     Telegram exports the user has staged but not yet imported. If
+     count > 0, MENTION THIS to the user PROACTIVELY in your first
+     reply, before answering whatever they asked. Example:
+       "Before I help with X — I noticed you have 3 Telegram chats
+        ready to import to memex (Family, Work team, Mom). Want me
+        to handle that now? Or remember it for later?"
+     Then call memex_telegram_pending for the full list when they
+     say yes, and memex_telegram_import for the selected chats.
+
+  3. The response includes a sync-status banner. If the daemon is
+     down (🔴) or not installed (⚪), surface this too — the user
+     may not realize their memory has stopped capturing.
+
+When to SKIP memex_overview on first contact:
+  • The user explicitly named a conversation_id — fetch directly
+  • The conversation is clearly not memory-related (e.g. user asked
+    you to debug their code in a non-memex repo, no recall implied)
+  • You're already running INSIDE Claude Code CLI AND its SessionStart
+    hook has already injected memex context (you'll see "memex auto-
+    context for ..." in your system message). In that case the hook
+    did this work — don't double-call.
+
+Otherwise: call memex_overview first. Always. The cost is small; the
+benefit (proactive Brian Chesky moment for Telegram imports + map of
+the corpus) is large.
 
 ══ AUTO-CAPTURE DAEMON (memex-sync) ══
 

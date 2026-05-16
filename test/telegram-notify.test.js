@@ -13,7 +13,7 @@ import {
   formatTelegramTip,
   VALID_CLICK_TARGETS,
 } from '../lib/telegram-notify.js';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -84,13 +84,32 @@ test('cliTipDue: handles invalid ISO string', () => {
   assert(cliTipDue(s, 6) === true);
 });
 
-test('notifIdFor: stable hash of path', () => {
-  const a = notifIdFor('/Users/me/foo');
-  const b = notifIdFor('/Users/me/foo');
-  const c = notifIdFor('/Users/me/bar');
+test('notifIdFor: stable hash of path (file does not exist — path-only)', () => {
+  // Non-existent paths → hash is path-only (stable across calls, but doesn't include mtime)
+  const a = notifIdFor('/no/such/path/foo');
+  const b = notifIdFor('/no/such/path/foo');
+  const c = notifIdFor('/no/such/path/bar');
   assert(a === b, 'same path → same id');
   assert(a !== c, 'different paths → different ids');
   assert(a.length === 16, 'id is 16 hex chars');
+});
+
+// v0.10.5 regression: when Telegram Desktop re-uses the same folder name
+// (ChatExport_2026-05-16 after the prior one was imported and removed),
+// the new file at the same path was incorrectly deduped against the old
+// hash. Fix: include mtime in hash so same path + different file → fresh hash.
+test('notifIdFor (v0.10.5): same path with different mtime → different hashes', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'memex-notify-hash-'));
+  try {
+    const p = join(tmp, 'export.txt');
+    writeFileSync(p, 'first');
+    const a = notifIdFor(p);
+    // Bump mtime artificially to a fixed earlier time — same path, different content/timestamp.
+    const past = new Date(Date.now() - 60_000);
+    utimesSync(p, past, past);
+    const b = notifIdFor(p);
+    assert(a !== b, `same path but different mtime should hash differently. a=${a} b=${b}`);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 
 test('notifShownFor: dedup by path', () => {

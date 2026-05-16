@@ -1,7 +1,7 @@
 ---
 name: install-memex
-description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~2 minutes — npm install, MCP config wiring, auto-capture daemon, history backfill. No cloud, no account, verbatim storage. Also indexes Obsidian notes, Telegram chats, and any URL the user wants to save (web pages, Perplexity threads, AI chat shares — memex_store_document tool, v0.6+). Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", or similar.
-version: 1.2.0
+description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
+version: 1.3.0
 metadata:
   openclaw:
     emoji: "📚"
@@ -225,16 +225,35 @@ If yes, run `memex_telegram_check` (MCP tool) or `memex telegram check` (CLI). T
   - **Logged in <24h ago?** → Tell them: "Telegram blocks export for the first 24h. Wait ~X hours, then come back."
   - **Ready to export?** → Show the click-path: open chat → ⋮ menu (top-right) → "Export chat history" → format HTML or JSON → Export.
 
-After the user exports, memex's daemon **auto-detects** the file in ~/Downloads/Telegram Desktop/ and stages it in pending review. Then:
+After the user exports, memex's daemon **auto-detects** the file in ~/Downloads/Telegram Desktop/ within ~7 seconds and stages it in `~/.memex/pending/`. Then:
 
   - Call `memex_telegram_pending` to list staged exports (chat name, msg count, date range).
-  - **Present as a numbered list**, ask which to import. Accept indices, titles, or natural language.
-  - Call `memex_telegram_import` with selected indices/titles. The chat is added to the allow-list — future re-exports auto-merge.
+  - **Present as a numbered list**, ask which to import. Accept indices, titles, or natural language ("import family and work, skip bank").
+  - Call `memex_telegram_import` with selected indices/titles. The chat is added to the allow-list — future re-exports auto-merge via UNIQUE(msg_id).
   - For sensitive chats user doesn't want (Bank, Therapist, etc.), call `memex_telegram_skip`.
+
+**Optional — clickable native macOS banner (v0.10.4+):** memex can fire a macOS notification the moment an export is staged. Default OFF for privacy. If the user wants this:
+
+```sh
+brew install terminal-notifier             # required for clickable banner
+memex telegram notifications on            # enable; default: titles hidden
+memex telegram notifications on --show-titles   # include chat names in banner
+```
+
+When enabled with `terminal-notifier`, clicking the banner opens (auto-detect priority): Claude Code CLI in a fresh Terminal tab → Claude Desktop → Terminal with `memex telegram pending`. The CLI launch path triggers the SessionStart hook → Brian Chesky moment. Override target: `memex telegram notifications target <auto|claude-cli|claude-desktop|terminal|none>`.
+
+**Other useful Telegram commands** (no MCP-tool wiring needed):
+
+```sh
+memex telegram check          # diagnostic: Desktop? login age (24h)? watcher?
+memex telegram open-pending   # one-shot: open pending list in best client
+memex telegram mode auto      # auto-import allow-listed chats on re-export
+memex telegram status         # decisions counts (allowed/skipped/blocked)
+```
 
 **Privacy is the core promise. Never auto-import. Always get explicit per-chat consent on the first round.**
 
-If the user declines Telegram setup ("not now" / "skip"): say "OK, I'll skip Telegram. You can run `memex telegram setup` anytime later." Don't push.
+If the user declines Telegram setup ("not now" / "skip"): say "OK, I'll skip Telegram. You can run `memex telegram check` anytime later to start." Don't push.
 
 ### 6. Tell the user what to do next
 
@@ -247,7 +266,11 @@ After restart, suggest they try any of:
 - "save https://en.wikipedia.org/wiki/As_We_May_Think to memex" → triggers `memex_store_document` and teaches the user that URL-saving exists (v0.6+)
 - **Open Claude Code in any project the user worked on recently** — the SessionStart auto-context (v0.8+) should kick in and Claude will mention prior work _before_ the user types anything. This is the "Brian Chesky moment" — the magical-first-impression of memex.
 
+- **(if Telegram was set up)** `memex telegram check` — confirms daemon's Telegram-Downloads watcher is active and shows the user's full capture pipeline state.
+
 These confirm everything works end-to-end.
+
+**Brian Chesky moment beyond Claude Code (v0.10.7+):** the SessionStart hook works only in Claude Code CLI. But starting v0.10.7, the same proactive behaviour is taught to agents in Cursor / Cline / Continue / Zed / Claude Desktop via SERVER_INSTRUCTIONS — these agents call `memex_overview` automatically on first interaction, read its `telegram_pending` field, and surface pending exports in their first reply. Slightly higher latency (one MCP roundtrip vs hook's instant inject), but same UX.
 
 **CLI fallback (v0.7+):** if the MCP integration doesn't pick up in the user's client for any reason, tell them they can verify memex from the terminal directly — same binary, no MCP needed:
 

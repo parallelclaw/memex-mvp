@@ -47,21 +47,25 @@ The skill description is written so Claude / OpenClaw auto-invoke it from any ph
 
 > **User:** install memex
 >
-> **Agent:** 👋 You're running inside Cursor. Let me run a quick discovery before any install actions...
+> **Agent:** 👋 You're running inside Cursor. Quick discovery before any install actions...
 >
 > ✓ Found Claude Code data at `~/.claude/projects/` (8 sessions)
-> ✓ Found Cowork sessions (3 subagent transcripts in your projects)
+> ✓ Found Cowork sessions (3 subagent transcripts)
 > ✗ Continue not installed
 > ✗ Zed not installed
 > ✓ Cursor data found (this is where I'll write the MCP config)
 >
-> After install, memex will auto-index conversations from: Claude Code, Cowork, Cursor. Drop Telegram exports into `~/.memex/inbox/` manually if you want those too.
+> After install, memex will auto-index conversations from: **Claude Code, Cowork, Cursor**. v0.10+ also auto-detects Telegram Desktop exports — when you export a chat, memex stages it and I'll ask which to import (privacy-first per-chat consent).
 >
-> Ready to proceed with Step 1 (`npm install -g memex-mvp`)?
+> Best path is the curl one-liner — does npm install (auto-fixes EACCES), daemon, auto-context hook, and history backfill in ~60 seconds. Want me to run:
+>
+> ```
+> curl -fsSL https://memex.parallelclaw.ai/install.sh | bash
+> ```
 >
 > **User:** yes
 >
-> **Agent:** [shows each command, runs npm install, gets `which memex` path, merges into `~/.cursor/mcp.json`, runs `memex-sync install`, runs `memex-sync scan`, prints restart hint]
+> **Agent:** [streams curl output, then edits `~/.cursor/mcp.json` to add `memex` MCP entry, prints restart hint, and offers Telegram capture setup]
 
 See [examples.md](examples.md) for more sample dialogues, including EACCES recovery and partial-install scenarios.
 

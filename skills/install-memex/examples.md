@@ -19,7 +19,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 > ✗ Continue / Zed not found
 > ```
 >
-> After install, memex will auto-index conversations from: **Claude Code, Cowork**. You can drop Telegram exports into `~/.memex/inbox/` later if needed.
+> After install, memex will auto-index conversations from: **Claude Code, Cowork**. v0.10+ also auto-detects Telegram Desktop exports — when you export a chat, I'll ask which to import.
 >
 > The fast path is a single hosted bash script that does **npm install (with EACCES auto-fix), daemon setup, Brian Chesky auto-context hook, history backfill, and `claude mcp add memex`** all in one go. Idempotent. Want me to run:
 >
@@ -64,7 +64,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 > ✗ Zed config not found
 > ```
 >
-> After install, memex will auto-index conversations from: **Claude Code, Cowork, Cursor**. If you also use Obsidian or want Telegram chats indexed, we can add those after the main install.
+> After install, memex will auto-index conversations from: **Claude Code, Cowork, Cursor**. v0.10+ Telegram capture also kicks in automatically — when you export a chat from Telegram Desktop, I'll ask which to import. If you also use Obsidian, we can wire that vault in after.
 >
 > Ready to proceed with Step 1?
 >

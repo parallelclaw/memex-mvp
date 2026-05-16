@@ -149,6 +149,51 @@ try {
     assertEq(listPending(), []);
   });
 
+  // v0.10.2 regression — Telegram Desktop JSON exports come as a
+  // ChatExport_* DIRECTORY with the JSON file inside (result.json or
+  // custom-named). Previously these came back as "(unparseable)" because
+  // detectTelegramHtml only handled HTML directories.
+  test('json-in-dir: ChatExport_*/result.json detected and previewed', () => {
+    const dir = join(PENDING_DIR, 'ChatExport_TestJson');
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'result.json'), JSON.stringify({
+      name: 'Test JSON Chat',
+      type: 'personal_chat',
+      id: 12345,
+      messages: [
+        { id: 1, type: 'message', date: '2026-03-20T14:00:00', date_unixtime: '1774004400', from: 'Alice', text: 'hi' },
+        { id: 2, type: 'message', date: '2026-03-21T15:00:00', date_unixtime: '1774094400', from: 'Bob',   text: 'yo' },
+      ],
+    }));
+    const list = listPending();
+    const e = list.find((x) => x.basename === 'ChatExport_TestJson');
+    assert(e, 'should find the json-in-dir entry');
+    assertEq(e.chat_title, 'Test JSON Chat');
+    assertEq(e.message_count, 2);
+    assertEq(e.kind, 'json-in-dir');
+    assert(e.inner_json_path && e.inner_json_path.endsWith('result.json'));
+    assert(e.senders_sample.includes('Alice'));
+    assert(e.senders_sample.includes('Bob'));
+  });
+
+  test('json-in-dir: custom JSON name (kimi.json) also detected', () => {
+    const dir = join(PENDING_DIR, 'ChatExport_Kimi');
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'kimi.json'), JSON.stringify({
+      name: 'KIMI',
+      type: 'bot_chat',
+      id: 99,
+      messages: [
+        { id: 1, type: 'message', date: '2026-04-01T10:00:00', date_unixtime: '1775292000', from: 'Oleg', text: 'q' },
+      ],
+    }));
+    const list = listPending();
+    const e = list.find((x) => x.basename === 'ChatExport_Kimi');
+    assert(e, 'should find the custom-named json');
+    assertEq(e.chat_title, 'KIMI');
+    assertEq(e.kind, 'json-in-dir');
+  });
+
 } finally {
   tearDown();
 }

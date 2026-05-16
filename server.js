@@ -3192,6 +3192,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           let raw;
           if (t.kind === 'html-dir') {
             raw = parseTelegramHtmlExport(t.path);
+          } else if (t.kind === 'json-in-dir' && t.inner_json_path) {
+            raw = JSON.parse(readFileSync(t.inner_json_path, 'utf-8'));
           } else {
             raw = JSON.parse(readFileSync(t.path, 'utf-8'));
           }

@@ -12,6 +12,10 @@ import {
   setClickTarget,
   formatTelegramTip,
   VALID_CLICK_TARGETS,
+  dashboardTipDue,
+  markDashboardTipShown,
+  markDashboardEverOpened,
+  formatDashboardTip,
 } from '../lib/telegram-notify.js';
 import { mkdtempSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -237,6 +241,77 @@ test('saveNotifyState + loadNotifyState round-trip preserves click_target', () =
 
     const r = loadNotifyState(p);
     assertEq(r.notifications.click_target, 'terminal');
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// ====== Dashboard discovery tip (v0.10.10) ======
+
+test('dashboardTipDue: returns true on fresh state', () => {
+  const s = loadNotifyState(join(mkdtempSync(join(tmpdir(), 'dt-')), 'x'));
+  assert(dashboardTipDue(s) === true);
+});
+
+test('dashboardTipDue: returns false after maxShows reached', () => {
+  const s = loadNotifyState(join(mkdtempSync(join(tmpdir(), 'dt-')), 'x'));
+  s.dashboard_tip_shown_count = 3;
+  // Last shown well in the past — only count gate should reject
+  s.dashboard_tip_last_shown_at = new Date(Date.now() - 99 * 3600_000).toISOString();
+  assert(dashboardTipDue(s, { maxShows: 3 }) === false);
+});
+
+test('dashboardTipDue: returns false within cooldown', () => {
+  const s = loadNotifyState(join(mkdtempSync(join(tmpdir(), 'dt-')), 'x'));
+  s.dashboard_tip_shown_count = 1;
+  s.dashboard_tip_last_shown_at = new Date().toISOString();
+  assert(dashboardTipDue(s, { cooldownHours: 12 }) === false);
+});
+
+test('dashboardTipDue: returns true after cooldown elapsed', () => {
+  const s = loadNotifyState(join(mkdtempSync(join(tmpdir(), 'dt-')), 'x'));
+  s.dashboard_tip_shown_count = 1;
+  s.dashboard_tip_last_shown_at = new Date(Date.now() - 13 * 3600_000).toISOString();
+  assert(dashboardTipDue(s, { cooldownHours: 12 }) === true);
+});
+
+test('dashboardTipDue: returns false forever once dashboard_ever_opened', () => {
+  const s = loadNotifyState(join(mkdtempSync(join(tmpdir(), 'dt-')), 'x'));
+  markDashboardEverOpened(s);
+  assert(dashboardTipDue(s) === false);
+  // Even with fresh count and elapsed cooldown
+  s.dashboard_tip_shown_count = 0;
+  s.dashboard_tip_last_shown_at = null;
+  assert(dashboardTipDue(s) === false);
+});
+
+test('markDashboardTipShown: increments count + sets timestamp', () => {
+  const s = loadNotifyState(join(mkdtempSync(join(tmpdir(), 'dt-')), 'x'));
+  markDashboardTipShown(s);
+  assert(s.dashboard_tip_shown_count === 1);
+  assert(s.dashboard_tip_last_shown_at !== null);
+  markDashboardTipShown(s);
+  assert(s.dashboard_tip_shown_count === 2);
+});
+
+test('formatDashboardTip: returns non-empty string mentioning memex web', () => {
+  const tip = formatDashboardTip();
+  assert(typeof tip === 'string' && tip.length > 0);
+  assert(/memex web/.test(tip));
+});
+
+test('dashboard tip state survives save/load round-trip', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'memex-dash-'));
+  try {
+    const p = join(tmp, '.tg-tip-state.json');
+    const s = loadNotifyState(p);
+    markDashboardTipShown(s);
+    markDashboardEverOpened(s);
+    saveNotifyState(s, p);
+
+    const r = loadNotifyState(p);
+    assert(r.dashboard_tip_shown_count === 1);
+    assert(r.dashboard_ever_opened === true);
+    assert(r.dashboard_tip_last_shown_at !== null);
+    assert(dashboardTipDue(r) === false);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 

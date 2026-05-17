@@ -293,6 +293,21 @@ async function cmdInstall() {
   console.log('');
   console.log(`config: ${CONFIG_PATH} (auto-created on first edit)`);
   console.log(`status: npx memex-sync status`);
+
+  // v0.10.10: surface the new web dashboard so manual installers actually
+  // discover it. (curl-bash flow has its own [Y/n] prompt in install.sh —
+  // it suppresses this output via `>/dev/null 2>&1`, so this callout is
+  // for the `memex-sync install` direct-call path only.)
+  console.log('');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🌐 NEW in v0.10.8: open your memory in a browser');
+  console.log('');
+  console.log('  memex web --open');
+  console.log('');
+  console.log('5 pages, read-only, localhost-only. Every captured');
+  console.log('conversation, verbatim — not summarized. Ctrl+C to stop.');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
   process.exit(0);
 }
 

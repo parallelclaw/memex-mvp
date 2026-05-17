@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
-version: 1.4.0
+version: 1.4.1
 metadata:
   openclaw:
     emoji: "📚"
@@ -290,15 +290,19 @@ If the user declines Telegram setup ("not now" / "skip"): say "OK, I'll skip Tel
 
 Tell the user to fully quit and reopen the MCP client (Cmd+Q on macOS) so it picks up the new memex tools.
 
-After restart, suggest they try any of:
+**🌟 FIRST, STRONGLY RECOMMEND THIS (v0.10.8+):** offer to run `memex web --open` for them right now. It's the single most magical post-install moment — a local browser tab opens at `http://127.0.0.1:8765` with 5 pages showing every conversation memex has captured, dialogue rendered as chat-bubbles, full-text searchable. Verbatim — not AI-summarized. Read-only, localhost-only, Ctrl+C to stop. Phrase it naturally, e.g.:
+
+> "I can open a local web dashboard that lets you actually *see* what memex captured — every message, in chat-bubble form, searchable. It's just a browser tab on `localhost:8765`. Run it now? It's a way better demo than asking me search queries blind."
+
+Then run `memex web --open` (in a backgrounded shell if your shell wrapper supports it — otherwise tell the user to run it themselves in another terminal). Wait for them to react before continuing.
+
+**After that, suggest other ways to confirm end-to-end:**
 - "show me what memex has in memory" → triggers `memex_overview`
 - "what projects has memex captured" → triggers `memex_list_projects`
 - "search memex for [recent topic]" → triggers `memex_search`
 - "save https://en.wikipedia.org/wiki/As_We_May_Think to memex" → triggers `memex_store_document` and teaches the user that URL-saving exists (v0.6+)
 - **Open Claude Code in any project the user worked on recently** — the SessionStart auto-context (v0.8+) should kick in and Claude will mention prior work _before_ the user types anything. This is the "Brian Chesky moment" — the magical-first-impression of memex.
-
 - **(if Telegram was set up)** `memex telegram check` — confirms daemon's Telegram-Downloads watcher is active and shows the user's full capture pipeline state.
-- **(v0.10.8+)** `memex web --open` — opens the local read-only web dashboard at `http://127.0.0.1:8765`. 5 pages: corpus stats, FTS5-searchable conversations list, verbatim chat-bubble transcripts, pending Telegram review with checkboxes, settings/daemon status. Useful for the user to *see* their memory with their own eyes — and a strong demo moment ("look at the actual messages verbatim, not an AI summary"). Localhost-only by default; Ctrl+C to stop.
 
 These confirm everything works end-to-end.
 

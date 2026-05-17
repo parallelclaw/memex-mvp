@@ -329,3 +329,35 @@ ${BOLD}Full guide:${RESET} memex help    ${DIM}|${RESET}    ${BOLD}Disable auto-
 ${BOLD}Repo:${RESET}       https://github.com/parallelclaw/memex-mvp
 
 EOF
+
+# ----- step 7: optional dashboard auto-open (v0.10.8+) ----------------------
+# Offer to open the new local web dashboard right after install. Skip
+# entirely in non-interactive contexts (CI, Docker build, piped scripts) so
+# we never hang waiting on stdin that nobody will type into.
+if [ -r /dev/tty ] && [ -t 1 ] && [ -z "${MEMEX_NO_WEB_PROMPT:-}" ]; then
+  cat <<EOF
+${BOLD}🌐 New in v0.10.8 — web dashboard${RESET}
+  Read-only local viewer of your memex corpus. 5 pages, localhost-only,
+  Ctrl+C to stop. (Run later anytime: ${CYAN}memex web --open${RESET})
+EOF
+  printf "  %sOpen it now? %s[Y/n]%s " "$BOLD" "$YELLOW" "$RESET"
+  # Read from /dev/tty so we get a real keystroke even when the script
+  # itself was piped from `curl ... | bash` (which leaves stdin attached
+  # to the pipe, not the keyboard).
+  reply=""
+  read -r reply </dev/tty || reply=""
+  case "$reply" in
+    n|N|no|NO|No)
+      echo "  Skipped. Run later: ${CYAN}memex web --open${RESET}"
+      ;;
+    *)
+      echo "  Starting dashboard in background…"
+      # Detach so the install script returns cleanly even though memex web
+      # is a long-running process. stdin redirected from /dev/null so it
+      # doesn't fight the curl pipe.
+      (memex web --open </dev/null >/dev/null 2>&1 &) || \
+        warn "memex web failed to launch — try manually: memex web --open"
+      ;;
+  esac
+  echo ""
+fi

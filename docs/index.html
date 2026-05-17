@@ -228,6 +228,141 @@
   .telegram-feature {
     background: linear-gradient(180deg, transparent 0%, rgba(110,231,183,0.05) 50%, transparent 100%);
   }
+
+  /* ===== Verbatim moat section (vs claude-mem & summary-based tools) ===== */
+  .verbatim-moat {
+    background: linear-gradient(180deg, transparent 0%, rgba(96,165,250,0.04) 50%, transparent 100%);
+  }
+  .vm-pre-header {
+    text-align: center;
+    font-size: 17px;
+    color: var(--accent-light);
+    margin: 0 auto 6px;
+    max-width: 720px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.45;
+  }
+  .vm-compare {
+    max-width: 1100px;
+    margin: 36px auto 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 900px) {
+    .vm-compare { grid-template-columns: 1fr; gap: 18px; }
+  }
+  .vm-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 22px 20px;
+    display: flex; flex-direction: column;
+  }
+  .vm-card-other {
+    opacity: 0.85;
+    /* muted */
+  }
+  .vm-card-memex {
+    border-color: rgba(110,231,183,0.35);
+    box-shadow: 0 0 0 1px rgba(110,231,183,0.12);
+  }
+  .vm-card-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .vm-card-memex .vm-card-label {
+    color: var(--accent-light);
+    border-bottom-color: rgba(110,231,183,0.30);
+  }
+
+  /* Mock DB row layout (left card) */
+  .vm-mock-db {
+    background: var(--bg-soft);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    margin-bottom: 14px;
+    flex: 1;
+  }
+  .vm-row { margin-bottom: 4px; }
+  .vm-key { color: var(--text-muted); }
+  .vm-val { color: var(--text-soft); }
+
+  /* Mock chat bubbles (right card) */
+  .vm-mock-chat {
+    flex: 1;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .vm-bubble {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    max-width: 94%;
+  }
+  .vm-bubble-user {
+    background: var(--bg-soft);
+    margin-left: auto;
+    border-right: 3px solid var(--accent-light);
+  }
+  .vm-bubble-claude {
+    background: rgba(110,231,183,0.06);
+    border-left: 3px solid var(--accent);
+  }
+  .vm-bubble-who {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .vm-bubble p { margin: 0 0 6px; color: var(--text); }
+  .vm-bubble p:last-child { margin-bottom: 0; }
+
+  .vm-card-verdict {
+    font-size: 13.5px;
+    color: var(--text-soft);
+    line-height: 1.55;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+    margin: 0;
+  }
+  .vm-card-memex .vm-card-verdict {
+    color: var(--text);
+    border-top-color: rgba(110,231,183,0.30);
+  }
+
+  .vm-bottom {
+    max-width: 820px;
+    margin: 36px auto 0;
+    text-align: center;
+    font-size: 14.5px;
+    color: var(--text-soft);
+    line-height: 1.65;
+    padding: 14px 22px;
+  }
+  .vm-bottom code {
+    background: var(--bg-soft);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--accent-light);
+  }
   .tg-pre-header {
     text-align: center;
     font-size: 17px;
@@ -1308,6 +1443,91 @@
   </div>
 </section>
 
+<!-- ============================================================
+     VERBATIM MOAT — direct comparison with summarized-memory tools
+     ============================================================ -->
+<section class="section verbatim-moat">
+  <div class="section-inner">
+    <p class="vm-pre-header"
+       data-en="Six months from now, when you need the exact wording — it'll be there."
+       data-ru="Через полгода, когда понадобится точная цитата — она будет на месте.">
+      Через полгода, когда понадобится точная цитата — она будет на месте.
+    </p>
+
+    <h2 class="section-title"
+        data-en="memex saves every word."
+        data-ru="memex сохраняет каждое слово.">
+      memex сохраняет каждое слово.
+    </h2>
+
+    <p class="section-sub"
+       data-en="Other AI-memory tools compress conversations into AI-generated summaries. The exact phrasing — Claude's wording, your code samples, the back-and-forth — is gone. memex keeps it word-for-word. Forever."
+       data-ru="Другие AI-memory инструменты сжимают разговоры в AI-сгенерированные summary. Точные формулировки — слова Claude'a, твои примеры кода, ход обсуждения — теряются. memex хранит дословно. Навсегда.">
+      Другие AI-memory инструменты сжимают разговоры в AI-сгенерированные summary. Точные формулировки — слова Claude'a, твои примеры кода, ход обсуждения — теряются. memex хранит дословно. Навсегда.
+    </p>
+
+    <!-- Side-by-side example: same March conversation, two ways -->
+    <div class="vm-compare">
+      <div class="vm-card vm-card-other">
+        <div class="vm-card-label"
+             data-en="What claude-mem stores (AI-summarized)"
+             data-ru="Что хранит claude-mem (AI-summary)">
+          What claude-mem stores (AI-summarized)
+        </div>
+        <div class="vm-mock-db">
+          <div class="vm-row"><span class="vm-key">title:</span> <span class="vm-val">"Multi-tenant auth strategies discussed"</span></div>
+          <div class="vm-row"><span class="vm-key">subtitle:</span> <span class="vm-val">"RLS recommended over JWT"</span></div>
+          <div class="vm-row"><span class="vm-key">narrative:</span> <span class="vm-val">"User asked about multi-tenant auth. Claude discussed three approaches and recommended PostgreSQL RLS."</span></div>
+          <div class="vm-row"><span class="vm-key">facts:</span> <span class="vm-val">["RLS preferred for cost", "JWKS rotation mentioned"]</span></div>
+          <div class="vm-row"><span class="vm-key">concepts:</span> <span class="vm-val">["multi-tenancy", "auth", "RLS"]</span></div>
+        </div>
+        <p class="vm-card-verdict"
+           data-en="→ Six months later: you remember <em>RLS was recommended</em>. But the exact reasoning Claude wrote? The JWKS rotation details? The code sample? <strong>Gone.</strong>"
+           data-ru="→ Через полгода: помнишь что <em>посоветовали RLS</em>. А точное обоснование Claude'a? Детали про JWKS-ротацию? Кодовые примеры? <strong>Потеряны.</strong>">
+          → Через полгода: помнишь что <em>посоветовали RLS</em>. А точное обоснование Claude'a? Детали про JWKS-ротацию? Кодовые примеры? <strong>Потеряны.</strong>
+        </p>
+      </div>
+
+      <div class="vm-card vm-card-memex">
+        <div class="vm-card-label"
+             data-en="What memex stores (verbatim transcript)"
+             data-ru="Что хранит memex (verbatim transcript)">
+          What memex stores (verbatim transcript)
+        </div>
+        <div class="vm-mock-chat">
+          <div class="vm-bubble vm-bubble-user">
+            <span class="vm-bubble-who" data-en="you · Mar 15 14:32" data-ru="ты · 15 мар 14:32">ты · 15 мар 14:32</span>
+            <p data-en="How do you do auth for multi-tenant?" data-ru="как делать auth для multi-tenant?">как делать auth для multi-tenant?</p>
+          </div>
+          <div class="vm-bubble vm-bubble-claude">
+            <span class="vm-bubble-who" data-en="Claude · Mar 15 14:32" data-ru="Claude · 15 мар 14:32">Claude · 15 мар 14:32</span>
+            <p data-en="For multi-tenant auth I'd recommend three approaches:" data-ru="Для multi-tenant auth я бы рекомендовал три подхода:">Для multi-tenant auth я бы рекомендовал три подхода:</p>
+            <p data-en="<strong>1) Tenant-isolated JWT</strong> — each tenant has its own key set, rotation via JWKS endpoint, Redis cache 5min TTL..."
+               data-ru="<strong>1) Tenant-isolated JWT</strong> — каждый tenant имеет свой key set, ротация через JWKS endpoint, Redis-кэш 5min TTL..."><strong>1) Tenant-isolated JWT</strong> — каждый tenant имеет свой key set, ротация через JWKS endpoint, Redis-кэш 5min TTL...</p>
+            <p data-en="<strong>2) PostgreSQL Row-Level Security</strong> — RLS policies on tenant_id, check per query, tenant_id indexes mandatory..."
+               data-ru="<strong>2) PostgreSQL Row-Level Security</strong> — RLS policies на tenant_id, проверка на каждый query, индексы по tenant_id обязательны..."><strong>2) PostgreSQL Row-Level Security</strong> — RLS policies на tenant_id, проверка на каждый query, индексы по tenant_id обязательны...</p>
+            <p data-en="<strong>3) Database-per-tenant</strong> — most isolated but expensive..."
+               data-ru="<strong>3) Database-per-tenant</strong> — самый изолированный но дорогой..."><strong>3) Database-per-tenant</strong> — самый изолированный но дорогой...</p>
+            <p data-en="I'd go with #2 — best cost/isolation trade-off for most SaaS up to 1000 tenants."
+               data-ru="Я бы выбрал #2 — лучший cost/isolation trade-off для большинства SaaS до 1000 tenants.">Я бы выбрал #2 — лучший cost/isolation trade-off для большинства SaaS до 1000 tenants.</p>
+          </div>
+        </div>
+        <p class="vm-card-verdict"
+           data-en="→ Six months later: <strong>every word is still here.</strong> Quote it. Re-read the JWKS detail. Copy the code. Search by phrase. <strong>Original intact.</strong>"
+           data-ru="→ Через полгода: <strong>каждое слово на месте.</strong> Цитируешь. Перечитываешь JWKS-детали. Копируешь код. Ищешь по фразе. <strong>Оригинал целый.</strong>">
+          → Через полгода: <strong>каждое слово на месте.</strong> Цитируешь. Перечитываешь JWKS-детали. Копируешь код. Ищешь по фразе. <strong>Оригинал целый.</strong>
+        </p>
+      </div>
+    </div>
+
+    <p class="vm-bottom"
+       data-en="This is why <code>memex.db</code> gets large. It's the trade. AI-summary tools save tokens at recall time; memex saves <em>information itself</em>. Compression is irreversible — you can always summarize from verbatim, never the other way around."
+       data-ru="Поэтому <code>memex.db</code> разрастается. Это компромисс. AI-summary инструменты экономят токены при recall'е; memex сохраняет <em>саму информацию</em>. Сжатие необратимо — из verbatim всегда можно сделать summary, обратно — никогда.">
+      Поэтому <code>memex.db</code> разрастается. Это компромисс. AI-summary инструменты экономят токены при recall'е; memex сохраняет <em>саму информацию</em>. Сжатие необратимо — из verbatim всегда можно сделать summary, обратно — никогда.
+    </p>
+  </div>
+</section>
+
 <section class="section">
   <div class="section-inner">
     <h2 class="section-title" data-en="FAQ" data-ru="FAQ">FAQ</h2>
@@ -1506,6 +1726,14 @@
                   <td data-en="Filesystem" data-ru="Filesystem">Filesystem</td>
                 </tr>
                 <tr>
+                  <td data-en="Claude's exact replies stored" data-ru="Точные ответы Claude'a сохраняются">Claude's exact replies stored</td>
+                  <td class="memex-col"><span class="y">✓</span> <span data-en="Word-for-word" data-ru="дословно">Word-for-word</span></td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span> <span data-en="Only AI-summary" data-ru="только AI-summary">Only AI-summary</span></td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span></td>
+                </tr>
+                <tr>
                   <td data-en="Where" data-ru="Где">Where</td>
                   <td class="memex-col" data-en="On your laptop" data-ru="На твоём ноуте">On your laptop</td>
                   <td data-en="Cloud / complex self-host" data-ru="Cloud / сложный self-host">Cloud / complex self-host</td>
@@ -1522,12 +1750,28 @@
                   <td data-en="Claude only" data-ru="Claude only">Claude only</td>
                 </tr>
                 <tr>
-                  <td data-en="API key needed" data-ru="API-ключ">API key needed</td>
-                  <td class="memex-col"><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+                  <td data-en="LLM API key required" data-ru="LLM API-ключ нужен">LLM API key required</td>
+                  <td class="memex-col"><span class="n">✗</span> <span data-en="Never" data-ru="никогда">Never</span></td>
                   <td><span class="y">✓</span> <span data-en="+ billing" data-ru="+ биллинг">+ billing</span></td>
-                  <td><span class="n">✗</span> <span data-en="Not needed" data-ru="не нужен">Not needed</span></td>
+                  <td><span class="y">✓</span> <span data-en="Claude/Gemini/OpenRouter" data-ru="Claude/Gemini/OpenRouter">Claude/Gemini/OpenRouter</span></td>
                   <td data-en="bundled" data-ru="bundled">bundled</td>
                   <td data-en="bundled" data-ru="bundled">bundled</td>
+                </tr>
+                <tr>
+                  <td data-en="Outbound network at runtime" data-ru="Outbound сеть в runtime">Outbound network at runtime</td>
+                  <td class="memex-col"><span class="y">✓</span> <span data-en="Zero" data-ru="ноль">Zero</span></td>
+                  <td><span class="n">✗</span> <span data-en="Cloud calls" data-ru="облачные вызовы">Cloud calls</span></td>
+                  <td><span class="n">✗</span> <span data-en="LLM call per observation" data-ru="LLM-вызов на каждое наблюдение">LLM call per observation</span></td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span></td>
+                </tr>
+                <tr>
+                  <td data-en="Works air-gapped" data-ru="Работает air-gapped">Works air-gapped</td>
+                  <td class="memex-col"><span class="y">✓</span></td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span> <span data-en="Needs LLM" data-ru="нужен LLM">Needs LLM</span></td>
+                  <td><span class="n">✗</span></td>
+                  <td><span class="n">✗</span></td>
                 </tr>
                 <tr>
                   <td data-en="Recovery after ban" data-ru="После бана">Recovery after ban</td>
@@ -1564,9 +1808,9 @@
                   data-ru="<strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure">
                 <strong>Mem0</strong> — если строишь AI-агента для своих юзеров и нужна memory infrastructure
               </li>
-              <li data-en="<strong>claude-mem</strong> — if you live in Claude Code and want it to remember projects between sessions"
-                  data-ru="<strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями">
-                <strong>claude-mem</strong> — если живёшь в Claude Code и хочешь чтобы он помнил project между сессиями
+              <li data-en="<strong>claude-mem</strong> — if you live in Claude Code, want action-level observability (which tool was used, which files touched), and you're OK with: AI-summarized observations (raw replies discarded), an LLM API call on every tool use (Claude/Gemini/OpenRouter), and no offline mode"
+                  data-ru="<strong>claude-mem</strong> — если живёшь в Claude Code, нужна action-level observability (какой tool, какие файлы), и тебе ок: AI-сжатые observations (сырые ответы Claude'a выбрасываются), LLM-вызов на каждый tool-use (Claude/Gemini/OpenRouter), и нет offline-режима">
+                <strong>claude-mem</strong> — если живёшь в Claude Code, нужна action-level observability (какой tool, какие файлы), и тебе ок: AI-сжатые observations (сырые ответы Claude'a выбрасываются), LLM-вызов на каждый tool-use (Claude/Gemini/OpenRouter), и нет offline-режима
               </li>
               <li data-en="<strong>ChatGPT Memory / Anthropic Memory</strong> — if you only use one vendor and trust the cloud"
                   data-ru="<strong>ChatGPT Memory / Anthropic Memory</strong> — если используешь только одного vendor'a и доверяешь облаку">

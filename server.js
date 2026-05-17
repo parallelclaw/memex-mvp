@@ -810,18 +810,23 @@ function importFile(filePath) {
       Math.floor(Date.now() / 1000),
       imported
     );
+    log(`imported ${imported} messages from ${basename(filePath)} (${source})`);
+  } else {
+    log(`no NEW messages from ${basename(filePath)} (all dupes)`);
+  }
 
-    // Move processed file to archive
+  // Move processed file to archive regardless of imported count. If we only
+  // archive when imported>0, a fully-deduplicated snapshot stays in inbox.
+  // Daemon then overwrites that file periodically — and on filesystems where
+  // rename-over-existing only fires chokidar 'change' (not 'add'), the
+  // 'change' listener above re-imports, fine; but it also means a wasted
+  // file accumulates in inbox if for any reason the listener didn't catch.
+  // Archiving always keeps inbox a clean "what's new" queue.
+  if (source !== 'unknown') {
     const targetDir = join(ARCHIVE, source);
     mkdirSync(targetDir, { recursive: true });
     const target = join(targetDir, basename(filePath));
-    try {
-      renameSync(filePath, target);
-    } catch (_) {}
-
-    log(`imported ${imported} messages from ${basename(filePath)} (${source})`);
-  } else {
-    log(`no messages imported from ${basename(filePath)}`);
+    try { renameSync(filePath, target); } catch (_) {}
   }
   return imported;
 }
@@ -850,6 +855,19 @@ chokidar
   })
   .on('add', (filePath) => {
     log('inbox detected (file):', basename(filePath));
+    importFile(filePath);
+  })
+  // 'change' is critical: the ingest daemon overwrites the inbox snapshot
+  // file every few seconds as the underlying Claude Code / Cowork JSONL
+  // grows (the snapshot is a full re-serialisation, not a delta append).
+  // Without a 'change' listener, chokidar only fires 'add' once when the
+  // file first appears — every subsequent overwrite is silent, the inbox
+  // file accumulates new content on disk but server.js never re-imports
+  // it. UNIQUE(source, conv, msg_id) + INSERT OR IGNORE keep repeated
+  // imports idempotent, so re-processing the whole file on every change
+  // is correct (and cheap: SQLite handles ~10k rows in tens of ms).
+  .on('change', (filePath) => {
+    log('inbox changed (file):', basename(filePath));
     importFile(filePath);
   })
   .on('addDir', (dirPath) => {

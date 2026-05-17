@@ -64,18 +64,30 @@ import { runCli, CLI_SUBCOMMAND_NAMES } from './lib/cli/index.js';
 //
 // This runs BEFORE any DB/watcher side-effects so the CLI doesn't open
 // the DB in write mode unnecessarily.
+// We use a labelled async IIFE so we can `break` (or just fall through)
+// without abusing top-level `return`, which is illegal in ESM modules.
 {
   const sub = process.argv[2];
   if (sub && CLI_SUBCOMMAND_NAMES.includes(sub)) {
     await runCli(sub, process.argv.slice(3));
-    process.exit(0);
-  }
-  if (sub && !sub.startsWith('-')) {
+    // 'web' is a long-running server — exiting here would kill it the moment
+    // startServer's listen-callback resolves. Let the HTTP server hold the
+    // event loop open instead.
+    if (sub !== 'web') process.exit(0);
+  } else if (sub && !sub.startsWith('-')) {
     // Unknown positional subcommand — fail fast with help, don't drift
     // into MCP mode (which would just hang waiting for stdin).
     console.error(`Unknown subcommand: ${sub}`);
     console.error(`Run 'memex --help' for usage.`);
     process.exit(2);
+  }
+  // For 'web': fall through to the rest of server.js so it keeps running.
+  // Actually no — the rest of server.js initializes MCP mode (stdin handler,
+  // DB watchers). For 'web' we DON'T want that. Sentinel-exit instead:
+  if (sub === 'web') {
+    // Server is listening — nothing more for this process to do.
+    // Just sit on the event loop until the HTTP server is closed.
+    await new Promise(() => {});
   }
   // No args (or only flags we don't recognize) → MCP mode
 }

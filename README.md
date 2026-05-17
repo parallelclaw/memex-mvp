@@ -211,6 +211,36 @@ Terminal equivalents: `memex telegram check / pending / import 1 3 5 / skip 2 / 
 
 ---
 
+## Web dashboard (v0.10.8+) — see your own memory
+
+Opt-in, read-only local UI for browsing the corpus without any AI in the loop. Same SQLite, different surface.
+
+```sh
+memex web --open      # localhost:8765, opens in browser
+memex web --port 9000 # custom port
+memex web --public --token s3cret   # bind on 0.0.0.0 with bearer auth (for remote / tunnel)
+memex web --help
+```
+
+Five pages:
+
+| Page              | What it shows                                                                            |
+|-------------------|------------------------------------------------------------------------------------------|
+| `/`               | Stats grid · sources breakdown · pending Telegram callout · recent 10 conversations      |
+| `/conversations`  | Live FTS5 search via htmx (200ms debounce) · source-chip filters · hit counts per chat   |
+| `/c/:id`          | **Verbatim** transcript in chat-bubbles · in-chat search with `<mark>` highlight · paged |
+| `/pending`        | Telegram exports awaiting decision · bulk Import / Skip checkboxes · decision history    |
+| `/settings`       | Daemon status · DB path & size · hooks installed · TG decisions counts (read-only)       |
+
+**Design constraints:**
+- **Opt-in, not always-on.** `memex web` starts the server; Ctrl+C stops it. No daemon.
+- **Read-only by default.** The only writes are TG import / skip on the `/pending` page — same privacy gate as `memex telegram import`.
+- **Localhost-only by default.** Binds `127.0.0.1`. Use `--public --token <…>` for remote access (cron-friendly: same endpoint reserved for the future multi-host sync API).
+- **No build step.** Node raw `http` + tagged template literals + htmx 14KB CDN. Total client bundle: ~30KB.
+- **Brand-aligned.** Same Inter + mint palette as [memex.parallelclaw.ai](https://memex.parallelclaw.ai).
+
+---
+
 ## What it captures
 
 | Source                | How it gets in                                                 |

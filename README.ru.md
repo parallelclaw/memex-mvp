@@ -528,6 +528,36 @@ One file with all your AI conversations — sounds scarier than it is.
 
 ---
 
+## Web-дашборд (v0.10.8+) — увидеть свою память без AI
+
+Опциональный read-only локальный UI для просмотра корпуса. Та же SQLite, другая поверхность — пригождается когда хочется просто посмотреть на свои разговоры глазами, без MCP-агента в цикле.
+
+```sh
+memex web --open       # localhost:8765, откроет браузер
+memex web --port 9000  # свой порт
+memex web --public --token s3cret   # 0.0.0.0 с bearer-авторизацией (для remote / туннеля)
+memex web --help
+```
+
+Пять страниц:
+
+| Страница          | Что внутри                                                                                |
+|-------------------|-------------------------------------------------------------------------------------------|
+| `/`               | Сетка статов · sources breakdown · callout про pending Telegram · последние 10 conversations |
+| `/conversations`  | Live FTS5-поиск через htmx (200мс debounce) · фильтры-чипы по source · кол-во hit'ов на чат |
+| `/c/:id`          | **Verbatim** транскрипт chat-bubble'ами · поиск внутри чата с `<mark>` подсветкой · пагинация |
+| `/pending`        | Telegram-экспорты ждущие решения · чекбоксы bulk Import / Skip · история твоих решений    |
+| `/settings`       | Статус daemon'а · путь и размер БД · установленные хуки · TG decisions counts (read-only) |
+
+**Принципы:**
+- **Opt-in, не always-on.** `memex web` поднимает сервер; Ctrl+C гасит. Никакого фонового демона.
+- **Read-only по умолчанию.** Единственные записи — TG import / skip на `/pending` (тот же privacy-gate, что и `memex telegram import`).
+- **Localhost-only по умолчанию.** Слушает на `127.0.0.1`. Для удалённого доступа — `--public --token <…>` (на этом же endpoint в будущем поедет multi-host sync API).
+- **Без build-step'а.** Raw Node `http` + tagged template literals + htmx 14KB с CDN. Клиентский bundle ≈ 30KB.
+- **Брендирование совпадает с лендингом.** Inter + mint-палитра как на [memex.parallelclaw.ai](https://memex.parallelclaw.ai).
+
+---
+
 ## Как использовать на практике / How to actually use it
 
 Полный guide с **6 типовыми use case'ами** (Telegram → action plan, cross-AI bridge, recall, project resume, patterns, deck-анализ), описанием всех MCP-tools и troubleshooting — в [HELP.md](HELP.md). Скопируй любой промпт из этого файла → вставь в свой AI-агент → попробуй сразу после установки.

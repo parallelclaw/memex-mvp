@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
-version: 1.3.1
+version: 1.4.0
 metadata:
   openclaw:
     emoji: "📚"
@@ -298,6 +298,7 @@ After restart, suggest they try any of:
 - **Open Claude Code in any project the user worked on recently** — the SessionStart auto-context (v0.8+) should kick in and Claude will mention prior work _before_ the user types anything. This is the "Brian Chesky moment" — the magical-first-impression of memex.
 
 - **(if Telegram was set up)** `memex telegram check` — confirms daemon's Telegram-Downloads watcher is active and shows the user's full capture pipeline state.
+- **(v0.10.8+)** `memex web --open` — opens the local read-only web dashboard at `http://127.0.0.1:8765`. 5 pages: corpus stats, FTS5-searchable conversations list, verbatim chat-bubble transcripts, pending Telegram review with checkboxes, settings/daemon status. Useful for the user to *see* their memory with their own eyes — and a strong demo moment ("look at the actual messages verbatim, not an AI summary"). Localhost-only by default; Ctrl+C to stop.
 
 These confirm everything works end-to-end.
 

@@ -363,6 +363,40 @@ memex get web-1582ab51a7b7 --json > backup.json
 
 ---
 
+## 🖥 Web-дашборд (v0.10.8+) — посмотреть память глазами
+
+Когда хочется не звать AI, а **самому полистать** что у тебя в memex'е — есть локальный read-only веб-UI. Та же SQLite, другая поверхность.
+
+```bash
+memex web --open                       # localhost:8765, откроется в браузере
+memex web --port 9000                  # свой порт
+memex web --public --token s3cret      # 0.0.0.0 с bearer-авторизацией (для туннеля)
+memex web --help
+```
+
+**5 страниц:**
+
+- `/` — статы (messages / conversations / sources / imports), sources breakdown, callout про pending Telegram, последние 10 чатов
+- `/conversations` — список с **live FTS5-поиском** через htmx (печатаешь — обновляется за 200мс), фильтры-чипы по source
+- `/c/:id` — **verbatim** транскрипт chat-bubble'ами (то самое, что не делает claude-mem — он только AI-резюмирует); поиск внутри чата с подсветкой; пагинация для 1000+ сообщений
+- `/pending` — Telegram-экспорты с чекбоксами; нажимаешь Import / Skip — тот же гейт privacy, что и `memex telegram import`
+- `/settings` — daemon status, путь и размер БД, установленные хуки, decisions count (read-only)
+
+**Что важно:**
+- Не always-on. `memex web` поднял — Ctrl+C погасил. Никакого фонового сервера.
+- Read-only. Единственные записи — это TG import / skip на `/pending`.
+- Localhost-only by default. Для remote — `--public --token …`.
+- Без build-step'a. Raw Node `http` + tagged template literals + htmx 14KB. Клиентский bundle ≈ 30KB (для сравнения у claude-mem ~10MB React-бандл).
+- Брендирование как на лендинге (mint #6ee7b7 на тёмном).
+
+**Когда полезно:**
+- Хочешь сам прокрутить большой Telegram-чат и не вспоминать какой именно поиск ввести
+- Демо коллеге — открыл вкладку, показал что у тебя реально лежит дословно (это и есть verbatim-moat — на любой чат с любого источника можно перейти и увидеть сырое, не AI-пересказ)
+- Аудит pending'a с мышкой и галочками вместо `memex telegram import 1 3 5`
+- Cron-friendly remote endpoint (тот же сервер потом получит multi-host sync API в v0.13+)
+
+---
+
 ## 🪄 Auto-context (v0.8+) — Brian Chesky moment
 
 Magic-фича. Когда ты открываешь Claude Code в проекте, Claude **сам** инжектит 500-1500 токенов контекста про этот проект — что ты делал недавно, какие conversations касались темы. Ты ещё ничего не спросил, а AI **уже знает**.

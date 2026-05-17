@@ -1528,6 +1528,82 @@
   </div>
 </section>
 
+<!-- ==================== Web dashboard (v0.10.8+) ==================== -->
+<section class="section web-dashboard" id="web-dashboard">
+  <div class="section-inner">
+    <p class="vm-pre-header"
+       data-en="Sometimes you don't want to ask an AI — you want to open your memory and look."
+       data-ru="Иногда не хочется звать AI — хочется просто открыть и увидеть всё самому.">
+      Иногда не хочется звать AI — хочется просто открыть и увидеть всё самому.
+    </p>
+
+    <h2 class="section-title"
+        data-en="Open your memory in a browser (v0.10.8+)"
+        data-ru="Открой свою память в браузере (v0.10.8+)">
+      Открой свою память в браузере (v0.10.8+)
+    </h2>
+
+    <p class="section-sub"
+       data-en="One command — <code>memex web --open</code>. A local read-only viewer of your corpus. 5 pages, ~30KB client bundle, the same verbatim chat-bubbles you saw above."
+       data-ru="Одна команда — <code>memex web --open</code>. Локальный read-only веб-просмотрщик корпуса. 5 страниц, ~30KB клиентского бандла, те же verbatim chat-bubbles что выше.">
+      Одна команда — <code>memex web --open</code>. Локальный read-only веб-просмотрщик корпуса. 5 страниц, ~30KB клиентского бандла, те же verbatim chat-bubbles что выше.
+    </p>
+
+    <div class="tg-steps">
+      <div class="tg-step">
+        <div class="tg-step-icon">📊</div>
+        <h3 data-en="Dashboard" data-ru="Dashboard">Dashboard</h3>
+        <p data-en="Corpus stats, sources breakdown, recent 10 conversations, pending-Telegram callout — at a glance."
+           data-ru="Статы корпуса, sources breakdown, последние 10 чатов, callout про pending Telegram — всё за один взгляд.">
+          Статы корпуса, sources breakdown, последние 10 чатов, callout про pending Telegram — всё за один взгляд.
+        </p>
+      </div>
+
+      <div class="tg-step">
+        <div class="tg-step-icon">🔍</div>
+        <h3 data-en="Conversations" data-ru="Conversations">Conversations</h3>
+        <p data-en="Live FTS5 search via htmx (200ms debounce). Source-chip filters. Hit counts per chat."
+           data-ru="Live FTS5-поиск через htmx (debounce 200мс). Фильтры-чипы по source. Кол-во hit'ов на каждый чат.">
+          Live FTS5-поиск через htmx (debounce 200мс). Фильтры-чипы по source. Кол-во hit'ов на каждый чат.
+        </p>
+      </div>
+
+      <div class="tg-step">
+        <div class="tg-step-icon">💬</div>
+        <h3 data-en="Verbatim transcript" data-ru="Verbatim transcript">Verbatim transcript</h3>
+        <p data-en="Every message as a chat-bubble — exactly what claude-mem doesn't do. In-chat search with <code>&lt;mark&gt;</code> highlight. Paged for 1000+ msg chats."
+           data-ru="Каждое сообщение — chat-bubble'ом, то самое что не делает claude-mem (он только AI-резюмирует). Поиск внутри чата с подсветкой. Пагинация для чатов 1000+.">
+          Каждое сообщение — chat-bubble'ом, то самое что не делает claude-mem (он только AI-резюмирует). Поиск внутри чата с подсветкой. Пагинация для чатов 1000+.
+        </p>
+      </div>
+
+      <div class="tg-step">
+        <div class="tg-step-icon">📬</div>
+        <h3 data-en="Pending" data-ru="Pending">Pending</h3>
+        <p data-en="Telegram exports awaiting decision. Checkbox-based bulk Import / Skip — same privacy gate as <code>memex telegram import</code>."
+           data-ru="Telegram-экспорты ждущие решения. Чекбоксы для bulk Import / Skip — тот же privacy-gate, что и в <code>memex telegram import</code>.">
+          Telegram-экспорты ждущие решения. Чекбоксы для bulk Import / Skip — тот же privacy-gate, что и в <code>memex telegram import</code>.
+        </p>
+      </div>
+
+      <div class="tg-step">
+        <div class="tg-step-icon">⚙️</div>
+        <h3 data-en="Settings" data-ru="Settings">Settings</h3>
+        <p data-en="Daemon status, DB path & size, installed hooks, decision counts. Read-only — destructive ops live in the CLI on purpose."
+           data-ru="Daemon status, путь и размер БД, установленные хуки, decision counts. Read-only — destructive операции живут в CLI специально.">
+          Daemon status, путь и размер БД, установленные хуки, decision counts. Read-only — destructive операции живут в CLI специально.
+        </p>
+      </div>
+    </div>
+
+    <p class="vm-bottom"
+       data-en="<strong>Opt-in</strong> (not always-on), <strong>read-only</strong> by default, <strong>localhost-only</strong> by default (<code>127.0.0.1</code>). For remote — <code>memex web --public --token …</code>. No build step; raw Node <code>http</code> + tagged templates + htmx — that's why the whole client bundle is ≈ 30KB (for comparison, <a href='https://github.com/thedotmack/claude-mem' target='_blank' rel='noopener'>claude-mem</a>'s viewer ships ~10MB of React)."
+       data-ru="<strong>Opt-in</strong> (не always-on), <strong>read-only</strong> по умолчанию, <strong>localhost-only</strong> по умолчанию (<code>127.0.0.1</code>). Для remote — <code>memex web --public --token …</code>. Без build-step'a; raw Node <code>http</code> + tagged templates + htmx — поэтому весь клиентский bundle ≈ 30KB (для сравнения, у <a href='https://github.com/thedotmack/claude-mem' target='_blank' rel='noopener'>claude-mem</a>'а viewer тащит ~10MB React'a).">
+      <strong>Opt-in</strong> (не always-on), <strong>read-only</strong> по умолчанию, <strong>localhost-only</strong> по умолчанию (<code>127.0.0.1</code>). Для remote — <code>memex web --public --token …</code>. Без build-step'a; raw Node <code>http</code> + tagged templates + htmx — поэтому весь клиентский bundle ≈ 30KB (для сравнения, у <a href='https://github.com/thedotmack/claude-mem' target='_blank' rel='noopener'>claude-mem</a>'а viewer тащит ~10MB React'a).
+    </p>
+  </div>
+</section>
+
 <section class="section">
   <div class="section-inner">
     <h2 class="section-title" data-en="FAQ" data-ru="FAQ">FAQ</h2>

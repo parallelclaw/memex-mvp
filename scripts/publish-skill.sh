@@ -35,4 +35,5 @@ npx -y clawhub skill publish skills/install-memex \
   --clawscan-note "Skill instructs the agent to run 'curl -fsSL https://memex.parallelclaw.ai/install.sh | bash' (preferred fast path) or step-by-step 'npm install -g memex-mvp' + MCP config edit (Claude Code / Cursor / Cline / Continue / Zed). Network access via npm + the hosted bash installer on memex.parallelclaw.ai (GitHub Pages — view source: github.com/parallelclaw/memex-mvp/blob/main/docs/install.sh), shell commands, JSON config edits in dot-files, and (optional) brew install terminal-notifier — all intentional. No exfiltration; explicit Discovery preflight + 'show every command before running' safety rule + per-chat Telegram consent. Memex itself is local-first and emits zero network traffic at runtime. v1.4.0 adds optional 'memex web --open' suggestion at the end — that command starts a Node http server on 127.0.0.1:8765 (localhost-only by default), read-only views over the local SQLite DB; no outbound traffic, no install side-effects."
 
 echo ""
-echo "Done. Verify at https://clawhub.ai/skills/$(npx -y clawhub whoami 2>/dev/null | tail -1 | awk '{print $NF}')/install-memex"
+HANDLE=$(npx -y clawhub whoami 2>/dev/null | tail -1 | awk '{print $NF}')
+echo "Done. Verify at https://clawhub.ai/${HANDLE}/install-memex"

@@ -5,11 +5,11 @@
   "type": "module",
   "main": "server.js",
   "bin": {
-    "memex": "./server.js",
-    "memex-mvp": "./ingest.js",
-    "memex-sync": "./ingest.js",
-    "memex-ingest": "./ingest.js",
-    "memex-bot": "./bot/index.js"
+    "memex": "server.js",
+    "memex-mvp": "ingest.js",
+    "memex-sync": "ingest.js",
+    "memex-ingest": "ingest.js",
+    "memex-bot": "bot/index.js"
   },
   "files": [
     "server.js",

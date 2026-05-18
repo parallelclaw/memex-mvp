@@ -523,8 +523,21 @@ One file with all your AI conversations — sounds scarier than it is.
 1. Telegram **Desktop** (mobile не умеет export)
 2. Чат → меню → **Export chat history**
 3. **Format: JSON** (не HTML)
-4. **Path:** `~/.memex/inbox/`
+4. **Path:** `~/.memex/inbox/` — или, начиная с v0.10.12, **любой путь куда угодно**, и потом `memex import <путь>` ([см. ниже](#импорт-из-любого-пути-v01012))
 5. Готово. Memex подхватит автоматически.
+
+## Импорт из любого пути (v0.10.12+)
+
+Если файл лежит не в `~/.memex/inbox/`, а в обычном месте на диске (`~/Downloads/`, `~/Desktop/`, `~/projects/foo/`) — одна команда:
+
+```bash
+memex import ~/projects/memex/result.json
+memex import ~/Downloads/ChatExport_2026-05-18/         # Telegram HTML-папка
+memex import ~/path/to/session.jsonl                    # Claude Code сессия
+memex import ~/Downloads/result.json --force            # пропустить privacy-gate
+```
+
+То же через AI-агента: `memex_import_file({path: "..."})` — один MCP tool-call. Не нужно вручную переносить файлы.
 
 ---
 

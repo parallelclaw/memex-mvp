@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
-version: 1.4.1
+version: 1.5.0
 metadata:
   openclaw:
     emoji: "📚"
@@ -290,7 +290,13 @@ If the user declines Telegram setup ("not now" / "skip"): say "OK, I'll skip Tel
 
 Tell the user to fully quit and reopen the MCP client (Cmd+Q on macOS) so it picks up the new memex tools.
 
-**🌟 FIRST, STRONGLY RECOMMEND THIS (v0.10.8+):** offer to run `memex web --open` for them right now. It's the single most magical post-install moment — a local browser tab opens at `http://127.0.0.1:8765` with 5 pages showing every conversation memex has captured, dialogue rendered as chat-bubbles, full-text searchable. Verbatim — not AI-summarized. Read-only, localhost-only, Ctrl+C to stop. Phrase it naturally, e.g.:
+**🌟 OFFER TO IMPORT THEIR EXISTING DATA RIGHT NOW (v0.10.12+):** before anything else, ask the user if they have a Telegram export or a chat-history file sitting somewhere on disk that they'd like to load. Many users come with a `result.json` they exported yesterday, sitting in `~/Downloads/` or a project folder. Don't make them figure out memex's "magic paths" — just ask:
+
+> "Do you have any chat exports already on disk you want loaded into memex right now? Tell me the path (e.g. `~/Downloads/result.json` or `~/projects/memex/result.json`) — I'll handle it."
+
+Then call `memex_import_file({path: "<their-path>"})`. The tool auto-detects format (Telegram JSON / HTML / Claude JSONL / Cowork JSONL), respects the privacy gate for Telegram (returns `needs_consent` with a preview — surface it, get user OK, retry with `force: true`), and gives you a structured result in one call. **Do not use bash `mv`/`cp` to shuffle files into `~/.memex/inbox/`** — that was the old workflow and burned ~10k tokens per file. Use `memex_import_file` instead.
+
+**🌟 ALSO STRONGLY RECOMMEND THIS (v0.10.8+):** offer to run `memex web --open` for them right now. It's the single most magical post-install moment — a local browser tab opens at `http://127.0.0.1:8765` with 5 pages showing every conversation memex has captured, dialogue rendered as chat-bubbles, full-text searchable. Verbatim — not AI-summarized. Read-only, localhost-only, Ctrl+C to stop. Phrase it naturally, e.g.:
 
 > "I can open a local web dashboard that lets you actually *see* what memex captured — every message, in chat-bubble form, searchable. It's just a browser tab on `localhost:8765`. Run it now? It's a way better demo than asking me search queries blind."
 

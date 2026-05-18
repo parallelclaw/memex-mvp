@@ -1838,6 +1838,60 @@ const TOOLS = [
       required: ['content'],
     },
   },
+  {
+    name: 'memex_import_file',
+    description:
+      'Ingest a chat/conversation file at any path on disk into memex. ' +
+      'Use this when the user gives you a file path (e.g. "~/projects/memex/result.json", ' +
+      '"~/Downloads/ChatExport_2026-05-18/", or a Claude Code .jsonl) and wants its content ' +
+      'in memex. Auto-detects format (Telegram JSON / Telegram HTML directory / Claude Code ' +
+      'JSONL / Cowork JSONL).\n\n' +
+      'WHEN TO USE:\n' +
+      '  • User: "загрузи мой файл из ~/projects/memex/result.json"\n' +
+      '  • User: "вот файл с историей перпплексити, импортируй"\n' +
+      '  • Anywhere a path is given outside the auto-watched directories.\n\n' +
+      'PRIVACY GATE: for Telegram chats not yet on the user\'s allow-list, the tool returns ' +
+      'status="needs_consent" with a preview (chat title, msg count, date range, senders). ' +
+      'Surface that to the user, confirm, then call again with force=true. Skipped/blocked ' +
+      'chats are refused similarly (override with force=true only after explicit "yes").\n\n' +
+      'IDEMPOTENT: re-importing the same file is safe — UNIQUE(source, conversation_id, msg_id) ' +
+      'dedups under the hood. Re-importing a Telegram export with new messages adds the delta.\n\n' +
+      'DO NOT use this for URLs / web pages — use memex_store_document for those. ' +
+      'DO NOT use bash file ops (mv, cp) to move files into ~/.memex/inbox/ — that\'s the ' +
+      'old workflow this tool replaces. Pass the path directly here and get a structured response.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description:
+            'Absolute or ~-relative path to the file or directory. Supported: ' +
+            '.json (Telegram Desktop JSON export), .html (Telegram HTML export, single file), ' +
+            'directory (Telegram HTML export root with messages.html inside, or a Telegram dir ' +
+            'with nested result.json), .jsonl (Claude Code / Cowork session log — prefix cowork- ' +
+            'is treated as Cowork).',
+        },
+        format: {
+          type: 'string',
+          enum: ['auto', 'telegram-json', 'telegram-html', 'claude-jsonl', 'cowork-jsonl'],
+          default: 'auto',
+          description:
+            'Override format detection. Default "auto" sniffs the file content/extension. ' +
+            'Pass an explicit value when the file lacks an extension or auto-detection fails.',
+        },
+        force: {
+          type: 'boolean',
+          default: false,
+          description:
+            'For Telegram: bypass the privacy gate — import even if the chat is new (no prior ' +
+            '"allow" decision), or if it was previously skipped/blocked. Default false: the tool ' +
+            'returns "needs_consent" or "skipped" so the agent can confirm with the user first. ' +
+            'Set true only AFTER the user has explicitly approved this chat\'s import.',
+        },
+      },
+      required: ['path'],
+    },
+  },
   // ---------------------------------------------------------------------
   // Telegram capture flow (v0.10+) — proactive agent-driven import path.
   //
@@ -3129,6 +3183,25 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         refreshed: !!(existing && refresh),
         warnings,
       });
+    }
+
+    // ============================================================
+    //  ARBITRARY-PATH FILE INGEST (v0.10.12+)
+    //
+    //  Closes the onboarding gap: a user puts an export at a path
+    //  memex doesn't watch by default (~/projects/foo/result.json,
+    //  ~/Desktop/, etc.) — agent calls this with the path and gets a
+    //  structured result. No more 10k-token bash file-shuffling.
+    // ============================================================
+    if (name === 'memex_import_file') {
+      const { ingestFile } = await import('./lib/ingest-file.js');
+      const path = typeof args.path === 'string' ? args.path : '';
+      if (!path) return jsonResult({ status: 'error', error: 'path is required' });
+      const result = await ingestFile(db, path, {
+        format: args.format || 'auto',
+        force: args.force === true,
+      });
+      return jsonResult(result);
     }
 
     // ============================================================

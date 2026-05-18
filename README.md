@@ -131,9 +131,22 @@ memex list --source web                     # all saved URLs
 memex get web-1582ab51a7b7                  # full content of one conversation
 memex overview                              # snapshot of corpus + v0.8.1: capture streak
 memex projects                              # distinct project_paths captured
+memex import ~/projects/memex/result.json  # v0.10.12: ingest any file from any path
 memex help                                  # full user guide (HELP.md)
 memex --help                                # command reference
 ```
+
+### Ingest from any path (v0.10.12+)
+
+```sh
+memex import ~/projects/memex/result.json           # auto-detects Telegram JSON
+memex import ~/Downloads/ChatExport_2026-05-18/     # Telegram HTML export directory
+memex import ~/path/to/session.jsonl                # Claude Code JSONL
+memex import ~/Downloads/result.json --force        # skip Telegram privacy gate
+memex import some-file --format claude-jsonl        # explicit format override
+```
+
+For Telegram, the privacy gate fires for any chat that isn't on your allow-list — the command exits with a preview (title, message count, date range, senders) so you can review before re-running with `--force`. Same path via MCP: any AI agent can call `memex_import_file({path: "..."})` to ingest one file in one tool call (instead of ~10k tokens of bash `mv`-shuffling).
 
 Every query supports `--json` for machine-readable output: `memex search foo --json | jq '.results[].snippet'`. The DB is opened **read-only** — safe to run while `memex-sync` daemon is writing.
 

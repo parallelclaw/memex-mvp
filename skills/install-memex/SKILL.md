@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
-version: 1.5.0
+version: 1.5.1
 metadata:
   openclaw:
     emoji: "📚"
@@ -262,6 +262,8 @@ After the user exports, memex's daemon **auto-detects** the file in ~/Downloads/
   - **Present as a numbered list**, ask which to import. Accept indices, titles, or natural language ("import family and work, skip bank").
   - Call `memex_telegram_import` with selected indices/titles. The chat is added to the allow-list — future re-exports auto-merge via UNIQUE(msg_id).
   - For sensitive chats user doesn't want (Bank, Therapist, etc.), call `memex_telegram_skip`.
+
+**⚠ Existing exports back-fill (v0.10.13+):** if the user had Telegram Desktop exports SITTING IN `~/Downloads/Telegram Desktop/` BEFORE memex was installed, the daemon's chokidar watcher may or may not detect them (race with FSEvents on first run). The fast remedy is `memex telegram scan` — it walks the Downloads dir and stages every `ChatExport_*` folder (HTML or JSON, both work). v0.10.13's `memex-sync install` also runs this scan automatically at the end, but if the user already installed pre-0.10.13, OR if `memex telegram pending` reports zero entries despite a populated Downloads dir, run `memex telegram scan` explicitly. Both HTML and JSON formats are supported — don't tell the user to re-export in JSON.
 
 **Optional — clickable native macOS banner (v0.10.4+):** memex can fire a macOS notification the moment an export is staged. Default OFF for privacy. If the user wants this:
 

@@ -522,9 +522,9 @@ One file with all your AI conversations — sounds scarier than it is.
 
 1. Telegram **Desktop** (mobile не умеет export)
 2. Чат → меню → **Export chat history**
-3. **Format: JSON** (не HTML)
-4. **Path:** `~/.memex/inbox/` — или, начиная с v0.10.12, **любой путь куда угодно**, и потом `memex import <путь>` ([см. ниже](#импорт-из-любого-пути-v01012))
-5. Готово. Memex подхватит автоматически.
+3. **Format:** JSON или HTML — оба работают (HTML — с v0.9+)
+4. **Path:** Daemon следит за `~/Downloads/Telegram Desktop/` и подхватывает экспорты автоматически. **Также с v0.10.12 — `memex import <путь>`** из любой папки ([см. ниже](#импорт-из-любого-пути-v01012)). Legacy-путь `~/.memex/inbox/` тоже работает.
+5. Готово. После экспорта запусти `memex telegram pending` чтобы увидеть staged-чаты для импорта. Если daemon ещё не подхватил (например, экспорт лежал до установки memex'а) — `memex telegram scan` сделает backfill.
 
 ## Импорт из любого пути (v0.10.12+)
 

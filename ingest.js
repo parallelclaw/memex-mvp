@@ -294,6 +294,40 @@ async function cmdInstall() {
   console.log(`config: ${CONFIG_PATH} (auto-created on first edit)`);
   console.log(`status: npx memex-sync status`);
 
+  // v0.10.13: back-fill any Telegram exports that already exist in
+  // ~/Downloads/Telegram Desktop/. The daemon's chokidar watcher with
+  // ignoreInitial:false SHOULD pick them up, but in practice users hit
+  // race conditions (daemon started before Downloads dir was scanned,
+  // FSEvents lag, etc.) and end up with empty pending despite having
+  // exports on disk (tester-8 case). Doing a one-shot scan here closes
+  // that gap before the user even tries `memex telegram pending`.
+  try {
+    const { discoverExports, defaultDownloadsPaths } = await import('./lib/telegram-discovery.js');
+    const { stageExport, listPending } = await import('./lib/telegram-pending.js');
+    const downloadsPaths = defaultDownloadsPaths();
+    const found = discoverExports(downloadsPaths);
+    if (found.length > 0) {
+      const beforeCount = listPending().length;
+      let staged = 0;
+      for (const f of found) {
+        try {
+          stageExport(f.path, { moveOrCopy: 'copy' });
+          staged++;
+        } catch (_) { /* race with watcher — fine, watcher will pick up */ }
+      }
+      const afterCount = listPending().length;
+      const newly = afterCount - beforeCount;
+      if (newly > 0) {
+        console.log('');
+        console.log(`📬 Found ${found.length} pre-existing Telegram export(s) in Downloads — `);
+        console.log(`   staged ${newly} new into ~/.memex/pending/`);
+        console.log(`   Review: ${'npx memex telegram pending'}`);
+      }
+    }
+  } catch (_) {
+    /* discovery / pending modules optional — skip silently */
+  }
+
   // v0.10.10: surface the new web dashboard so manual installers actually
   // discover it. (curl-bash flow has its own [Y/n] prompt in install.sh —
   // it suppresses this output via `>/dev/null 2>&1`, so this callout is

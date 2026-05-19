@@ -1,7 +1,7 @@
 ---
 name: install-memex-claw
 description: Wire memex (the local-first MCP memory server) into an OpenClaw gateway — works wherever OpenClaw runs (Linux or macOS, VPS or workstation). Auto-captures every OpenClaw session in ~/.openclaw/agents/main/sessions/ and exposes 18 MCP tools (memex_search, memex_recent, memex_overview, memex_store_document, memex_import_file, etc.) to the local OpenClaw agent. Auto-detects whether memex is already installed on this machine (e.g. via the generic install-memex skill for Claude Code) — if yes, skips install and just merges memex into the OpenClaw gateway config; if no, does the full platform-aware install (Linux → systemd user-service, macOS → LaunchAgent). Back-fills past sessions in one shot. Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. PAIRS with the generic install-memex skill — if the user ALSO uses Claude Code, Cursor, Cline, Continue, Zed, or has Telegram chats to capture on this same machine, recommend they run install-memex separately for those flows.
-version: 1.0.2
+version: 1.0.3
 metadata:
   openclaw:
     emoji: "🧠"
@@ -107,8 +107,8 @@ ls -la ~/.openclaw/openclaw.json ~/.openclaw/config.json ~/.openclaw/mcp.json 2>
 |---|---|
 | **OpenClaw not found** | Stop. Tell user: "This skill is for OpenClaw agents. For Claude Code / Cursor / Cline / Continue / Zed, use `install-memex` instead." |
 | **Node < 20 or missing** | Stop. Tell user how to install Node (nvm.sh or distro package manager). Don't install Node yourself. |
-| **memex ≥ 0.10.14 + daemon running** | Skip Steps 2–4. Go directly to Step 5 (MCP wiring). Tell user: "memex already installed and running — just need to wire it into OpenClaw." |
-| **memex installed but < 0.10.14** | Upgrade in-place: `npm install -g memex-mvp@latest`. Then continue (daemon will auto-restart if running). |
+| **memex ≥ 0.11.5 + daemon running** | Skip Steps 2–4. Go directly to Step 5 (MCP wiring). Tell user: "memex already installed and running — just need to wire it into OpenClaw." |
+| **memex installed but < 0.11.5** | Upgrade in-place: `npm install -g memex-mvp@latest`. Then continue (daemon will auto-restart if running). **Critical for self-hosted OpenClaw users** — older versions miss `.reset.*` session archives where the long-term Telegram chat lives (~140 MB of history). |
 | **memex installed, daemon not running** | Run `memex-sync install` to register/start the daemon. Skip the npm install. |
 | **memex not installed** | Full path: Step 2 (install) → Step 3 (daemon) → Step 4 (back-fill) → Step 5 (wire). |
 | **No existing sessions** | Still proceed — daemon will capture new sessions going forward. Mention this. |
@@ -120,11 +120,11 @@ Report each result back to the user as **facts, not questions**:
 > "✓ OpenClaw detected"
 > "✓ Linux + systemd 255 — will use user-systemd for daemon"
 > "✓ Node 22.10.0 — ok"
-> "→ memex not installed — installing 0.10.14"
+> "→ memex not installed — installing 0.11.5"
 > "✓ Found 126 OpenClaw sessions ready to back-fill"
 > "→ Config at ~/.openclaw/openclaw.json"
 
-## Step 2 — Install memex (skip if already at ≥ 0.10.14)
+## Step 2 — Install memex (skip if already at ≥ 0.11.5)
 
 ```sh
 npm install -g memex-mvp@latest
@@ -144,7 +144,7 @@ npm install -g memex-mvp@latest
 After install:
 
 ```sh
-memex --version    # must print 0.10.14 or later
+memex --version    # must print 0.11.5 or later
 ```
 
 ## Step 3 — Install the auto-capture daemon (skip if already running)
@@ -153,7 +153,7 @@ memex --version    # must print 0.10.14 or later
 memex-sync install
 ```
 
-**Platform-specific behavior (handled automatically by memex-sync v0.10.14+):**
+**Platform-specific behavior (handled automatically by memex-sync v0.11.5+):**
 
 | Platform | What memex-sync install does |
 |---|---|
@@ -169,7 +169,7 @@ If linger needs sudo, the install output prints the manual command. **Tell the u
 memex-sync scan
 ```
 
-`memex-sync scan` walks SOURCES (Claude Code, Cowork, **OpenClaw** added in v0.10.14, …) and emits any unindexed sessions. For OpenClaw it processes every `<uuid>.jsonl` in `~/.openclaw/agents/main/sessions/`, filters internal-state noise, and writes to memex.db.
+`memex-sync scan` walks SOURCES (Claude Code, Cowork, **OpenClaw** added in v0.10.14, …) and emits any unindexed sessions. For OpenClaw it processes every `<uuid>.jsonl` in `~/.openclaw/agents/main/sessions/` PLUS `.checkpoint.*` snapshots PLUS `.reset.*` archives (v0.11.5+), filters internal-state noise, and writes to memex.db.
 
 Expected output:
 
@@ -186,41 +186,58 @@ scanned 126 files · 1255 messages emitted
 
 If the daemon was already running (Step 3 skipped), the back-fill via scan is still useful — it catches anything the daemon's chokidar might have raced on startup.
 
-### Step 4b — Channel-aware re-import (memex ≥ 0.11.0, OpenClaw users only)
+### Step 4b — Channel-aware re-import (memex ≥ 0.11.5, recommended for ALL OpenClaw users)
 
-v0.11 introduced channel-aware routing: Telegram messages relayed through OpenClaw go into per-sender conversations (`openclaw-tg-<sender_id>`), Kimi-web sessions stay in their own thread (`openclaw-kimi-<file8>`), system output is segregated (`openclaw-sys-<file8>`). Pre-0.11 imports merged everything into one bucket per session file.
-
-**v0.11.4 (current) — pick up `.reset.*` session archives** (the long-term Telegram history on self-hosted OpenClaw): on long-running deployments the main chat lives in `<uuid>.reset.<reset-uuid>.jsonl` files (full pre-reset archives) plus periodic checkpoints. v0.11.3 and earlier filtered `.reset.*` as "session-reset markers" — wrong attribution. v0.11.4 ingests them as full session archives. Effect: a self-hosted user who had thousands of Telegram messages disappear after v0.11.2's checkpoint-skip will see them all show up after upgrade.
-
-**v0.11.3 — content-based session-type detection**: `sessions.json` only tracks CURRENT active sessions. After main-session rotation, archived files were misclassified as "unknown" and treated as self-hosted (skipping checkpoints). v0.11.3 falls back to scanning the file body for channel markers — fixes auto-detection on rotated Kimi-Claw archives.
-
-**v0.11.2 — critical fixes for self-hosted OpenClaw** — re-run backfill after upgrading:
-- **Two-mode routing (auto-detected)**: memex now distinguishes Kimi-Claw (Moonshot's merged-file deployment) from self-hosted (separate `<uuid>.jsonl` per session). For self-hosted, checkpoint files are SKIPPED — they're snapshots that previously caused 30-40× row duplication. Override with `--mode kimi-claw` or `--mode self-hosted`.
-- **File-level channel detection for archive files**: previously only 1 of N self-hosted sessions got correctly tagged with channel; now all sessions match via uuid8 lookup.
-- **No more empty/ghost conversations**: subagent system-init files no longer produce conv rows with 0 messages and `[Subagent Context]` titles.
-- **Smarter title selection**: system-prompt-ish text (`[Subagent Context] You are running as ...`) is skipped — title falls through to the first real user message.
-
-**v0.11.1 base fixes (still applies)**:
-- Kimi-web header (`User Message From Kimi:`) now strips correctly even when the optional `[Time:]` block is missing (common case for short messages)
-- Tool-result records (`role='user'` with no channel marker, e.g. Bash/Read output) now correctly inherit the parent conversation instead of orphaning into a fallback bucket
-- **Self-hosted OpenClaw**: custom channel names from `sessions.json` (e.g. `discord`, `matrix`, `my-web-ui`) are auto-discovered — they route to `openclaw-<channel>-<accountId-or-file8>` without any code changes
-
-If you scanned with an older memex, re-run with channel splitting:
+v0.11.5 is the first version where OpenClaw ingestion can be trusted end-to-end on both **self-hosted OpenClaw** (the dominant case — separate `<uuid>.jsonl` per session) and **Moonshot Kimi-Claw** (the merged-file variant). Older versions had architectural blind spots. **After upgrading from anything below 0.11.5, run a channel-aware re-import:**
 
 ```sh
 memex-sync backfill-channels --yes
 ```
 
-This deletes existing `source = 'openclaw'` rows and re-imports each archive file via the new channel-aware path. Output ends with a per-channel breakdown:
+This deletes existing `source = 'openclaw'` rows and re-imports each archived file with the v0.11.5 pipeline. Expected banner:
+
+```
+Backfill: 110 archived OpenClaw file(s) (57 main + 38 checkpoint + 15 reset)
+  mode:          auto -> detected: self-hosted
+  current state: 1481 messages in 8 conversation(s)
+  38 checkpoint file(s) will be SKIPPED (snapshots — avoid 30-40× duplication).
+  15 reset file(s) will be ingested (full archives of pre-reset session history).
+```
+
+Per-channel breakdown at the end:
 
 ```
   channels:
-    • telegram: 1024 msgs
-    • kimi-web: 387 msgs
-    • system:   52 msgs
+    • telegram: 7338 msgs
+    • kimi-web:  102 msgs
 ```
 
-Idempotent: re-running is safe (UNIQUE(source, conv, msg_id) dedups).
+Idempotent — re-running is safe (UNIQUE(source, conv, msg_id) dedups).
+
+**Override mode if auto-detection picks the wrong one:**
+
+```sh
+memex-sync backfill-channels --yes --mode kimi-claw     # force Moonshot mode
+memex-sync backfill-channels --yes --mode self-hosted   # force self-hosted mode
+```
+
+Auto-detection rarely needs override — it inspects sessions.json and falls back to scanning file contents for channel markers (Kimi-Claw merged files contain BOTH Kimi and Telegram markers; self-hosted has one channel per file).
+
+#### What you get out of v0.11.5 vs older
+
+| Bug class | Fixed in | Real-world impact |
+|---|---|---|
+| Channel-aware routing (TG / Kimi-web / system in own conv buckets) | v0.11.0 | Telegram messages from one sender now share one thread across all OpenClaw sessions |
+| Kimi-web header strips correctly without optional `[Time:]` block | v0.11.1 | Clean user-text in storage for short messages |
+| Tool-result records (Bash/Read output, role='user' no marker) inherit parent conv | v0.11.1 | Assistant reasoning chain stays glued to the conversation it answers |
+| Two-mode routing: kimi-claw ingests checkpoints, self-hosted skips them | v0.11.2 | Self-hosted: no more 30-40× row duplication from checkpoint snapshots |
+| Auto-discovery of custom channels from `sessions.json` (discord/matrix/web-ui) | v0.11.2 | Self-hosters with non-standard channels work out of the box |
+| `--mode` flag for manual override | v0.11.2 | Power-user escape hatch when auto-detection fails |
+| Content-based session-type detection (when sessions.json doesn't have entry) | v0.11.3 | After main-session rotation, archived files are still correctly classified |
+| `.reset.*` files ingested (full pre-reset session archives) | v0.11.4 → v0.11.5 | **Self-hosted users get back their full long-term history** — typically 3-7K messages that were hidden in `.reset.*` files (~140 MB) before memex saw them |
+| `shouldIngest` accepts reset files whose names end in `.Z` (not `.jsonl`) | v0.11.5 | Made the v0.11.4 reset-pickup actually fire — real reset format is `<uuid>.jsonl.reset.<ISO-timestamp>`, doesn't end in `.jsonl` |
+| ENOENT crash in `memex-sync scan` on fresh boxes (`~/.memex/data/` missing) | v0.11.2 | Scan no longer crashes mid-run on a clean install |
+| Ghost conversations from subagent system-init files (msg_count=0, `[Subagent Context]` titles) | v0.11.2 | Conv list shows real conversations only |
 
 ## Step 5 — Wire memex into the OpenClaw gateway config
 
@@ -295,7 +312,7 @@ Adjust the numbers; print verbatim otherwise:
 ```
 ✓ Node 22 — ok
 ✓ Linux + systemd 255 — daemon as user-service (linger enabled)
-✓ memex 0.10.14 installed
+✓ memex 0.11.5 installed
 ✓ Daemon running (PID 12345)
 ✓ Back-filled 126 sessions → 1255 messages
 ✓ MCP wired into ~/.openclaw/openclaw.json

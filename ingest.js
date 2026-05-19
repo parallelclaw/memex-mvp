@@ -1196,8 +1196,19 @@ function fingerprint(filePath) {
 
 // -------------------- File filter --------------------
 function shouldIngest(filePath) {
-  if (!filePath.endsWith('.jsonl')) return false;
   const name = basename(filePath);
+  // v0.11.5: reset files on self-hosted OpenClaw have a SURPRISING format
+  // discovered live —
+  //   "<uuid>.jsonl.reset.<ISO-timestamp>"
+  //   e.g. "722c711b-….jsonl.reset.2026-05-05T19-37-01.833Z"
+  // Note: the file does NOT end in .jsonl (it ends in the timestamp's
+  // millisecond tail like ".833Z"). v0.11.4's first-line check
+  // `endsWith('.jsonl')` silently rejected these, making the rest of the
+  // v0.11.4 "now we ingest resets" logic dead code. Fix: let .reset.
+  // files through even without the .jsonl tail — the staging pipeline
+  // adds .jsonl in inboxNameFor() so downstream parsers still see a
+  // clean JSONL file.
+  if (!filePath.endsWith('.jsonl') && !/\.reset\./.test(name)) return false;
   if (name === 'audit.jsonl') return false; // tool-call audit log, not dialogue
   // OpenClaw v0.10.14+ — its sessions dir holds internal state files alongside
   // the dialogue .jsonl. Filter the noise:
@@ -1206,20 +1217,17 @@ function shouldIngest(filePath) {
   //   usage-cost-cache            ← billing cache
   //   *.lock                      ← file locks
   //
-  // INGEST these dialogue-bearing files (do NOT filter):
-  //   <uuid>.jsonl                 — main live session
-  //   <uuid>.checkpoint.<chkpt>... — periodic snapshot of current session
-  //   <uuid>.reset.<reset-uuid>... — FULL ARCHIVE of session before reset.
-  //                                  Critical for self-hosted OpenClaw:
-  //                                  on long-running deployments the main
-  //                                  Telegram chat lives ONLY in 30+
-  //                                  .checkpoint files plus 1 .reset file
-  //                                  (~140 MB of full conversation history,
-  //                                  ~3.2K user messages deduplicated).
-  //                                  v0.11.3 and earlier filtered .reset.*
-  //                                  as "session-reset markers" — wrong
-  //                                  attribution: they're complete archives.
-  //                                  v0.11.4 picks them up.
+  // INGEST these dialogue-bearing files:
+  //   <uuid>.jsonl                       — main live session
+  //   <uuid>.checkpoint.<chkpt>.jsonl    — periodic snapshot of current session
+  //   <uuid>.jsonl.reset.<timestamp>     — FULL ARCHIVE of session before reset
+  //                                        (note: ISO timestamp suffix, not .jsonl).
+  //                                        Critical for self-hosted OpenClaw:
+  //                                        on long-running deployments the main
+  //                                        Telegram chat lives ONLY in 30+
+  //                                        .checkpoint files plus 1+ .reset files
+  //                                        (~140 MB of full conversation history,
+  //                                        ~3.2K user messages deduplicated).
   if (/\.trajectory\./.test(name)) return false;
   if (name.includes('trajectory-path')) return false;
   if (name.includes('usage-cost-cache')) return false;
@@ -1261,14 +1269,23 @@ function inboxNameFor(srcPath, source) {
       const chkpt = mC[2].replace(/-/g, '').slice(0, 8);
       return `${source.prefix}-${base}-ckpt-${chkpt}.jsonl`;
     }
-    // Reset pattern (v0.11.4): <base-uuid>.reset.<reset-uuid> — full
-    // archive of the session at the moment of reset. Self-hosted
-    // OpenClaw stores its long-term Telegram history here.
-    const mR = stem.match(/^([0-9a-f]+(?:-[0-9a-f]+)*)\.reset\.([0-9a-f]+(?:-[0-9a-f]+)*)$/i);
+    // Reset pattern (v0.11.5): real production format on self-hosted is
+    //   <base-uuid>.jsonl.reset.<ISO-timestamp>
+    // e.g. "722c711b-….jsonl.reset.2026-05-05T19-37-01.833Z"
+    // The reset-suffix is a timestamp (NOT a uuid as we initially
+    // guessed). It contains dots, dashes, colons stripped/converted —
+    // hash it into a stable 8-hex short id so the inbox name follows
+    // our `-reset-<8hex>` convention.
+    //
+    // Note: `basename(p, '.jsonl')` only strips `.jsonl` at the END.
+    // For reset files (ending in `.833Z`) it strips nothing, so the
+    // stem still contains `.jsonl` in the middle — the optional
+    // `(?:\.jsonl)?` in the regex matches that.
+    const mR = basename(srcPath).match(/^([0-9a-f]+(?:-[0-9a-f]+)*)(?:\.jsonl)?\.reset\.(.+)$/i);
     if (mR) {
       const base = mR[1].replace(/-/g, '').slice(0, 8);
-      const reset = mR[2].replace(/-/g, '').slice(0, 8);
-      return `${source.prefix}-${base}-reset-${reset}.jsonl`;
+      const resetId = createHash('sha1').update(mR[2]).digest('hex').slice(0, 8);
+      return `${source.prefix}-${base}-reset-${resetId}.jsonl`;
     }
     // Plain main-session file
     return `${source.prefix}-${stem.replace(/-/g, '').slice(0, 8)}.jsonl`;

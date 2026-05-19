@@ -512,6 +512,19 @@ test('baseUuid8: <base>.reset.<reset>.jsonl (source format)', () => {
   );
 });
 
+// v0.11.5: real production reset format is "<uuid>.jsonl.reset.<ISO-timestamp>".
+// Note the file ends in the timestamp (e.g. ".833Z"), NOT in ".jsonl".
+test('baseUuid8: real reset format (jsonl-in-middle + timestamp suffix)', () => {
+  assertEq(
+    baseUuid8('722c711b-ea6e-4e08-a83a-c596288bcfe3.jsonl.reset.2026-05-05T19-37-01.833Z'),
+    '722c711b',
+  );
+});
+
+test('isResetFile: real production format (.jsonl in middle, timestamp tail)', () => {
+  assert(isResetFile('722c711b-ea6e-4e08-a83a-c596288bcfe3.jsonl.reset.2026-05-05T19-37-01.833Z'));
+});
+
 // ============ v0.11.3: content-based session-type detection ============
 //
 // Critical for backfill from archive: sessions.json only tracks CURRENT

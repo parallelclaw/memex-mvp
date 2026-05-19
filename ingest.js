@@ -1035,10 +1035,23 @@ function shouldIngest(filePath) {
   const name = basename(filePath);
   if (name === 'audit.jsonl') return false; // tool-call audit log, not dialogue
   // OpenClaw v0.10.14+ — its sessions dir holds internal state files alongside
-  // the dialogue .jsonl. Filter the noise: <uuid>.trajectory.jsonl, .checkpoint.,
-  // .reset., trajectory-path files, usage-cost-cache, *.lock. The clean
-  // dialogue file is just <uuid>.jsonl with no extra extension.
-  if (/\.(checkpoint|trajectory|reset)\./.test(name)) return false;
+  // the dialogue .jsonl. Filter the noise:
+  //   <uuid>.trajectory.jsonl     ← agent reasoning trace, not dialogue
+  //   <uuid>.reset.jsonl          ← session-reset markers
+  //   trajectory-path*            ← execution paths
+  //   usage-cost-cache            ← billing cache
+  //   *.lock                      ← file locks
+  //
+  // IMPORTANT: do NOT filter <uuid>.checkpoint.<chkpt>.jsonl files.
+  // v0.10.16 and earlier filtered these as "internal state" per an early
+  // OpenClaw maintainer note — BUT on real-world VPS deployments these
+  // files actually contain TELEGRAM-channel messages received while the
+  // agent was busy on the main session. Filtering them silently dropped
+  // user-sent Telegram messages from the memex index. Fix: pass them
+  // through; inboxNameFor() below handles their checkpoint-suffixed
+  // filenames and merges their content into the BASE session's
+  // conversation_id so they appear in the same thread as the main chat.
+  if (/\.(trajectory|reset)\./.test(name)) return false;
   if (name.includes('trajectory-path')) return false;
   if (name.includes('usage-cost-cache')) return false;
   return true;
@@ -1060,11 +1073,27 @@ function shouldIngest(filePath) {
  *   → inbox/code-<UUID first 8>.jsonl
  */
 function inboxNameFor(srcPath, source) {
-  // OpenClaw stores sessions as flat <uuid>.jsonl with no subagent/encoded
-  // path structure. Just use the stem prefix.
+  // OpenClaw — sessions live at flat <uuid>.jsonl. Background-channel
+  // messages (Telegram while agent busy on main session) land in sibling
+  // <base>.checkpoint.<chkpt>.jsonl files. We DO ingest those (v0.10.17+);
+  // their inbox name needs to be unique-per-source-file BUT also let the
+  // downstream ingest associate them with the BASE session's conv_id, so
+  // a Telegram message + a Kimi message from the same session end up in
+  // the same memex conversation.
   if (source.name === 'openclaw') {
     const stem = basename(srcPath, '.jsonl');
-    return `${source.prefix}-${stem.slice(0, 8)}.jsonl`;
+    // Checkpoint pattern: <base-uuid>.checkpoint.<chkpt-uuid>
+    const m = stem.match(/^([0-9a-f]+(?:-[0-9a-f]+)*)\.checkpoint\.([0-9a-f]+(?:-[0-9a-f]+)*)$/i);
+    if (m) {
+      const base = m[1].replace(/-/g, '').slice(0, 8);
+      const chkpt = m[2].replace(/-/g, '').slice(0, 8);
+      // `-ckpt-` separator is the marker for ingestClaudeJsonl to merge
+      // these messages into the base session's conv_id rather than
+      // creating a parallel conversation.
+      return `${source.prefix}-${base}-ckpt-${chkpt}.jsonl`;
+    }
+    // Plain main-session file
+    return `${source.prefix}-${stem.replace(/-/g, '').slice(0, 8)}.jsonl`;
   }
   const parts = srcPath.split(sep);
   const subIdx = parts.indexOf('subagents');

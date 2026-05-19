@@ -286,12 +286,22 @@ function importTelegram(filePathOrRaw) {
  *  extractMessageFromRecord.
  */
 function importClaudeCodeJsonl(filePath, source = 'claude-code') {
-  const fileName = basename(filePath, '.jsonl');
+  let fileName = basename(filePath, '.jsonl');
+  // v0.10.17: OpenClaw checkpoint files (Telegram-while-busy etc.) arrive
+  // in inbox named `openclaw-<base8>-ckpt-<chkpt8>.jsonl`. Strip the
+  // `-ckpt-…` suffix so they join the base session's conversation_id
+  // rather than spawning a parallel conv. Mirrors the same logic in
+  // lib/ingest-file.js (used by the daemon's inbox-drainer).
+  if (source === 'openclaw') {
+    const m = fileName.match(/^(openclaw-[0-9a-f]+)-ckpt-[0-9a-f]+$/i);
+    if (m) fileName = m[1];
+  }
   const conversationId = `${source}-${fileName}`;
   const sourceLabel =
     source === 'claude-cowork' ? 'Claude Cowork'
     : source === 'cursor' ? 'Cursor'
     : source === 'obsidian' ? 'Obsidian'
+    : source === 'openclaw' ? 'OpenClaw'
     : 'Claude Code';
   const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
   let imported = 0;

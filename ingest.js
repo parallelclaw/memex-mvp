@@ -900,15 +900,59 @@ async function cmdBackfillChannels() {
 
   const { initializeDb } = await import('./lib/db-init.js');
   const { ingestFile } = await import('./lib/ingest-file.js');
+  const channelMod = await import('./lib/openclaw-channel.js');
   const db = initializeDb(dbPath);
   db.pragma('busy_timeout = 5000');
+
+  // v0.11.2: --mode flag for users who want to override auto-detection.
+  // 'auto' (default) - per-file detection via sessions.json
+  // 'kimi-claw'      - assume merged-file Moonshot deployment (ingest checkpoints)
+  // 'self-hosted'    - assume separate-file deployment (skip checkpoints)
+  const modeIdx = process.argv.findIndex((a) => a === '--mode');
+  let mode = 'auto';
+  if (modeIdx >= 0 && process.argv[modeIdx + 1]) {
+    const v = process.argv[modeIdx + 1];
+    if (['auto', 'kimi-claw', 'self-hosted'].includes(v)) mode = v;
+    else {
+      console.error(`Invalid --mode value: ${v}. Use: auto | kimi-claw | self-hosted`);
+      process.exit(1);
+    }
+  }
 
   // Count current openclaw rows (informational + safety check)
   const before = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE source = 'openclaw'").get().n;
   const beforeConvs = db.prepare("SELECT COUNT(*) AS n FROM conversations WHERE source = 'openclaw'").get().n;
 
-  console.log(`Backfill: ${files.length} archived OpenClaw file(s) → channel-aware re-import`);
+  // Pre-scan: categorise files + probe session type so the banner
+  // tells the user upfront what we'll skip.
+  const checkpoints = files.filter((n) => channelMod.isCheckpointFile(n));
+  const mainFiles = files.filter((n) => !channelMod.isCheckpointFile(n));
+  let detectedMode = mode;
+  if (mode === 'auto' && mainFiles.length > 0) {
+    const probePath = join(archiveOpenclawDir, mainFiles[0]);
+    const sessionsJsonPath = channelMod.findSessionsJson(probePath);
+    const channelMap = sessionsJsonPath
+      ? channelMod.loadSessionsJsonChannelMap(sessionsJsonPath)
+      : new Map();
+    let kimi = 0, hosted = 0, unknown = 0;
+    for (const n of mainFiles) {
+      const t = channelMod.detectSessionType(join(archiveOpenclawDir, n), channelMap);
+      if (t === 'kimi-claw') kimi++;
+      else if (t === 'self-hosted') hosted++;
+      else unknown++;
+    }
+    if (kimi > hosted) detectedMode = 'kimi-claw';
+    else if (hosted > 0) detectedMode = 'self-hosted';
+    else detectedMode = 'unknown (treating as self-hosted)';
+  }
+
+  console.log(`Backfill: ${files.length} archived OpenClaw file(s) (${mainFiles.length} main + ${checkpoints.length} checkpoint)`);
+  console.log(`  mode:          ${mode}${mode === 'auto' ? ` -> detected: ${detectedMode}` : ''}`);
   console.log(`  current state: ${before} messages in ${beforeConvs} conversation(s)`);
+  if (mode !== 'kimi-claw' && detectedMode !== 'kimi-claw' && checkpoints.length > 0) {
+    console.log(`  ${checkpoints.length} checkpoint file(s) will be SKIPPED ` +
+                `(snapshots - avoid 30-40x duplication). Override: --mode kimi-claw`);
+  }
   console.log('');
 
   const yesFlag = process.argv.includes('--yes') || process.argv.includes('-y');
@@ -927,17 +971,25 @@ async function cmdBackfillChannels() {
 
   let imported = 0;
   let failed = 0;
+  let skipped = 0;
   for (let i = 0; i < files.length; i++) {
     const filePath = join(archiveOpenclawDir, files[i]);
     process.stdout.write(`  [${i + 1}/${files.length}] ${files[i]}... `);
     try {
-      const r = await ingestFile(db, filePath, { format: 'openclaw-jsonl', force: true });
+      const r = await ingestFile(db, filePath, {
+        format: 'openclaw-jsonl',
+        force: true,
+        mode, // 'auto' | 'kimi-claw' | 'self-hosted'
+      });
       if (r.status === 'imported') {
         imported += r.total_imported || 0;
         process.stdout.write(`${r.total_imported || 0} msgs into ${r.conversations?.length || 0} conv(s)\n`);
+      } else if (r.status === 'skipped') {
+        skipped++;
+        process.stdout.write(`SKIP (${r.reason || ''})\n`);
       } else {
         failed++;
-        process.stdout.write(`SKIP (${r.status}: ${r.error || ''})\n`);
+        process.stdout.write(`FAIL (${r.status}: ${r.error || ''})\n`);
       }
     } catch (e) {
       failed++;
@@ -956,7 +1008,7 @@ async function cmdBackfillChannels() {
   console.log('');
   console.log('Done.');
   console.log(`  before: ${before} msgs / ${beforeConvs} convs`);
-  console.log(`  after:  ${after} msgs / ${afterConvs} convs (${failed} file(s) failed)`);
+  console.log(`  after:  ${after} msgs / ${afterConvs} convs (${skipped} skipped, ${failed} failed)`);
   if (channels.length > 0) {
     console.log('  channels:');
     for (const c of channels) console.log(`    • ${c.channel}: ${c.n} msgs`);
@@ -1099,6 +1151,13 @@ if (existsSync(STATE_PATH)) {
 }
 
 function saveState() {
+  // v0.11.2: ensure ~/.memex/data/ exists before writing the tmp file.
+  // On a fresh box where memex-sync runs before the MCP server has ever
+  // opened the DB, the data/ dir doesn't exist yet — writeFileSync
+  // would succeed nowhere (or fail), and the subsequent renameSync
+  // crashed with ENOENT on Linux. Discovered by a self-hosted OpenClaw
+  // tester running install-memex-claw on Ubuntu 24.04.
+  mkdirSync(DATA, { recursive: true });
   const tmp = STATE_PATH + '.tmp';
   writeFileSync(tmp, JSON.stringify(state, null, 2));
   renameSync(tmp, STATE_PATH);

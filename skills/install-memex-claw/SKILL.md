@@ -190,10 +190,16 @@ If the daemon was already running (Step 3 skipped), the back-fill via scan is st
 
 v0.11 introduced channel-aware routing: Telegram messages relayed through OpenClaw go into per-sender conversations (`openclaw-tg-<sender_id>`), Kimi-web sessions stay in their own thread (`openclaw-kimi-<file8>`), system output is segregated (`openclaw-sys-<file8>`). Pre-0.11 imports merged everything into one bucket per session file.
 
-**v0.11.1 (recommended) adds two important fixes** — re-run backfill after upgrading from v0.11.0:
-- Kimi-web header (`User Message From Kimi:`) now strips correctly even when the optional `[Time:]` block is missing (which is the common case for short messages)
+**v0.11.2 (recommended) adds critical fixes for self-hosted OpenClaw** — re-run backfill after upgrading:
+- **Two-mode routing (auto-detected)**: memex now distinguishes Kimi-Claw (Moonshot's merged-file deployment) from self-hosted (separate `<uuid>.jsonl` per session). For self-hosted, checkpoint files are SKIPPED — they're snapshots that previously caused 30-40× row duplication. Override with `--mode kimi-claw` or `--mode self-hosted`.
+- **File-level channel detection for archive files**: previously only 1 of N self-hosted sessions got correctly tagged with channel; now all sessions match via uuid8 lookup.
+- **No more empty/ghost conversations**: subagent system-init files no longer produce conv rows with 0 messages and `[Subagent Context]` titles.
+- **Smarter title selection**: system-prompt-ish text (`[Subagent Context] You are running as ...`) is skipped — title falls through to the first real user message.
+
+**v0.11.1 base fixes (still applies)**:
+- Kimi-web header (`User Message From Kimi:`) now strips correctly even when the optional `[Time:]` block is missing (common case for short messages)
 - Tool-result records (`role='user'` with no channel marker, e.g. Bash/Read output) now correctly inherit the parent conversation instead of orphaning into a fallback bucket
-- **Self-hosted OpenClaw**: custom channel names from `sessions.json` (e.g. `discord`, `matrix`, `my-web-ui`) are now auto-discovered — they route to `openclaw-<channel>-<accountId-or-file8>` without any code changes
+- **Self-hosted OpenClaw**: custom channel names from `sessions.json` (e.g. `discord`, `matrix`, `my-web-ui`) are auto-discovered — they route to `openclaw-<channel>-<accountId-or-file8>` without any code changes
 
 If you scanned with an older memex, re-run with channel splitting:
 

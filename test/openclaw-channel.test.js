@@ -12,6 +12,9 @@ import {
   stripKimiHeader,
   loadSessionsJsonChannelMap,
   findSessionsJson,
+  lookupChannel,
+  detectSessionType,
+  isCheckpointFile,
   deriveOpenclawConvId,
   titlePrefixFor,
   baseUuid8,
@@ -357,30 +360,120 @@ test('baseUuid8: <base>.checkpoint.<chkpt>.jsonl (source file)', () => {
 
 // ============ loadSessionsJsonChannelMap ============
 
-test('loadSessionsJsonChannelMap: maps sessionFile → channel', () => {
+test('loadSessionsJsonChannelMap: maps sessionFile → channel (multi-key)', () => {
+  // v0.11.2: map is indexed by 3 keys per entry — full path, basename,
+  // and uuid8:<base-uuid>. The lookupChannel helper picks whichever
+  // matches. Verify all three are present.
   const root = mkdtempSync(join(tmpdir(), 'memex-ses-'));
   try {
     const p = join(root, 'sessions.json');
     writeFileSync(p, JSON.stringify({
       'agent:main:main': {
         deliveryContext: { channel: 'kimi-claw' },
-        sessionFile: '/root/.openclaw/agents/main/sessions/3824f87a.jsonl',
+        sessionFile: '/root/.openclaw/agents/main/sessions/3824f87a-ea6e-4e08-a83a-c596288bcfe3.jsonl',
       },
       'agent:main:subagent:xyz': {
         deliveryContext: { channel: 'telegram' },
-        sessionFile: '/root/.openclaw/agents/main/sessions/778e300b.jsonl',
+        sessionFile: '/root/.openclaw/agents/main/sessions/778e300b-aa11-bb22-cc33-dd44ee55ff66.jsonl',
       },
     }));
     const m = loadSessionsJsonChannelMap(p);
-    assertEq(m.size, 2);
-    assertEq(m.get('/root/.openclaw/agents/main/sessions/3824f87a.jsonl'), 'kimi-web'); // normalised
-    assertEq(m.get('/root/.openclaw/agents/main/sessions/778e300b.jsonl'), 'telegram');
+    // 2 entries × 3 keys each = 6 (assuming all three keys are distinct)
+    assertEq(m.size, 6);
+    // Full path key
+    assertEq(m.get('/root/.openclaw/agents/main/sessions/3824f87a-ea6e-4e08-a83a-c596288bcfe3.jsonl'), 'kimi-web');
+    // Basename key
+    assertEq(m.get('3824f87a-ea6e-4e08-a83a-c596288bcfe3.jsonl'), 'kimi-web');
+    // uuid8 key
+    assertEq(m.get('uuid8:3824f87a'), 'kimi-web');
+    // Same for the telegram entry
+    assertEq(m.get('uuid8:778e300b'), 'telegram');
+    assertEq(m.get('778e300b-aa11-bb22-cc33-dd44ee55ff66.jsonl'), 'telegram');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('loadSessionsJsonChannelMap: missing file → empty Map', () => {
   const m = loadSessionsJsonChannelMap('/nonexistent/sessions.json');
   assertEq(m.size, 0);
+});
+
+// ============ v0.11.2: lookupChannel + detectSessionType + isCheckpointFile ============
+
+test('lookupChannel: matches by full path', () => {
+  const map = new Map([['/path/to/abc.jsonl', 'telegram']]);
+  assertEq(lookupChannel(map, '/path/to/abc.jsonl'), 'telegram');
+});
+
+test('lookupChannel: matches by basename', () => {
+  const map = new Map([['abc.jsonl', 'telegram']]);
+  assertEq(lookupChannel(map, '/different/dir/abc.jsonl'), 'telegram');
+});
+
+test('lookupChannel: matches by uuid8 (archive-staged file)', () => {
+  // Critical v0.11.2 case: archive file is named openclaw-3824f87a.jsonl
+  // but sessions.json key is uuid8:3824f87a (set by loadSessionsJsonChannelMap).
+  const map = new Map([['uuid8:3824f87a', 'telegram']]);
+  assertEq(lookupChannel(map, '/archive/openclaw-3824f87a.jsonl'), 'telegram');
+});
+
+test('lookupChannel: no match → null', () => {
+  const map = new Map([['uuid8:3824f87a', 'telegram']]);
+  assertEq(lookupChannel(map, '/archive/openclaw-deadbeef.jsonl'), null);
+});
+
+test('lookupChannel: end-to-end via loadSessionsJsonChannelMap', () => {
+  // Simulate the real flow: sessions.json -> map -> archive-file lookup
+  const root = mkdtempSync(join(tmpdir(), 'memex-lkp-'));
+  try {
+    const p = join(root, 'sessions.json');
+    writeFileSync(p, JSON.stringify({
+      'agent:main:main': {
+        deliveryContext: { channel: 'telegram' },
+        sessionFile: '/home/user/.openclaw/agents/main/sessions/3824f87a-ea6e-4e08-a83a-c596288bcfe3.jsonl',
+      },
+    }));
+    const m = loadSessionsJsonChannelMap(p);
+    // Archive-staged name (different from sessionFile in sessions.json)
+    assertEq(lookupChannel(m, '/home/user/.memex/archive/openclaw/openclaw-3824f87a.jsonl'), 'telegram');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('detectSessionType: kimi-web channel → kimi-claw', () => {
+  const map = new Map([['uuid8:3824f87a', 'kimi-web']]);
+  assertEq(detectSessionType('/archive/openclaw-3824f87a.jsonl', map), 'kimi-claw');
+});
+
+test('detectSessionType: telegram channel → self-hosted', () => {
+  const map = new Map([['uuid8:3824f87a', 'telegram']]);
+  assertEq(detectSessionType('/archive/openclaw-3824f87a.jsonl', map), 'self-hosted');
+});
+
+test('detectSessionType: custom channel → self-hosted', () => {
+  const map = new Map([['uuid8:3824f87a', 'webchat']]);
+  assertEq(detectSessionType('/archive/openclaw-3824f87a.jsonl', map), 'self-hosted');
+});
+
+test('detectSessionType: no channel → unknown', () => {
+  const map = new Map();
+  assertEq(detectSessionType('/archive/openclaw-deadbeef.jsonl', map), 'unknown');
+});
+
+test('isCheckpointFile: classic .checkpoint. format', () => {
+  assert(isCheckpointFile('3824f87a-ea6e-4e08-a83a-c596288bcfe3.checkpoint.e6c37ac7-64d2-49cd-ba5e-5858fe98bddc.jsonl'));
+});
+
+test('isCheckpointFile: inbox-staged -ckpt- format', () => {
+  assert(isCheckpointFile('openclaw-3824f87a-ckpt-e6c37ac7.jsonl'));
+});
+
+test('isCheckpointFile: main session file → false', () => {
+  assertEq(isCheckpointFile('openclaw-3824f87a.jsonl'), false);
+  assertEq(isCheckpointFile('3824f87a-ea6e-4e08-a83a-c596288bcfe3.jsonl'), false);
+});
+
+test('isCheckpointFile: empty/null → false', () => {
+  assertEq(isCheckpointFile(''), false);
+  assertEq(isCheckpointFile(null), false);
 });
 
 test('findSessionsJson: walks up to find sibling', () => {

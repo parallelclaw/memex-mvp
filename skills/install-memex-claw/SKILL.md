@@ -1,7 +1,7 @@
 ---
 name: install-memex-claw
 description: Wire memex (the local-first MCP memory server) into an OpenClaw gateway — works wherever OpenClaw runs (Linux or macOS, VPS or workstation). Auto-captures every OpenClaw session in ~/.openclaw/agents/main/sessions/ and exposes 18 MCP tools (memex_search, memex_recent, memex_overview, memex_store_document, memex_import_file, etc.) to the local OpenClaw agent. Auto-detects whether memex is already installed on this machine (e.g. via the generic install-memex skill for Claude Code) — if yes, skips install and just merges memex into the OpenClaw gateway config; if no, does the full platform-aware install (Linux → systemd user-service, macOS → LaunchAgent). Back-fills past sessions in one shot. Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. PAIRS with the generic install-memex skill — if the user ALSO uses Claude Code, Cursor, Cline, Continue, Zed, or has Telegram chats to capture on this same machine, recommend they run install-memex separately for those flows.
-version: 1.0.0
+version: 1.0.1
 metadata:
   openclaw:
     emoji: "🧠"
@@ -60,6 +60,21 @@ This skill installs `memex-mvp` from npm (if not already present) and wires it a
 - If memex is already installed (e.g. via the generic install-memex skill), this skill skips re-install and only wires OpenClaw — no surprise reinstalls
 
 ---
+
+## Before this skill can be installed (one-time OpenClaw bootstrap)
+
+If the user runs `openclaw skill install install-memex-claw` and gets back **"plugin not allowed"** or similar — the OpenClaw `skill` plugin isn't enabled in the gateway config by default on fresh installs. This is OpenClaw's own permission model preventing arbitrary code execution; it's not specific to memex.
+
+**One-time fix** before any ClawHub skill can be installed:
+
+1. Open `~/.openclaw/openclaw.json` (or wherever your OpenClaw gateway config lives — often `/root/.openclaw/openclaw.json` on a fresh root-owned VPS).
+2. Find the `plugins.allow` array. Add `"skill"` to it (merge, don't overwrite other entries).
+3. Restart the OpenClaw gateway so the new permission takes effect.
+4. Retry `openclaw skill install install-memex-claw`.
+
+After this is done once, the `skill` plugin stays allowed forever — every future ClawHub skill works out of the box.
+
+Once this skill is loaded and you're reading the rest of this file: continue to "Prerequisite" below.
 
 ## Prerequisite
 

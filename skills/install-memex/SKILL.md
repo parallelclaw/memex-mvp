@@ -1,7 +1,7 @@
 ---
 name: install-memex
 description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
-version: 1.5.1
+version: 1.6.0
 metadata:
   openclaw:
     emoji: "📚"
@@ -57,7 +57,9 @@ Memex has its OWN storage at `~/.memex/data/memex.db`. It READS from each tool's
 
 ## Prerequisite
 
-This skill only works if you are running INSIDE an AI agent that has direct access to the user's shell — i.e. one of: Claude Code (CLI), Cursor, Cline, Continue, or Zed. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute `npm`/file operations. If you are NOT a CLI-based agent with shell access, stop now and tell the user to use the manual install at https://memex.parallelclaw.ai/#quickstart.
+This skill only works if you are running INSIDE an AI agent that has direct access to the user's shell — i.e. one of: Claude Code (CLI), Cursor, Cline, Continue, Zed, OR an OpenClaw / Hermes agent running on a Linux VPS. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute `npm`/file operations. If you are NOT a CLI-based agent with shell access, stop now and tell the user to use the manual install at https://memex.parallelclaw.ai/#quickstart.
+
+**Platform note (v0.10.14+):** memex now runs natively on **both macOS and Linux**. `memex-sync install` auto-detects platform: macOS → LaunchAgent, Linux → systemd user-service. On Linux it will also try to `loginctl enable-linger $USER` so the daemon survives SSH logout — if that needs sudo, the script prints a clear next step instead of failing. **VPS deployments** (OpenClaw / Hermes running on Ubuntu/Debian etc.) work end-to-end — capture sessions from `~/.openclaw/agents/main/sessions/` automatically.
 
 ## Discovery — do this BEFORE the numbered steps
 

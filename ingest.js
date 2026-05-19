@@ -5,8 +5,8 @@
  *
  * CLI usage:
  *   memex-sync             # run in foreground (debug / launchctl ProgramArguments)
- *   memex-sync install     # register macOS LaunchAgent (autostart on login)
- *   memex-sync uninstall   # unload + remove LaunchAgent (data is preserved)
+ *   memex-sync install     # register autostart daemon (macOS LaunchAgent or Linux systemd-user)
+ *   memex-sync uninstall   # stop + remove daemon (data is preserved)
  *   memex-sync status      # show daemon state, watched files, last activity
  *   memex-sync logs        # tail -f the daemon log
  *
@@ -89,11 +89,16 @@ const DATA = join(MEMEX_DIR, 'data');
 const STATE_PATH = join(DATA, 'ingest-state.json');
 const LOG_PATH = join(DATA, 'ingest.log');
 
-// LaunchAgent metadata (macOS). Linux/systemd-user support to follow.
+// Daemon metadata — per-platform. macOS uses LaunchAgents (plist),
+// Linux uses systemd user-service. v0.10.14 added Linux support so memex
+// can run on VPSes alongside OpenClaw / Hermes etc.
 const LAUNCH_LABEL = 'com.parallelclaw.memex.sync';
 const LEGACY_LABEL = 'com.parallelclaw.memex.ingest'; // pre-rename, migrated transparently
 const PLIST_PATH = join(HOME, 'Library', 'LaunchAgents', `${LAUNCH_LABEL}.plist`);
 const LEGACY_PLIST_PATH = join(HOME, 'Library', 'LaunchAgents', `${LEGACY_LABEL}.plist`);
+const SYSTEMD_USER_DIR = join(HOME, '.config', 'systemd', 'user');
+const SYSTEMD_SERVICE_NAME = 'memex-sync.service';
+const SYSTEMD_SERVICE_PATH = join(SYSTEMD_USER_DIR, SYSTEMD_SERVICE_NAME);
 
 // Chokidar-watched JSONL roots. Declared here (not below the dispatch
 // block) so CLI subcommands that run BEFORE the daemon body — e.g.
@@ -108,6 +113,15 @@ const SOURCES = [
     name: 'claude-cowork',
     prefix: 'cowork',
     dir: join(HOME, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions'),
+  },
+  // OpenClaw (v0.10.14+): used primarily on VPS deployments where OpenClaw
+  // agents run. Sessions live as flat <uuid>.jsonl files; the watcher filters
+  // out OpenClaw internal state (.checkpoint., .trajectory., .reset., .lock,
+  // trajectory-path, usage-cost-cache) via shouldIngest() below.
+  {
+    name: 'openclaw',
+    prefix: 'openclaw',
+    dir: join(HOME, '.openclaw', 'agents', 'main', 'sessions'),
   },
 ];
 
@@ -151,8 +165,8 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
 
 daemon mode:
   memex-sync                    run in foreground (default; same as 'serve')
-  memex-sync install            register macOS LaunchAgent (autostart on login)
-  memex-sync uninstall          unload and remove LaunchAgent (data preserved)
+  memex-sync install            register autostart daemon (macOS LaunchAgent / Linux systemd-user)
+  memex-sync uninstall          stop and remove daemon (data preserved)
   memex-sync restart            restart the LaunchAgent (after config changes)
   memex-sync status             show daemon health, watched files, last activity
   memex-sync logs               tail the daemon log
@@ -192,13 +206,9 @@ paths:
 
 // -------------------- CLI command handlers --------------------
 
-async function cmdInstall() {
-  if (platform() !== 'darwin') {
-    console.error('install: macOS-only for now (LaunchAgent). Linux systemd-user support pending.');
-    console.error('on Linux you can run: nohup memex-sync &');
-    process.exit(1);
-  }
+// ── Platform-specific daemon installers ─────────────────────────────────────
 
+function installLaunchAgent() {
   // Migrate legacy plist (pre-rename) if present.
   if (existsSync(LEGACY_PLIST_PATH)) {
     console.log('migrating legacy LaunchAgent (com.parallelclaw.memex.ingest → .sync)...');
@@ -248,6 +258,105 @@ async function cmdInstall() {
   console.log(`✓ memex-sync installed and running`);
   console.log(`  plist: ${PLIST_PATH}`);
   console.log(`  log:   ${LOG_PATH}`);
+}
+
+function installSystemdUserService() {
+  // Sanity-check: systemd user-instance must be available. On many container
+  // distros (e.g. minimal Docker images) it isn't.
+  try { execSync('systemctl --user --version', { stdio: 'ignore' }); }
+  catch (_) {
+    console.error('systemctl --user not available on this system.');
+    console.error('Either:');
+    console.error('  • Install systemd-user-session (Ubuntu/Debian: it should be on by default),');
+    console.error('  • Or run memex-sync in the foreground: `nohup memex-sync >/tmp/memex.log 2>&1 &`');
+    process.exit(1);
+  }
+
+  const nodePath = process.execPath;
+  const scriptPath = resolve(fileURLToPath(import.meta.url));
+  const workingDir = resolve(scriptPath, '..');
+
+  // ExecStart needs absolute paths. Logs go to ~/.memex/data/ — systemd
+  // doesn't include them in StandardOutput inheritance by default.
+  const unit = `[Unit]
+Description=memex auto-capture daemon
+Documentation=https://memex.parallelclaw.ai
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${nodePath} ${scriptPath}
+WorkingDirectory=${workingDir}
+Restart=on-failure
+RestartSec=10s
+StartLimitIntervalSec=60
+StartLimitBurst=5
+StandardOutput=append:${join(DATA, 'systemd.out.log')}
+StandardError=append:${join(DATA, 'systemd.err.log')}
+# Make sure the daemon's child processes see the right HOME / MEMEX_DIR
+# (systemd-user inherits these from the login session, but be explicit).
+Environment=HOME=${HOME}
+Environment=MEMEX_DIR=${MEMEX_DIR}
+# Low priority — capture is background work, never compete with user processes.
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=default.target
+`;
+
+  mkdirSync(SYSTEMD_USER_DIR, { recursive: true });
+  // Stop existing instance first (idempotent). Errors are fine — service
+  // might not exist yet on first install.
+  try { execSync(`systemctl --user stop ${SYSTEMD_SERVICE_NAME}`, { stdio: 'ignore' }); } catch (_) {}
+  writeFileSync(SYSTEMD_SERVICE_PATH, unit);
+  try {
+    execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
+    execSync(`systemctl --user enable ${SYSTEMD_SERVICE_NAME}`, { stdio: 'inherit' });
+    execSync(`systemctl --user start ${SYSTEMD_SERVICE_NAME}`, { stdio: 'inherit' });
+  } catch (e) {
+    console.error(`systemctl operation failed: ${e.message}`);
+    console.error(`Service file written at ${SYSTEMD_SERVICE_PATH}.`);
+    console.error('Diagnose with: systemctl --user status ' + SYSTEMD_SERVICE_NAME);
+    process.exit(1);
+  }
+
+  console.log(`✓ memex-sync installed and running (systemd user-service)`);
+  console.log(`  unit:  ${SYSTEMD_SERVICE_PATH}`);
+  console.log(`  log:   ${LOG_PATH}`);
+
+  // Linger: without this, the user-systemd instance dies when the user logs
+  // out of SSH. On a VPS that means daemon stops between SSH sessions. We
+  // try to enable it; if we lack sudo, print a clear next step.
+  const user = process.env.USER || process.env.USERNAME || '';
+  if (user) {
+    try {
+      execSync(`loginctl show-user ${user} -p Linger 2>/dev/null | grep -q Linger=yes`, { stdio: 'ignore' });
+      console.log(`  ✓ linger already enabled — daemon survives SSH logout`);
+    } catch (_) {
+      try {
+        execSync(`loginctl enable-linger ${user}`, { stdio: 'pipe' });
+        console.log(`  ✓ linger enabled — daemon survives SSH logout`);
+      } catch (_) {
+        console.log(`  ⚠ could not enable linger automatically (need sudo).`);
+        console.log(`    Daemon may stop on SSH logout. To fix:`);
+        console.log(`      sudo loginctl enable-linger ${user}`);
+      }
+    }
+  }
+}
+
+async function cmdInstall() {
+  if (platform() === 'darwin') {
+    installLaunchAgent();
+  } else if (platform() === 'linux') {
+    installSystemdUserService();
+  } else {
+    console.error(`install: unsupported platform "${platform()}". Supported: darwin, linux.`);
+    console.error('Workaround for unsupported OS: run `nohup memex-sync &` in your shell.');
+    process.exit(1);
+  }
   console.log('');
 
   // ── Auto-context prompt (v0.8+) ─────────────────────────────────────
@@ -273,6 +382,7 @@ async function cmdInstall() {
       const dir = join(HOME, '.claude', 'projects');
       detail = existsSync(dir) ? `(${dir})` : '(not found — won\'t capture)';
     } else if (name === 'claude_cowork') {
+      // Cowork lives under macOS Application Support; doesn't exist on Linux.
       const dir = join(HOME, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions');
       detail = existsSync(dir) ? '(Cowork sessions found)' : '(not found — won\'t capture)';
     } else if (name === 'cursor') {
@@ -282,6 +392,9 @@ async function cmdInstall() {
       const vaults = obsidianVaultsFromConfig(cfg);
       const auto = vaults.length === 0 ? autodetectObsidianVaults() : vaults;
       detail = auto.length > 0 ? `(${auto.length} vault${auto.length > 1 ? 's' : ''}: ${auto.map((v) => v.replace(HOME, '~')).join(', ')})` : '(no vaults detected)';
+    } else if (name === 'openclaw') {
+      const dir = join(HOME, '.openclaw', 'agents', 'main', 'sessions');
+      detail = existsSync(dir) ? `(${dir})` : '(not found — won\'t capture)';
     }
     console.log(`  ${mark} ${name.padEnd(15)} ${detail}`);
   }
@@ -437,38 +550,62 @@ function promptYesNo(question, defaultAnswer) {
 }
 
 function cmdUninstall() {
-  if (platform() !== 'darwin') {
-    console.error('uninstall: macOS-only for now.');
+  let removed = 0;
+  if (platform() === 'darwin') {
+    for (const p of [PLIST_PATH, LEGACY_PLIST_PATH]) {
+      if (existsSync(p)) {
+        try { execSync(`launchctl unload ${JSON.stringify(p)}`, { stdio: 'ignore' }); } catch (_) {}
+        try { unlinkSync(p); removed++; } catch (_) {}
+      }
+    }
+    if (removed > 0) {
+      console.log(`✓ memex-sync uninstalled (${removed} LaunchAgent file${removed > 1 ? 's' : ''} removed)`);
+    } else {
+      console.log(`memex-sync was not installed (nothing to remove).`);
+    }
+  } else if (platform() === 'linux') {
+    if (existsSync(SYSTEMD_SERVICE_PATH)) {
+      try { execSync(`systemctl --user stop ${SYSTEMD_SERVICE_NAME}`, { stdio: 'ignore' }); } catch (_) {}
+      try { execSync(`systemctl --user disable ${SYSTEMD_SERVICE_NAME}`, { stdio: 'ignore' }); } catch (_) {}
+      try { unlinkSync(SYSTEMD_SERVICE_PATH); removed++; } catch (_) {}
+      try { execSync('systemctl --user daemon-reload', { stdio: 'ignore' }); } catch (_) {}
+      console.log(`✓ memex-sync uninstalled (systemd user-service removed)`);
+    } else {
+      console.log(`memex-sync was not installed (no service unit found).`);
+    }
+  } else {
+    console.error(`uninstall: unsupported platform "${platform()}". Supported: darwin, linux.`);
     process.exit(1);
   }
-  let removed = 0;
-  for (const p of [PLIST_PATH, LEGACY_PLIST_PATH]) {
-    if (existsSync(p)) {
-      try { execSync(`launchctl unload ${JSON.stringify(p)}`, { stdio: 'ignore' }); } catch (_) {}
-      try { unlinkSync(p); removed++; } catch (_) {}
-    }
-  }
   if (removed > 0) {
-    console.log(`✓ memex-sync uninstalled (${removed} LaunchAgent file${removed > 1 ? 's' : ''} removed)`);
     console.log(`\nMemory database at ~/.memex/data/memex.db is preserved.`);
     console.log(`To fully purge: rm -rf ~/.memex`);
-  } else {
-    console.log(`memex-sync was not installed (nothing to remove).`);
   }
   process.exit(0);
 }
 
 function cmdStatus() {
-  // Discover state + plist + running PID
-  const installed = existsSync(PLIST_PATH);
-  const legacyInstalled = existsSync(LEGACY_PLIST_PATH);
+  // Discover state + daemon state per-platform
+  const isLinux = platform() === 'linux';
+  const isMac = platform() === 'darwin';
+  const installed = isMac ? existsSync(PLIST_PATH) : isLinux ? existsSync(SYSTEMD_SERVICE_PATH) : false;
+  const legacyInstalled = isMac && existsSync(LEGACY_PLIST_PATH);
+
   let runningPid = null;
-  let label = installed ? LAUNCH_LABEL : (legacyInstalled ? LEGACY_LABEL : null);
-  if (label) {
+  if (isMac) {
+    const label = installed ? LAUNCH_LABEL : (legacyInstalled ? LEGACY_LABEL : null);
+    if (label) {
+      try {
+        const out = execSync(`launchctl list | grep ${label}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+        const m = out.match(/^(\d+|-)\s+(\d+|-)\s+\S+/m);
+        if (m && m[1] !== '-') runningPid = parseInt(m[1], 10);
+      } catch (_) {}
+    }
+  } else if (isLinux && installed) {
     try {
-      const out = execSync(`launchctl list | grep ${label}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-      const m = out.match(/^(\d+|-)\s+(\d+|-)\s+\S+/m);
-      if (m && m[1] !== '-') runningPid = parseInt(m[1], 10);
+      const out = execSync(`systemctl --user show -p MainPID --value ${SYSTEMD_SERVICE_NAME}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+      const pid = parseInt(out, 10);
+      if (Number.isFinite(pid) && pid > 0) runningPid = pid;
     } catch (_) {}
   }
 
@@ -507,7 +644,9 @@ function cmdStatus() {
   // Output
   console.log('memex-sync status\n');
   if (installed) {
-    console.log(`  daemon:    installed (${PLIST_PATH})`);
+    const path = isLinux ? SYSTEMD_SERVICE_PATH : PLIST_PATH;
+    const kind = isLinux ? 'systemd user-service' : 'LaunchAgent';
+    console.log(`  daemon:    installed (${kind} · ${path})`);
   } else if (legacyInstalled) {
     console.log(`  daemon:    installed under legacy label (run 'memex-sync install' to migrate)`);
   } else {
@@ -561,20 +700,33 @@ function cmdServe() {
 }
 
 function cmdRestart() {
-  if (platform() !== 'darwin') {
-    console.error('restart: macOS-only for now.');
-    process.exit(1);
-  }
-  if (!existsSync(PLIST_PATH)) {
-    console.error('memex-sync is not installed (no LaunchAgent plist found).');
-    console.error('Run: npx memex-sync install');
-    process.exit(1);
-  }
-  try { execSync(`launchctl unload ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' }); } catch (_) {}
-  try {
-    execSync(`launchctl load ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' });
-  } catch (e) {
-    console.error('launchctl load failed:', e.message);
+  if (platform() === 'darwin') {
+    if (!existsSync(PLIST_PATH)) {
+      console.error('memex-sync is not installed (no LaunchAgent plist found).');
+      console.error('Run: npx memex-sync install');
+      process.exit(1);
+    }
+    try { execSync(`launchctl unload ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' }); } catch (_) {}
+    try {
+      execSync(`launchctl load ${JSON.stringify(PLIST_PATH)}`, { stdio: 'ignore' });
+    } catch (e) {
+      console.error('launchctl load failed:', e.message);
+      process.exit(1);
+    }
+  } else if (platform() === 'linux') {
+    if (!existsSync(SYSTEMD_SERVICE_PATH)) {
+      console.error('memex-sync is not installed (no systemd unit found).');
+      console.error('Run: npx memex-sync install');
+      process.exit(1);
+    }
+    try {
+      execSync(`systemctl --user restart ${SYSTEMD_SERVICE_NAME}`, { stdio: 'inherit' });
+    } catch (e) {
+      console.error('systemctl restart failed:', e.message);
+      process.exit(1);
+    }
+  } else {
+    console.error(`restart: unsupported platform "${platform()}". Supported: darwin, linux.`);
     process.exit(1);
   }
   console.log(`✓ memex-sync restarted`);
@@ -862,6 +1014,13 @@ function shouldIngest(filePath) {
   if (!filePath.endsWith('.jsonl')) return false;
   const name = basename(filePath);
   if (name === 'audit.jsonl') return false; // tool-call audit log, not dialogue
+  // OpenClaw v0.10.14+ — its sessions dir holds internal state files alongside
+  // the dialogue .jsonl. Filter the noise: <uuid>.trajectory.jsonl, .checkpoint.,
+  // .reset., trajectory-path files, usage-cost-cache, *.lock. The clean
+  // dialogue file is just <uuid>.jsonl with no extra extension.
+  if (/\.(checkpoint|trajectory|reset)\./.test(name)) return false;
+  if (name.includes('trajectory-path')) return false;
+  if (name.includes('usage-cost-cache')) return false;
   return true;
 }
 
@@ -881,6 +1040,12 @@ function shouldIngest(filePath) {
  *   → inbox/code-<UUID first 8>.jsonl
  */
 function inboxNameFor(srcPath, source) {
+  // OpenClaw stores sessions as flat <uuid>.jsonl with no subagent/encoded
+  // path structure. Just use the stem prefix.
+  if (source.name === 'openclaw') {
+    const stem = basename(srcPath, '.jsonl');
+    return `${source.prefix}-${stem.slice(0, 8)}.jsonl`;
+  }
   const parts = srcPath.split(sep);
   const subIdx = parts.indexOf('subagents');
   if (subIdx > 0) {
@@ -1081,6 +1246,7 @@ const watchers = [];
 const SOURCE_TO_CONFIG_KEY = {
   'claude-code': 'claude_code',
   'claude-cowork': 'claude_cowork',
+  'openclaw': 'openclaw',
 };
 function isJsonlSourceEnabled(source) {
   const key = SOURCE_TO_CONFIG_KEY[source.name] || source.name;

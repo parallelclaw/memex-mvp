@@ -14,6 +14,7 @@ import {
   findSessionsJson,
   lookupChannel,
   detectSessionType,
+  detectSessionTypeFromContent,
   isCheckpointFile,
   deriveOpenclawConvId,
   titlePrefixFor,
@@ -474,6 +475,112 @@ test('isCheckpointFile: main session file → false', () => {
 test('isCheckpointFile: empty/null → false', () => {
   assertEq(isCheckpointFile(''), false);
   assertEq(isCheckpointFile(null), false);
+});
+
+// ============ v0.11.3: content-based session-type detection ============
+//
+// Critical for backfill from archive: sessions.json only tracks CURRENT
+// active sessions. After main-session rotation, archived files have no
+// entry → lookup fails. Without content fallback, every old archive
+// looks 'unknown' → defaults to self-hosted → checkpoints are skipped
+// even for Kimi-Claw users. Confirmed empirically on a Kimi-Claw VPS
+// 2026-05-20: archive contained 3824f87a files, sessions.json only knew
+// about ac39cfb2 (the new main session).
+
+test('detectSessionTypeFromContent: Kimi + TG markers → kimi-claw', () => {
+  const root = mkdtempSync(join(tmpdir(), 'memex-content-'));
+  try {
+    const p = join(root, 'merged.jsonl');
+    writeFileSync(p, [
+      JSON.stringify({ message: { role: 'user', content: [{ type: 'text', text: 'User Message From Kimi:\nпривет' }] } }),
+      JSON.stringify({ message: { role: 'user', content: [{ type: 'text', text: '[Queued messages while agent was busy]\n---\nQueued #1' }] } }),
+    ].join('\n'));
+    assertEq(detectSessionTypeFromContent(p), 'kimi-claw');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('detectSessionTypeFromContent: only Kimi marker → self-hosted', () => {
+  const root = mkdtempSync(join(tmpdir(), 'memex-content-'));
+  try {
+    const p = join(root, 'kimi-only.jsonl');
+    writeFileSync(p, JSON.stringify({
+      message: { role: 'user', content: [{ type: 'text', text: 'User Message From Kimi:\nтекст' }] },
+    }));
+    assertEq(detectSessionTypeFromContent(p), 'self-hosted');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('detectSessionTypeFromContent: only Telegram marker → self-hosted', () => {
+  const root = mkdtempSync(join(tmpdir(), 'memex-content-'));
+  try {
+    const p = join(root, 'tg-only.jsonl');
+    writeFileSync(p, JSON.stringify({
+      message: { role: 'user', content: [{
+        type: 'text',
+        text: 'Conversation info (untrusted metadata):\n```json\n{"sender_id":"42"}\n```',
+      }]},
+    }));
+    assertEq(detectSessionTypeFromContent(p), 'self-hosted');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('detectSessionTypeFromContent: no markers → unknown', () => {
+  const root = mkdtempSync(join(tmpdir(), 'memex-content-'));
+  try {
+    const p = join(root, 'empty-content.jsonl');
+    writeFileSync(p, JSON.stringify({
+      message: { role: 'user', content: [{ type: 'text', text: 'just some random text' }] },
+    }));
+    assertEq(detectSessionTypeFromContent(p), 'unknown');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('detectSessionTypeFromContent: missing file → unknown', () => {
+  assertEq(detectSessionTypeFromContent('/nonexistent/file.jsonl'), 'unknown');
+  assertEq(detectSessionTypeFromContent(null), 'unknown');
+});
+
+test('detectSessionType: content-fallback when sessions.json has no entry', () => {
+  // Reproduces the Kimi-Claw archive scenario from 2026-05-20.
+  // sessions.json knows about ac39cfb2 (current main) but the archive
+  // contains 3824f87a (old main, rotated out). Content fallback should
+  // detect kimi-claw from the file body.
+  const root = mkdtempSync(join(tmpdir(), 'memex-cfb-'));
+  try {
+    const p = join(root, 'openclaw-3824f87a.jsonl');
+    writeFileSync(p, [
+      JSON.stringify({ message: { role: 'user', content: [{ type: 'text', text: 'User Message From Kimi:\nпривет' }] } }),
+      JSON.stringify({ message: { role: 'user', content: [{ type: 'text', text: '[Queued messages while agent was busy]\n---\nQueued #1' }] } }),
+    ].join('\n'));
+    // channelMap knows nothing about this file (other session ID)
+    const map = new Map([['uuid8:ac39cfb2', 'kimi-web']]);
+    assertEq(detectSessionType(p, map), 'kimi-claw');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('detectSessionType: checkpoint hops to main file for classification', () => {
+  // When the checkpoint contains only TG (no Kimi marker), naive
+  // content scan would say "self-hosted" and the checkpoint would be
+  // skipped. Hopping to the main file (same uuid8) reveals the merged
+  // Kimi-Claw nature and rescues the checkpoint.
+  const root = mkdtempSync(join(tmpdir(), 'memex-hop-'));
+  try {
+    const mainP = join(root, 'openclaw-3824f87a.jsonl');
+    const ckptP = join(root, 'openclaw-3824f87a-ckpt-deadbeef.jsonl');
+    writeFileSync(mainP, [
+      JSON.stringify({ message: { role: 'user', content: [{ type: 'text', text: 'User Message From Kimi:\nпривет' }] } }),
+      JSON.stringify({ message: { role: 'user', content: [{ type: 'text', text: '[Queued messages while agent was busy]\n---\nQueued #1' }] } }),
+    ].join('\n'));
+    writeFileSync(ckptP, JSON.stringify({
+      message: { role: 'user', content: [{
+        type: 'text',
+        text: '[Queued messages while agent was busy]\n---\nQueued #1\nlate TG message',
+      }]},
+    }));
+    // channelMap empty — force content path
+    const map = new Map();
+    assertEq(detectSessionType(ckptP, map), 'kimi-claw');
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('findSessionsJson: walks up to find sibling', () => {

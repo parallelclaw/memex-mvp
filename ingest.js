@@ -32,7 +32,7 @@
 import chokidar from 'chokidar';
 import Database from 'better-sqlite3';
 import { homedir, platform } from 'node:os';
-import { join, basename, sep, resolve, relative } from 'node:path';
+import { join, basename, dirname, sep, resolve, relative } from 'node:path';
 import {
   existsSync, statSync, readFileSync, writeFileSync, renameSync,
   mkdirSync, openSync, readSync, closeSync, unlinkSync, readdirSync,
@@ -1322,6 +1322,99 @@ function safetyRescan() {
   log(`safety rescan done · ${triggered} file(s) re-scheduled`);
 }
 if (!ANY_ONESHOT_MODE) setInterval(safetyRescan, RESCAN_INTERVAL_MS);
+
+// -------------------- Inbox-drainer (v0.10.16+) --------------------
+//
+// Closes a long-standing UX trap: with the old two-stage pipeline
+// (daemon → inbox → MCP server → DB), DB freshness depended on the MCP
+// server being ALIVE. When the user's MCP client (Claude Code / OpenClaw
+// gateway) wasn't running, inbox accumulated and `memex overview` /
+// `memex search` returned stale data — even though the daemon was
+// happily writing inbox every few seconds.
+//
+// Fix: daemon ALSO drains inbox into the DB itself, every 10 seconds.
+// This way DB is always at-most ~10s behind the live source, regardless
+// of MCP-server lifecycle. Inbox files are processed via the shared
+// lib/ingest-file.js ingestFile() (handles all formats correctly:
+// claude-jsonl / cowork-jsonl / openclaw-jsonl / telegram-json /
+// telegram-html). After a successful ingest the file is moved to
+// ~/.memex/archive/<source>/ — same destination server.js's inbox
+// watcher would use. UNIQUE(source, conversation_id, msg_id) makes
+// the operation idempotent so a still-running MCP server (or two
+// daemons in some weird setup) can't double-import.
+
+const DRAIN_INTERVAL_MS = 10 * 1000; // 10 seconds
+let drainDb = null;
+
+function archiveForInboxName(name) {
+  let source = 'claude-code';
+  if (name.startsWith('cowork-')) source = 'claude-cowork';
+  else if (name.startsWith('cursor-')) source = 'cursor';
+  else if (name.startsWith('obsidian-')) source = 'obsidian';
+  else if (name.startsWith('openclaw-')) source = 'openclaw';
+  return join(MEMEX_DIR, 'archive', source, name);
+}
+
+async function drainInbox() {
+  if (!drainDb) return;
+  let entries;
+  try { entries = readdirSync(INBOX); }
+  catch (_) { return; }
+  let imported = 0;
+  let archived = 0;
+  for (const name of entries) {
+    if (name.startsWith('.')) continue; // hidden
+    if (!name.endsWith('.jsonl')) continue; // only inbox snapshots
+    const path = join(INBOX, name);
+    let stat;
+    try { stat = statSync(path); }
+    catch (_) { continue; }
+    if (!stat.isFile() || stat.size === 0) continue;
+
+    try {
+      const { ingestFile } = await import('./lib/ingest-file.js');
+      const r = await ingestFile(drainDb, path, { format: 'auto', force: true });
+      if (r.status === 'imported') {
+        imported += r.total_imported || 0;
+        // Move to archive, same destination as server.js's inbox watcher
+        const target = archiveForInboxName(name);
+        try {
+          mkdirSync(dirname(target), { recursive: true });
+          renameSync(path, target);
+          archived++;
+        } catch (_) {
+          // archive failed (e.g. file locked) — leave it; next cycle retries
+        }
+      }
+      // Non-'imported' statuses ('needs_consent' / 'skipped' / 'error') — leave file
+      // in inbox so MCP-server / next drain can decide. Telegram-needs-consent
+      // exports are handled by the separate ~/.memex/pending/ flow, not this
+      // path, so they shouldn't appear here.
+    } catch (_) {
+      // dynamic import error — skip this cycle, will retry
+      return;
+    }
+  }
+  if (archived > 0) {
+    log(`drained ${archived} inbox file(s) → DB · ${imported} new row(s)`);
+  }
+}
+
+if (!ANY_ONESHOT_MODE) {
+  // Open shared writable DB handle for the inbox-drainer + future
+  // change_log writes (Stage B sync). Failure is non-fatal — daemon
+  // still writes inbox; the MCP server will drain it on next start.
+  (async () => {
+    try {
+      const { initializeDb } = await import('./lib/db-init.js');
+      drainDb = initializeDb(DB_PATH);
+      log(`drainDb opened (${DB_PATH}) — inbox→DB every ${DRAIN_INTERVAL_MS / 1000}s`);
+    } catch (e) {
+      log(`could not open drainDb: ${e.message} — inbox-drain disabled`);
+    }
+  })();
+  setInterval(drainInbox, DRAIN_INTERVAL_MS);
+}
 
 // -------------------- Cursor scanner --------------------
 // Cursor stores history in SQLite (state.vscdb), not flat files. We can't

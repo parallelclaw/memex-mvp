@@ -1,5 +1,5 @@
 ---
-name: install-memex-openclaw
+name: install-memex-claw
 description: Wire memex (the local-first MCP memory server) into an OpenClaw gateway — works wherever OpenClaw runs (Linux or macOS, VPS or workstation). Auto-captures every OpenClaw session in ~/.openclaw/agents/main/sessions/ and exposes 18 MCP tools (memex_search, memex_recent, memex_overview, memex_store_document, memex_import_file, etc.) to the local OpenClaw agent. Auto-detects whether memex is already installed on this machine (e.g. via the generic install-memex skill for Claude Code) — if yes, skips install and just merges memex into the OpenClaw gateway config; if no, does the full platform-aware install (Linux → systemd user-service, macOS → LaunchAgent). Back-fills past sessions in one shot. Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. PAIRS with the generic install-memex skill — if the user ALSO uses Claude Code, Cursor, Cline, Continue, Zed, or has Telegram chats to capture on this same machine, recommend they run install-memex separately for those flows.
 version: 1.0.0
 metadata:

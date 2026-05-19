@@ -1,10 +1,10 @@
 #!/bin/sh
-# Publish the install-memex-openclaw skill to ClawHub.
+# Publish the install-memex-claw skill to ClawHub.
 #
 # This is a SEPARATE skill from install-memex. They're for different audiences:
 #   • install-memex            — Claude Code / Cursor / Cline / Continue / Zed / Claude Desktop
 #                                 (i.e. workstation install — mostly macOS, with Telegram capture)
-#   • install-memex-openclaw   — OpenClaw agents on VPS (Linux-first, no Telegram)
+#   • install-memex-claw   — OpenClaw agents on VPS (Linux-first, no Telegram)
 #
 # ClawHub is OpenClaw's skill marketplace (github.com/openclaw/clawhub) so the
 # OpenClaw-specific variant is the canonical one for that audience. The
@@ -25,15 +25,15 @@ VERSION="${1:-1.0.0}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if [ ! -f "skills/install-memex-openclaw/SKILL.md" ]; then
-  echo "skills/install-memex-openclaw/SKILL.md not found in $ROOT_DIR" >&2
+if [ ! -f "skills/install-memex-claw/SKILL.md" ]; then
+  echo "skills/install-memex-claw/SKILL.md not found in $ROOT_DIR" >&2
   exit 1
 fi
 
-echo "Publishing install-memex-openclaw@$VERSION to ClawHub..."
+echo "Publishing install-memex-claw@$VERSION to ClawHub..."
 
-npx -y clawhub skill publish skills/install-memex-openclaw \
-  --slug install-memex-openclaw \
+npx -y clawhub skill publish skills/install-memex-claw \
+  --slug install-memex-claw \
   --name "Install memex for OpenClaw" \
   --version "$VERSION" \
   --changelog "v1.0.0 — first release. Wires memex into an OpenClaw gateway WHEREVER OpenClaw runs: Linux VPS, Linux workstation, macOS workstation, macOS server — all four equally first-class. Discovery checks OpenClaw / Node ≥ 20 / existing memex install / existing daemon / sessions count / systemd-user (Linux only) / gateway config location. Branches intelligently: if memex is already installed (e.g. via the generic install-memex skill on the same machine for Claude Code), skips install+daemon and just merges memex into the OpenClaw gateway's MCP-server config. Otherwise full platform-aware install: Linux → ~/.config/systemd/user/memex-sync.service with loginctl enable-linger attempt; macOS → ~/Library/LaunchAgents/com.parallelclaw.memex.sync.plist. EACCES handled via ~/.npm-global prefix fix (no sudo). Back-fills past OpenClaw sessions via memex-sync scan, filtering internal-state files (.checkpoint., .trajectory., .reset., trajectory-path*, usage-cost-cache). MCP wiring uses absolute path from \`which memex\` (MCP-stdio doesn't inherit shell PATH), merges into the OpenClaw config without overwriting other MCP servers. Verifies end-to-end with memex-sync status + memex overview + a smoke memex search before declaring done. Zero questions to the user — discovery → actions → verification. Adds 18 MCP tools (memex_search, memex_recent, memex_overview, memex_store_document, memex_import_file, etc.) to OpenClaw after gateway restart. Pairs nicely with install-memex (generic skill) when the same machine ALSO runs Claude Code / Cursor / Telegram capture — both skills share ~/.memex/data/memex.db so the corpus is unified. Memex runtime emits zero outbound network traffic. Requires memex-mvp v0.10.14+ which added native Linux + systemd-user + OpenClaw source support." \
@@ -42,4 +42,4 @@ npx -y clawhub skill publish skills/install-memex-openclaw \
 
 echo ""
 HANDLE=$(npx -y clawhub whoami 2>&1 | tail -1 | awk '{print $NF}')
-echo "Done. Verify at https://clawhub.ai/${HANDLE}/install-memex-openclaw"
+echo "Done. Verify at https://clawhub.ai/${HANDLE}/install-memex-claw"

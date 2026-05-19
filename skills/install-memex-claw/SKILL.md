@@ -190,6 +190,11 @@ If the daemon was already running (Step 3 skipped), the back-fill via scan is st
 
 v0.11 introduced channel-aware routing: Telegram messages relayed through OpenClaw go into per-sender conversations (`openclaw-tg-<sender_id>`), Kimi-web sessions stay in their own thread (`openclaw-kimi-<file8>`), system output is segregated (`openclaw-sys-<file8>`). Pre-0.11 imports merged everything into one bucket per session file.
 
+**v0.11.1 (recommended) adds two important fixes** — re-run backfill after upgrading from v0.11.0:
+- Kimi-web header (`User Message From Kimi:`) now strips correctly even when the optional `[Time:]` block is missing (which is the common case for short messages)
+- Tool-result records (`role='user'` with no channel marker, e.g. Bash/Read output) now correctly inherit the parent conversation instead of orphaning into a fallback bucket
+- **Self-hosted OpenClaw**: custom channel names from `sessions.json` (e.g. `discord`, `matrix`, `my-web-ui`) are now auto-discovered — they route to `openclaw-<channel>-<accountId-or-file8>` without any code changes
+
 If you scanned with an older memex, re-run with channel splitting:
 
 ```sh

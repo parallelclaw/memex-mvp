@@ -11,7 +11,7 @@
 //   • channel column populated correctly
 //   • Conversation titles tagged [Telegram] / [Kimi-web] / [System]
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ingestFile } from '../lib/ingest-file.js';
@@ -262,6 +262,168 @@ try {
 } finally {
   db.close();
   rmSync(root, { recursive: true, force: true });
+}
+
+// ============ v0.11.1: sticky pointer holds through tool_results ============
+//
+// Pattern from real OpenClaw VPS diagnostic:
+//   1. Kimi-web user message (detected)
+//   2. assistant reply (no marker, inherits)
+//   3. tool_result (role='user', no marker — would have orphaned in v0.11.0)
+//   4. assistant follow-up (would have orphaned because sticky=null after #3)
+//
+// All four should land in `openclaw-kimi-<file8>`, not in a fallback bucket.
+
+const root2 = mkdtempSync(join(tmpdir(), 'memex-sticky-'));
+const dbPath2 = join(root2, 'memex.db');
+const filePath2 = join(root2, 'openclaw-aabbccdd.jsonl');
+
+const records = [
+  {
+    type: 'message', id: 'r1',
+    timestamp: '2026-05-19T10:00:00Z',
+    message: { role: 'user', content: [{ type: 'text', text: 'User Message From Kimi:\nприветик' }] },
+  },
+  {
+    type: 'message', id: 'r2',
+    timestamp: '2026-05-19T10:00:05Z',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'привет! чем помочь?' }] },
+  },
+  {
+    type: 'message', id: 'r3',
+    timestamp: '2026-05-19T10:00:10Z',
+    // Synthetic tool_result-style: role=user, long text, no channel marker
+    message: { role: 'user', content: [{
+      type: 'text',
+      text: '[Bash output] /tmp/foo/bar:\nfile1.txt 123\nfile2.txt 456\n... (long output continues, far longer than any chat reply)',
+    }]},
+  },
+  {
+    type: 'message', id: 'r4',
+    timestamp: '2026-05-19T10:00:15Z',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'вижу что у тебя 2 файла' }] },
+  },
+  {
+    type: 'message', id: 'r5',
+    timestamp: '2026-05-19T10:00:20Z',
+    message: { role: 'user', content: [{ type: 'text', text: 'User Message From Kimi:\nспасибо' }] },
+  },
+];
+
+writeFileSync(filePath2, records.map(JSON.stringify).join('\n'));
+
+const db2 = initializeDb(dbPath2);
+try {
+  const r = await ingestFile(db2, filePath2, { format: 'openclaw-jsonl' });
+  test('sticky-pointer: ingest succeeds', () => {
+    assertEq(r.status, 'imported');
+  });
+
+  test('sticky-pointer: all 5 records land in openclaw-kimi-aabbccdd', () => {
+    const rows = db2.prepare(
+      `SELECT id, role, channel, conversation_id, substr(text,1,30) AS preview
+         FROM messages WHERE source='openclaw' ORDER BY ts`,
+    ).all();
+    assertEq(rows.length, 5);
+    for (const row of rows) {
+      assertEq(row.conversation_id, 'openclaw-kimi-aabbccdd', `record ${row.id} (${row.role}) routed wrong: ${row.preview}`);
+      assertEq(row.channel, 'kimi-web', `record ${row.id} channel wrong`);
+    }
+  });
+
+  test('sticky-pointer: zero fallback bucket conversations', () => {
+    const fallback = db2.prepare(
+      `SELECT COUNT(*) AS n FROM messages
+        WHERE source='openclaw' AND conversation_id='openclaw-aabbccdd'`,
+    ).get().n;
+    assertEq(fallback, 0, 'tool_result should NOT orphan into fallback bucket');
+  });
+
+  test('sticky-pointer: Kimi-strip works on short messages (no Time block)', () => {
+    const row = db2.prepare(
+      `SELECT text FROM messages
+        WHERE source='openclaw' AND id IN (
+          SELECT MIN(id) FROM messages WHERE source='openclaw' GROUP BY msg_id
+        ) AND msg_id='r1'`,
+    ).get();
+    assertEq(row.text, 'приветик', `Kimi header should be stripped, got: ${row.text}`);
+  });
+} finally {
+  db2.close();
+  rmSync(root2, { recursive: true, force: true });
+}
+
+// ============ v0.11.1: auto-discovery for self-hosted custom channel ============
+//
+// Simulates a self-hosted OpenClaw VPS with `channel: "discord"` in
+// sessions.json. memex has no built-in 'discord' handler, but should
+// still route correctly via auto-registration.
+
+const root3 = mkdtempSync(join(tmpdir(), 'memex-auto-'));
+const dbPath3 = join(root3, 'memex.db');
+// Mimic real layout: sessions/ subdir holds the session file + sessions.json
+const sessDir = join(root3, 'agents', 'main', 'sessions');
+mkdirSync(sessDir, { recursive: true });
+const filePath3 = join(sessDir, 'beefdead.jsonl');
+const sessionsJsonPath = join(sessDir, 'sessions.json');
+
+writeFileSync(sessionsJsonPath, JSON.stringify({
+  'agent:main:main': {
+    deliveryContext: { channel: 'discord' },
+    sessionFile: filePath3,
+  },
+}));
+
+writeFileSync(filePath3, [
+  {
+    type: 'message', id: 'd1',
+    timestamp: '2026-05-19T11:00:00Z',
+    // No channel marker — relies on sessions.json fallback (auto-registered)
+    message: { role: 'user', content: [{ type: 'text', text: 'hey bot, what time is it?' }] },
+  },
+  {
+    type: 'message', id: 'd2',
+    timestamp: '2026-05-19T11:00:05Z',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'It is 11:00 UTC.' }] },
+  },
+].map(JSON.stringify).join('\n'));
+
+const db3 = initializeDb(dbPath3);
+try {
+  const r = await ingestFile(db3, filePath3, { format: 'openclaw-jsonl' });
+  test('auto-discovery: ingest succeeds', () => {
+    assertEq(r.status, 'imported');
+  });
+
+  test('auto-discovery: unknown channel routed to openclaw-discord-<file8>', () => {
+    const rows = db3.prepare(
+      `SELECT role, channel, conversation_id, text FROM messages
+         WHERE source='openclaw' ORDER BY ts`,
+    ).all();
+    assertEq(rows.length, 2);
+    assertEq(rows[0].conversation_id, 'openclaw-discord-beefdead');
+    assertEq(rows[1].conversation_id, 'openclaw-discord-beefdead');
+    assertEq(rows[0].channel, 'discord');
+    assertEq(rows[1].channel, 'discord');
+  });
+
+  test('auto-discovery: conv title has [discord] prefix', () => {
+    const conv = db3.prepare(
+      `SELECT title FROM conversations WHERE source='openclaw' LIMIT 1`,
+    ).get();
+    assert(conv.title.startsWith('[discord]'), `title should start with [discord], got: ${conv.title}`);
+  });
+
+  test('auto-discovery: metadata flags auto_channel=true', () => {
+    const row = db3.prepare(
+      `SELECT metadata FROM messages WHERE source='openclaw' LIMIT 1`,
+    ).get();
+    const meta = JSON.parse(row.metadata);
+    assertEq(meta.auto_channel, true);
+  });
+} finally {
+  db3.close();
+  rmSync(root3, { recursive: true, force: true });
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);

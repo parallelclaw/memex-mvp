@@ -2,7 +2,10 @@
 // Telegram batch unpacking, and conv_id derivation.
 
 import {
+  CHANNELS,
   detectChannel,
+  findChannelDef,
+  getOrAutoRegister,
   parseBatchedTelegram,
   parseSingleTelegram,
   parseTelegramTimestamp,
@@ -10,6 +13,7 @@ import {
   loadSessionsJsonChannelMap,
   findSessionsJson,
   deriveOpenclawConvId,
+  titlePrefixFor,
   baseUuid8,
 } from '../lib/openclaw-channel.js';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -188,6 +192,124 @@ test('stripKimiHeader: removes canonical preamble', () => {
 
 test('stripKimiHeader: text without header passes through', () => {
   assertEq(stripKimiHeader('plain text'), 'plain text');
+});
+
+// v0.11.1: production OpenClaw omits [Time:] block for short messages —
+// the v0.11.0 regex required it and silently failed for everything else.
+test('stripKimiHeader: NO Time block (real production format)', () => {
+  assertEq(stripKimiHeader('User Message From Kimi:\nтут?'), 'тут?');
+  assertEq(
+    stripKimiHeader('User Message From Kimi:\nсколько у тебя килобайт?'),
+    'сколько у тебя килобайт?',
+  );
+});
+
+test('stripKimiHeader: extra whitespace before newline', () => {
+  assertEq(stripKimiHeader('User Message From Kimi:   \nhi'), 'hi');
+});
+
+// ============ CHANNELS registry ============
+
+test('CHANNELS: built-in channels exposed', () => {
+  const names = CHANNELS.map((c) => c.name);
+  assert(names.includes('telegram'));
+  assert(names.includes('kimi-web'));
+  assert(names.includes('system'));
+});
+
+test('findChannelDef: by canonical name', () => {
+  assertEq(findChannelDef('telegram')?.name, 'telegram');
+  assertEq(findChannelDef('kimi-web')?.name, 'kimi-web');
+});
+
+test('findChannelDef: by sessions.json alias (kimi-claw → kimi-web)', () => {
+  assertEq(findChannelDef('kimi-claw')?.name, 'kimi-web');
+});
+
+test('findChannelDef: unknown → null', () => {
+  assertEq(findChannelDef('discord'), null);
+  assertEq(findChannelDef(null), null);
+});
+
+// ============ getOrAutoRegister (self-hosted channels) ============
+
+test('getOrAutoRegister: known channel returns existing def', () => {
+  const def = getOrAutoRegister('telegram');
+  assertEq(def?.name, 'telegram');
+  assertEq(def?.isAutoRegistered, undefined); // built-in, not auto
+});
+
+test('getOrAutoRegister: alias resolves to existing def', () => {
+  const def = getOrAutoRegister('kimi-claw');
+  assertEq(def?.name, 'kimi-web');
+});
+
+test('getOrAutoRegister: unknown channel → synthesized def', () => {
+  const def = getOrAutoRegister('discord');
+  assertEq(def?.name, 'discord');
+  assertEq(def?.isAutoRegistered, true);
+  assertEq(def?.titlePrefix, '[discord]');
+  // conv_id falls back to fileUuid8 when no sender info
+  assertEq(def.convIdFor({}, { fileUuid8: '3824f87a' }), 'openclaw-discord-3824f87a');
+  // routes per-account when accountId is provided
+  assertEq(
+    def.convIdFor({ accountId: 'user-42' }, { fileUuid8: '3824f87a' }),
+    'openclaw-discord-user-42',
+  );
+});
+
+test('getOrAutoRegister: sanitises hostile channel names', () => {
+  // Should strip spaces/slashes — these would corrupt conv_id values
+  const def = getOrAutoRegister('My Custom/Web UI');
+  assertEq(def?.name, 'mycustomwebui');
+  assertEq(def?.titlePrefix, '[mycustomwebui]');
+});
+
+test('getOrAutoRegister: empty/invalid → null', () => {
+  assertEq(getOrAutoRegister(''), null);
+  assertEq(getOrAutoRegister(null), null);
+  assertEq(getOrAutoRegister('!!!'), null); // no valid chars → null
+});
+
+// ============ titlePrefixFor ============
+
+test('titlePrefixFor: built-in channels', () => {
+  assertEq(titlePrefixFor('telegram'), '[Telegram]');
+  assertEq(titlePrefixFor('kimi-web'), '[Kimi-web]');
+  assertEq(titlePrefixFor('system'), '[System]');
+});
+
+test('titlePrefixFor: auto-discovered channel', () => {
+  assertEq(titlePrefixFor('discord'), '[discord]');
+});
+
+test('titlePrefixFor: null/empty → ""', () => {
+  assertEq(titlePrefixFor(null), '');
+  assertEq(titlePrefixFor(''), '');
+});
+
+// ============ deriveOpenclawConvId — v0.11.1 additions ============
+
+test('deriveOpenclawConvId: unknown channel auto-routes per-file', () => {
+  assertEq(
+    deriveOpenclawConvId('discord', null, '3824f87a'),
+    'openclaw-discord-3824f87a',
+  );
+});
+
+test('deriveOpenclawConvId: unknown channel + accountId routes per-user', () => {
+  assertEq(
+    deriveOpenclawConvId('matrix', { accountId: 'mara-42' }, '3824f87a'),
+    'openclaw-matrix-mara-42',
+  );
+});
+
+test('deriveOpenclawConvId: kimi-claw alias → kimi conv', () => {
+  // Pre-normalised value from sessions.json should route the same as canonical
+  assertEq(
+    deriveOpenclawConvId('kimi-claw', null, '3824f87a'),
+    'openclaw-kimi-3824f87a',
+  );
 });
 
 // ============ deriveOpenclawConvId ============

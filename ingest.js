@@ -139,6 +139,7 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     sources: cmdSources,
     vault: cmdVault,
     'backfill-projects': cmdBackfillProjects,
+    'backfill-channels': cmdBackfillChannels, // v0.11+
     serve: cmdServe, // explicit foreground; same as no-arg
     // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.
@@ -874,6 +875,101 @@ function cmdVault() {
  * Cursor: not backfilled (no workspace path captured by the current
  * parser). Telegram: skipped by design — chats have no project concept.
  */
+// v0.11+ — re-parse archived OpenClaw files into channel-aware conversations.
+// Old (pre-0.11) data sat in `openclaw-openclaw-<file8>` convs with mixed
+// channels; this command deletes those and re-imports each archive file via
+// the new ingestOpenclawJsonl, which splits per channel/sender.
+async function cmdBackfillChannels() {
+  const archiveOpenclawDir = join(MEMEX_DIR, 'archive', 'openclaw');
+  if (!existsSync(archiveOpenclawDir)) {
+    console.log('No OpenClaw archive found at ' + archiveOpenclawDir);
+    console.log('Nothing to back-fill. (Run the daemon for a while first.)');
+    process.exit(0);
+  }
+  const dbPath = join(MEMEX_DIR, 'data', 'memex.db');
+  if (!existsSync(dbPath)) {
+    console.error('memex.db not found at ' + dbPath + ' — install first.');
+    process.exit(1);
+  }
+
+  const files = readdirSync(archiveOpenclawDir).filter((n) => n.endsWith('.jsonl'));
+  if (files.length === 0) {
+    console.log('No .jsonl files in ' + archiveOpenclawDir + '. Nothing to do.');
+    process.exit(0);
+  }
+
+  const { initializeDb } = await import('./lib/db-init.js');
+  const { ingestFile } = await import('./lib/ingest-file.js');
+  const db = initializeDb(dbPath);
+  db.pragma('busy_timeout = 5000');
+
+  // Count current openclaw rows (informational + safety check)
+  const before = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE source = 'openclaw'").get().n;
+  const beforeConvs = db.prepare("SELECT COUNT(*) AS n FROM conversations WHERE source = 'openclaw'").get().n;
+
+  console.log(`Backfill: ${files.length} archived OpenClaw file(s) → channel-aware re-import`);
+  console.log(`  current state: ${before} messages in ${beforeConvs} conversation(s)`);
+  console.log('');
+
+  const yesFlag = process.argv.includes('--yes') || process.argv.includes('-y');
+  if (!yesFlag && before > 0) {
+    console.log('This will DELETE current `source = openclaw` rows in messages + conversations');
+    console.log('and re-import each archived file with channel-aware splitting.');
+    console.log('');
+    console.log('Re-run with `--yes` to proceed:');
+    console.log('  memex-sync backfill-channels --yes');
+    process.exit(0);
+  }
+
+  // Wipe existing openclaw data — re-import will repopulate with proper channel routing.
+  db.exec("DELETE FROM messages WHERE source = 'openclaw'");
+  db.exec("DELETE FROM conversations WHERE source = 'openclaw'");
+
+  let imported = 0;
+  let failed = 0;
+  for (let i = 0; i < files.length; i++) {
+    const filePath = join(archiveOpenclawDir, files[i]);
+    process.stdout.write(`  [${i + 1}/${files.length}] ${files[i]}... `);
+    try {
+      const r = await ingestFile(db, filePath, { format: 'openclaw-jsonl', force: true });
+      if (r.status === 'imported') {
+        imported += r.total_imported || 0;
+        process.stdout.write(`${r.total_imported || 0} msgs into ${r.conversations?.length || 0} conv(s)\n`);
+      } else {
+        failed++;
+        process.stdout.write(`SKIP (${r.status}: ${r.error || ''})\n`);
+      }
+    } catch (e) {
+      failed++;
+      process.stdout.write(`ERROR (${e.message})\n`);
+    }
+  }
+
+  const after = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE source = 'openclaw'").get().n;
+  const afterConvs = db.prepare("SELECT COUNT(*) AS n FROM conversations WHERE source = 'openclaw'").get().n;
+  const channels = db.prepare(`
+    SELECT channel, COUNT(*) AS n FROM messages
+    WHERE source = 'openclaw' AND channel IS NOT NULL
+    GROUP BY channel ORDER BY n DESC
+  `).all();
+
+  console.log('');
+  console.log('Done.');
+  console.log(`  before: ${before} msgs / ${beforeConvs} convs`);
+  console.log(`  after:  ${after} msgs / ${afterConvs} convs (${failed} file(s) failed)`);
+  if (channels.length > 0) {
+    console.log('  channels:');
+    for (const c of channels) console.log(`    • ${c.channel}: ${c.n} msgs`);
+  }
+  const nullChannel = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE source='openclaw' AND channel IS NULL").get().n;
+  if (nullChannel > 0) {
+    console.log(`    • (no channel): ${nullChannel} msgs   ${'[2m'}(records where text didn't match a known marker)${'[0m'}`);
+  }
+
+  db.close();
+  process.exit(failed > 0 ? 1 : 0);
+}
+
 function cmdBackfillProjects() {
   const dbPath = join(MEMEX_DIR, 'data', 'memex.db');
   if (!existsSync(dbPath)) {
@@ -1080,8 +1176,9 @@ function inboxNameFor(srcPath, source) {
   // conversation_id downstream) — these are conceptually different
   // threads (Telegram-channel vs Kimi-web-channel) even though they
   // share a base session uuid. Channel-aware routing (Telegram →
-  // openclaw-tg-<chat_id>, Kimi → openclaw-<base8>) is a v0.11 feature
-  // pending an OpenClaw record-schema survey.
+  // openclaw-tg-<sender>, Kimi → openclaw-kimi-<base8>, system →
+  // openclaw-sys-<base8>) is implemented in v0.11 inside
+  // lib/ingest-file.js → ingestOpenclawJsonl.
   if (source.name === 'openclaw') {
     const stem = basename(srcPath, '.jsonl');
     // Checkpoint pattern: <base-uuid>.checkpoint.<chkpt-uuid>

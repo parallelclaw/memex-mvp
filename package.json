@@ -1,6 +1,6 @@
 {
   "name": "memex-mvp",
-  "version": "0.10.18",
+  "version": "0.11.0",
   "description": "Local-first MCP server for cross-agent AI memory. One SQLite + FTS5 corpus across Claude Code, Cowork, Cursor, Continue, Zed, Obsidian, and Telegram — passively captured, verbatim, searchable from any MCP-compatible client.",
   "type": "module",
   "main": "server.js",
@@ -26,7 +26,7 @@
     "sync": "node ingest.js",
     "ingest": "node ingest.js",
     "bot": "node bot/index.js",
-    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js && node test/store-document.test.js && node test/cli.test.js && node test/hook.test.js && node test/telegram-html.test.js && node test/telegram-decisions.test.js && node test/telegram-pending.test.js && node test/telegram-notify.test.js && node test/notify-click-action.test.js && node test/inbox-watcher.test.js && node test/e2e-inbox.test.js && node test/ingest-file.test.js",
+    "test": "node test/parser.test.js && node test/bot-inbox.test.js && node test/search-sort.test.js && node test/store-document.test.js && node test/cli.test.js && node test/hook.test.js && node test/telegram-html.test.js && node test/telegram-decisions.test.js && node test/telegram-pending.test.js && node test/telegram-notify.test.js && node test/notify-click-action.test.js && node test/inbox-watcher.test.js && node test/e2e-inbox.test.js && node test/ingest-file.test.js && node test/openclaw-channel.test.js && node test/openclaw-channel-e2e.test.js",
     "prepublishOnly": "npm test"
   },
   "engines": {

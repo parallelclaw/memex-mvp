@@ -591,7 +591,7 @@ function importTelegramHtmlIfMatches(path) {
   return imported;
 }
 
-function importFile(filePath) {
+async function importFile(filePath) {
   if (!existsSync(filePath)) return 0;
   const stats = statSync(filePath);
 
@@ -629,13 +629,32 @@ function importFile(filePath) {
       // cowork-   → Claude Cowork (incl. its subagents)
       // cursor-   → Cursor IDE Composer/Chat (sourced from state.vscdb)
       // obsidian- → Obsidian vault note (sourced from .md file)
+      // openclaw- → OpenClaw — v0.11+ routes via lib/ingest-file.js's
+      //             channel-aware logic (Telegram → tg-<sender>, Kimi → kimi-<file8>)
       // anything else → Claude Code (default)
       if (baseName.startsWith('cowork-')) source = 'claude-cowork';
       else if (baseName.startsWith('cursor-')) source = 'cursor';
       else if (baseName.startsWith('obsidian-')) source = 'obsidian';
       else if (baseName.startsWith('openclaw-')) source = 'openclaw';
       else source = 'claude-code';
-      imported = importClaudeCodeJsonl(filePath, source);
+
+      if (source === 'openclaw') {
+        // v0.11: route through lib/ingest-file.js so OpenClaw's channel-aware
+        // splitting (Telegram → per-sender, Kimi-web → per-session, system →
+        // own conv) applies on the inbox path too — not just the daemon's
+        // drainInbox. Both writers stay idempotent via UNIQUE(source, conv, msg_id).
+        // Async: chokidar handlers tolerate it.
+        try {
+          const { ingestFile } = await import('./lib/ingest-file.js');
+          const r = await ingestFile(db, filePath, { format: 'openclaw-jsonl', force: true });
+          imported = r.status === 'imported' ? (r.total_imported || 0) : 0;
+        } catch (err) {
+          log('openclaw ingest failed:', filePath, err.message);
+          return 0;
+        }
+      } else {
+        imported = importClaudeCodeJsonl(filePath, source);
+      }
     }
   } catch (err) {
     log('import error:', filePath, err.message);
@@ -1287,7 +1306,17 @@ const TOOLS = [
         limit: { type: 'integer', default: 10, minimum: 1, maximum: 50 },
         source: {
           type: 'string',
-          description: 'Optional filter: "telegram", "claude-code", "claude-cowork", etc.',
+          description: 'Optional filter: "telegram", "claude-code", "claude-cowork", "openclaw", etc.',
+        },
+        channel: {
+          type: 'string',
+          description:
+            'Optional channel filter (v0.11+). For OpenClaw and multi-channel sources, ' +
+            'splits messages by transport: "telegram" matches Telegram messages captured ' +
+            'via OpenClaw or native Telegram-export; "kimi-web" matches Kimi web-chat ' +
+            'sessions; "system" matches OpenClaw diagnostics. ' +
+            'Independent of `source` — set both for narrowest scope, set only `channel` to ' +
+            'find e.g. "all Telegram messages anywhere in memex".',
         },
         project: {
           type: 'string',
@@ -1871,6 +1900,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         filters.push('m.source = ?');
         matchParams.push(args.source);
       }
+      if (args.channel) {
+        filters.push('m.channel = ?');
+        matchParams.push(args.channel);
+      }
       if (!includeArchived) {
         filters.push('(c.archived_at IS NULL OR c.archived_at = 0)');
       }
@@ -1953,6 +1986,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (args.source) {
           likeFilters.push('m.source = ?');
           likeParams.push(args.source);
+        }
+        if (args.channel) {
+          likeFilters.push('m.channel = ?');
+          likeParams.push(args.channel);
         }
         if (!includeArchived) {
           likeFilters.push('(c.archived_at IS NULL OR c.archived_at = 0)');

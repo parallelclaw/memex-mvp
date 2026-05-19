@@ -186,6 +186,27 @@ scanned 126 files · 1255 messages emitted
 
 If the daemon was already running (Step 3 skipped), the back-fill via scan is still useful — it catches anything the daemon's chokidar might have raced on startup.
 
+### Step 4b — Channel-aware re-import (memex ≥ 0.11.0, OpenClaw users only)
+
+v0.11 introduced channel-aware routing: Telegram messages relayed through OpenClaw go into per-sender conversations (`openclaw-tg-<sender_id>`), Kimi-web sessions stay in their own thread (`openclaw-kimi-<file8>`), system output is segregated (`openclaw-sys-<file8>`). Pre-0.11 imports merged everything into one bucket per session file.
+
+If you scanned with an older memex, re-run with channel splitting:
+
+```sh
+memex-sync backfill-channels --yes
+```
+
+This deletes existing `source = 'openclaw'` rows and re-imports each archive file via the new channel-aware path. Output ends with a per-channel breakdown:
+
+```
+  channels:
+    • telegram: 1024 msgs
+    • kimi-web: 387 msgs
+    • system:   52 msgs
+```
+
+Idempotent: re-running is safe (UNIQUE(source, conv, msg_id) dedups).
+
 ## Step 5 — Wire memex into the OpenClaw gateway config
 
 The most fragile step. Get it exactly right:

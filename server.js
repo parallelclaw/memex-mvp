@@ -286,16 +286,11 @@ function importTelegram(filePathOrRaw) {
  *  extractMessageFromRecord.
  */
 function importClaudeCodeJsonl(filePath, source = 'claude-code') {
-  let fileName = basename(filePath, '.jsonl');
-  // v0.10.17: OpenClaw checkpoint files (Telegram-while-busy etc.) arrive
-  // in inbox named `openclaw-<base8>-ckpt-<chkpt8>.jsonl`. Strip the
-  // `-ckpt-…` suffix so they join the base session's conversation_id
-  // rather than spawning a parallel conv. Mirrors the same logic in
-  // lib/ingest-file.js (used by the daemon's inbox-drainer).
-  if (source === 'openclaw') {
-    const m = fileName.match(/^(openclaw-[0-9a-f]+)-ckpt-[0-9a-f]+$/i);
-    if (m) fileName = m[1];
-  }
+  const fileName = basename(filePath, '.jsonl');
+  // v0.10.18: each OpenClaw checkpoint file gets its OWN conv_id (was
+  // merged into base in v0.10.17 — wrong design; Telegram-while-busy is
+  // a separate conversation from the Kimi-web session it temporally
+  // overlapped). Channel-aware routing pending v0.11.
   const conversationId = `${source}-${fileName}`;
   const sourceLabel =
     source === 'claude-cowork' ? 'Claude Cowork'

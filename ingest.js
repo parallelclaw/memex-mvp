@@ -1075,11 +1075,13 @@ function shouldIngest(filePath) {
 function inboxNameFor(srcPath, source) {
   // OpenClaw — sessions live at flat <uuid>.jsonl. Background-channel
   // messages (Telegram while agent busy on main session) land in sibling
-  // <base>.checkpoint.<chkpt>.jsonl files. We DO ingest those (v0.10.17+);
-  // their inbox name needs to be unique-per-source-file BUT also let the
-  // downstream ingest associate them with the BASE session's conv_id, so
-  // a Telegram message + a Kimi message from the same session end up in
-  // the same memex conversation.
+  // <base>.checkpoint.<chkpt>.jsonl files. v0.10.17+ ingests both forms.
+  // Each produces a SEPARATE inbox-name (and thus a separate
+  // conversation_id downstream) — these are conceptually different
+  // threads (Telegram-channel vs Kimi-web-channel) even though they
+  // share a base session uuid. Channel-aware routing (Telegram →
+  // openclaw-tg-<chat_id>, Kimi → openclaw-<base8>) is a v0.11 feature
+  // pending an OpenClaw record-schema survey.
   if (source.name === 'openclaw') {
     const stem = basename(srcPath, '.jsonl');
     // Checkpoint pattern: <base-uuid>.checkpoint.<chkpt-uuid>
@@ -1087,9 +1089,6 @@ function inboxNameFor(srcPath, source) {
     if (m) {
       const base = m[1].replace(/-/g, '').slice(0, 8);
       const chkpt = m[2].replace(/-/g, '').slice(0, 8);
-      // `-ckpt-` separator is the marker for ingestClaudeJsonl to merge
-      // these messages into the base session's conv_id rather than
-      // creating a parallel conversation.
       return `${source.prefix}-${base}-ckpt-${chkpt}.jsonl`;
     }
     // Plain main-session file

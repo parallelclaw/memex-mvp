@@ -926,7 +926,10 @@ async function cmdBackfillChannels() {
   // Pre-scan: categorise files + probe session type so the banner
   // tells the user upfront what we'll skip.
   const checkpoints = files.filter((n) => channelMod.isCheckpointFile(n));
-  const mainFiles = files.filter((n) => !channelMod.isCheckpointFile(n));
+  const resets = files.filter((n) => channelMod.isResetFile(n));
+  const mainFiles = files.filter(
+    (n) => !channelMod.isCheckpointFile(n) && !channelMod.isResetFile(n),
+  );
   let detectedMode = mode;
   if (mode === 'auto' && mainFiles.length > 0) {
     const probePath = join(archiveOpenclawDir, mainFiles[0]);
@@ -946,12 +949,19 @@ async function cmdBackfillChannels() {
     else detectedMode = 'unknown (treating as self-hosted)';
   }
 
-  console.log(`Backfill: ${files.length} archived OpenClaw file(s) (${mainFiles.length} main + ${checkpoints.length} checkpoint)`);
+  console.log(
+    `Backfill: ${files.length} archived OpenClaw file(s) ` +
+    `(${mainFiles.length} main + ${checkpoints.length} checkpoint + ${resets.length} reset)`,
+  );
   console.log(`  mode:          ${mode}${mode === 'auto' ? ` -> detected: ${detectedMode}` : ''}`);
   console.log(`  current state: ${before} messages in ${beforeConvs} conversation(s)`);
   if (mode !== 'kimi-claw' && detectedMode !== 'kimi-claw' && checkpoints.length > 0) {
     console.log(`  ${checkpoints.length} checkpoint file(s) will be SKIPPED ` +
                 `(snapshots - avoid 30-40x duplication). Override: --mode kimi-claw`);
+  }
+  if (resets.length > 0) {
+    console.log(`  ${resets.length} reset file(s) will be ingested ` +
+                `(full archives of pre-reset session history).`);
   }
   console.log('');
 
@@ -1192,21 +1202,25 @@ function shouldIngest(filePath) {
   // OpenClaw v0.10.14+ — its sessions dir holds internal state files alongside
   // the dialogue .jsonl. Filter the noise:
   //   <uuid>.trajectory.jsonl     ← agent reasoning trace, not dialogue
-  //   <uuid>.reset.jsonl          ← session-reset markers
   //   trajectory-path*            ← execution paths
   //   usage-cost-cache            ← billing cache
   //   *.lock                      ← file locks
   //
-  // IMPORTANT: do NOT filter <uuid>.checkpoint.<chkpt>.jsonl files.
-  // v0.10.16 and earlier filtered these as "internal state" per an early
-  // OpenClaw maintainer note — BUT on real-world VPS deployments these
-  // files actually contain TELEGRAM-channel messages received while the
-  // agent was busy on the main session. Filtering them silently dropped
-  // user-sent Telegram messages from the memex index. Fix: pass them
-  // through; inboxNameFor() below handles their checkpoint-suffixed
-  // filenames and merges their content into the BASE session's
-  // conversation_id so they appear in the same thread as the main chat.
-  if (/\.(trajectory|reset)\./.test(name)) return false;
+  // INGEST these dialogue-bearing files (do NOT filter):
+  //   <uuid>.jsonl                 — main live session
+  //   <uuid>.checkpoint.<chkpt>... — periodic snapshot of current session
+  //   <uuid>.reset.<reset-uuid>... — FULL ARCHIVE of session before reset.
+  //                                  Critical for self-hosted OpenClaw:
+  //                                  on long-running deployments the main
+  //                                  Telegram chat lives ONLY in 30+
+  //                                  .checkpoint files plus 1 .reset file
+  //                                  (~140 MB of full conversation history,
+  //                                  ~3.2K user messages deduplicated).
+  //                                  v0.11.3 and earlier filtered .reset.*
+  //                                  as "session-reset markers" — wrong
+  //                                  attribution: they're complete archives.
+  //                                  v0.11.4 picks them up.
+  if (/\.trajectory\./.test(name)) return false;
   if (name.includes('trajectory-path')) return false;
   if (name.includes('usage-cost-cache')) return false;
   return true;
@@ -1241,11 +1255,20 @@ function inboxNameFor(srcPath, source) {
   if (source.name === 'openclaw') {
     const stem = basename(srcPath, '.jsonl');
     // Checkpoint pattern: <base-uuid>.checkpoint.<chkpt-uuid>
-    const m = stem.match(/^([0-9a-f]+(?:-[0-9a-f]+)*)\.checkpoint\.([0-9a-f]+(?:-[0-9a-f]+)*)$/i);
-    if (m) {
-      const base = m[1].replace(/-/g, '').slice(0, 8);
-      const chkpt = m[2].replace(/-/g, '').slice(0, 8);
+    const mC = stem.match(/^([0-9a-f]+(?:-[0-9a-f]+)*)\.checkpoint\.([0-9a-f]+(?:-[0-9a-f]+)*)$/i);
+    if (mC) {
+      const base = mC[1].replace(/-/g, '').slice(0, 8);
+      const chkpt = mC[2].replace(/-/g, '').slice(0, 8);
       return `${source.prefix}-${base}-ckpt-${chkpt}.jsonl`;
+    }
+    // Reset pattern (v0.11.4): <base-uuid>.reset.<reset-uuid> — full
+    // archive of the session at the moment of reset. Self-hosted
+    // OpenClaw stores its long-term Telegram history here.
+    const mR = stem.match(/^([0-9a-f]+(?:-[0-9a-f]+)*)\.reset\.([0-9a-f]+(?:-[0-9a-f]+)*)$/i);
+    if (mR) {
+      const base = mR[1].replace(/-/g, '').slice(0, 8);
+      const reset = mR[2].replace(/-/g, '').slice(0, 8);
+      return `${source.prefix}-${base}-reset-${reset}.jsonl`;
     }
     // Plain main-session file
     return `${source.prefix}-${stem.replace(/-/g, '').slice(0, 8)}.jsonl`;

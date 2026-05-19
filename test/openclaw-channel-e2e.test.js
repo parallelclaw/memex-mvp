@@ -561,6 +561,93 @@ try {
   rmSync(root5, { recursive: true, force: true });
 }
 
+// ============ v0.11.4: reset files are FULL archives, always ingested ============
+//
+// Self-hosted OpenClaw stores long-term Telegram history in .reset.* files
+// (~140 MB / ~3.2K messages per file on the test VPS). These were previously
+// filtered out alongside .trajectory.* as "session-reset markers" — wrong
+// attribution. Reset files are complete pre-reset archives and must be
+// ingested regardless of session-type detection.
+
+const root7 = mkdtempSync(join(tmpdir(), 'memex-reset-'));
+const dbPath7 = join(root7, 'memex.db');
+const sessDir7 = join(root7, 'agents', 'main', 'sessions');
+mkdirSync(sessDir7, { recursive: true });
+
+// Inbox-staged name (what memex-sync produces from a source-side reset):
+const resetPath = join(sessDir7, 'openclaw-7a8b9cde-reset-feedface.jsonl');
+const sessionsJson7 = join(sessDir7, 'sessions.json');
+
+// sessions.json knows nothing about this (rotated session) — forces
+// content-based fallback. Reset must still be ingested as self-hosted.
+writeFileSync(sessionsJson7, JSON.stringify({
+  'agent:main:main': {
+    deliveryContext: { channel: 'telegram' },
+    sessionFile: join(sessDir7, 'someother.jsonl'),
+  },
+}));
+
+// Reset file: full archive with a TG batched message and an assistant reply
+writeFileSync(resetPath, [
+  {
+    type: 'message', id: 'r1',
+    timestamp: '2026-04-10T10:00:00Z',
+    message: { role: 'user', content: [{
+      type: 'text',
+      text: [
+        '[Queued messages while agent was busy]',
+        '',
+        '---',
+        'Queued #1',
+        'Conversation info (untrusted metadata):',
+        '```json',
+        '{ "message_id": "100", "sender_id": "42", "sender": "Bob", "timestamp": "Fri 2026-04-10 18:00 GMT+8" }',
+        '```',
+        '',
+        'старое сообщение из reset-архива',
+      ].join('\n'),
+    }]},
+  },
+  {
+    type: 'message', id: 'r2',
+    timestamp: '2026-04-10T10:00:30Z',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'старый ответ агента' }] },
+  },
+].map(JSON.stringify).join('\n'));
+
+const db7 = initializeDb(dbPath7);
+try {
+  const r = await ingestFile(db7, resetPath, { format: 'openclaw-jsonl' });
+
+  test('reset: file is ingested (not skipped like checkpoints)', () => {
+    assertEq(r.status, 'imported');
+    assert(r.total_imported > 0, 'reset file should produce rows');
+  });
+
+  test('reset: TG message correctly routed to openclaw-tg-<sender>', () => {
+    const row = db7.prepare(
+      `SELECT text, channel FROM messages
+        WHERE source='openclaw' AND conversation_id='openclaw-tg-42'
+        ORDER BY ts LIMIT 1`,
+    ).get();
+    assertEq(row?.text, 'старое сообщение из reset-архива');
+    assertEq(row?.channel, 'telegram');
+  });
+
+  test('reset: assistant inherits TG conversation via sticky', () => {
+    const rows = db7.prepare(
+      `SELECT role FROM messages
+        WHERE source='openclaw' AND conversation_id='openclaw-tg-42' ORDER BY ts`,
+    ).all();
+    assertEq(rows.length, 2);
+    assertEq(rows[0].role, 'user');
+    assertEq(rows[1].role, 'assistant');
+  });
+} finally {
+  db7.close();
+  rmSync(root7, { recursive: true, force: true });
+}
+
 // ============ v0.11.2: empty conv-rows are NOT created ============
 
 const root6 = mkdtempSync(join(tmpdir(), 'memex-empty-'));

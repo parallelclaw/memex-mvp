@@ -190,7 +190,11 @@ If the daemon was already running (Step 3 skipped), the back-fill via scan is st
 
 v0.11 introduced channel-aware routing: Telegram messages relayed through OpenClaw go into per-sender conversations (`openclaw-tg-<sender_id>`), Kimi-web sessions stay in their own thread (`openclaw-kimi-<file8>`), system output is segregated (`openclaw-sys-<file8>`). Pre-0.11 imports merged everything into one bucket per session file.
 
-**v0.11.2 (recommended) adds critical fixes for self-hosted OpenClaw** — re-run backfill after upgrading:
+**v0.11.4 (current) — pick up `.reset.*` session archives** (the long-term Telegram history on self-hosted OpenClaw): on long-running deployments the main chat lives in `<uuid>.reset.<reset-uuid>.jsonl` files (full pre-reset archives) plus periodic checkpoints. v0.11.3 and earlier filtered `.reset.*` as "session-reset markers" — wrong attribution. v0.11.4 ingests them as full session archives. Effect: a self-hosted user who had thousands of Telegram messages disappear after v0.11.2's checkpoint-skip will see them all show up after upgrade.
+
+**v0.11.3 — content-based session-type detection**: `sessions.json` only tracks CURRENT active sessions. After main-session rotation, archived files were misclassified as "unknown" and treated as self-hosted (skipping checkpoints). v0.11.3 falls back to scanning the file body for channel markers — fixes auto-detection on rotated Kimi-Claw archives.
+
+**v0.11.2 — critical fixes for self-hosted OpenClaw** — re-run backfill after upgrading:
 - **Two-mode routing (auto-detected)**: memex now distinguishes Kimi-Claw (Moonshot's merged-file deployment) from self-hosted (separate `<uuid>.jsonl` per session). For self-hosted, checkpoint files are SKIPPED — they're snapshots that previously caused 30-40× row duplication. Override with `--mode kimi-claw` or `--mode self-hosted`.
 - **File-level channel detection for archive files**: previously only 1 of N self-hosted sessions got correctly tagged with channel; now all sessions match via uuid8 lookup.
 - **No more empty/ghost conversations**: subagent system-init files no longer produce conv rows with 0 messages and `[Subagent Context]` titles.

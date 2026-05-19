@@ -16,6 +16,7 @@ import {
   detectSessionType,
   detectSessionTypeFromContent,
   isCheckpointFile,
+  isResetFile,
   deriveOpenclawConvId,
   titlePrefixFor,
   baseUuid8,
@@ -475,6 +476,40 @@ test('isCheckpointFile: main session file → false', () => {
 test('isCheckpointFile: empty/null → false', () => {
   assertEq(isCheckpointFile(''), false);
   assertEq(isCheckpointFile(null), false);
+});
+
+// v0.11.4: reset files — full pre-reset session archives.
+test('isResetFile: source .reset.<uuid> format', () => {
+  assert(isResetFile('3824f87a-ea6e-4e08-a83a-c596288bcfe3.reset.deadbeef-aaaa-bbbb-cccc-ddddeeee0000.jsonl'));
+});
+
+test('isResetFile: inbox-staged -reset- format', () => {
+  assert(isResetFile('openclaw-3824f87a-reset-deadbeef.jsonl'));
+});
+
+test('isResetFile: checkpoint file is NOT reset', () => {
+  assertEq(isResetFile('openclaw-3824f87a-ckpt-deadbeef.jsonl'), false);
+  assertEq(isResetFile('3824f87a-ea6e-4e08-a83a-c596288bcfe3.checkpoint.e6c37ac7-64d2-49cd-ba5e-5858fe98bddc.jsonl'), false);
+});
+
+test('isResetFile: main file is NOT reset', () => {
+  assertEq(isResetFile('openclaw-3824f87a.jsonl'), false);
+});
+
+test('isResetFile: empty/null → false', () => {
+  assertEq(isResetFile(''), false);
+  assertEq(isResetFile(null), false);
+});
+
+test('baseUuid8: openclaw-<base8>-reset-<reset8>.jsonl', () => {
+  assertEq(baseUuid8('openclaw-3824f87a-reset-deadbeef.jsonl'), '3824f87a');
+});
+
+test('baseUuid8: <base>.reset.<reset>.jsonl (source format)', () => {
+  assertEq(
+    baseUuid8('3824f87a-ea6e-4e08-a83a-c596288bcfe3.reset.deadbeef-aaaa-bbbb-cccc-ddddeeee0000.jsonl'),
+    '3824f87a',
+  );
 });
 
 // ============ v0.11.3: content-based session-type detection ============

@@ -88,6 +88,7 @@ const STAGING = join(MEMEX_DIR, 'staging');
 const DATA = join(MEMEX_DIR, 'data');
 const STATE_PATH = join(DATA, 'ingest-state.json');
 const LOG_PATH = join(DATA, 'ingest.log');
+const DB_PATH = join(DATA, 'memex.db');
 
 // Daemon metadata — per-platform. macOS uses LaunchAgents (plist),
 // Linux uses systemd user-service. v0.10.14 added Linux support so memex
@@ -406,6 +407,25 @@ async function cmdInstall() {
   console.log('');
   console.log(`config: ${CONFIG_PATH} (auto-created on first edit)`);
   console.log(`status: npx memex-sync status`);
+
+  // v0.10.15: pre-create memex.db with full schema so post-install
+  // commands (memex overview, memex search) and the post-scan back-fill
+  // flow work IMMEDIATELY — without waiting for the MCP server to spawn
+  // for the first time. On clean machines this was the most-common
+  // first-time confusion: `memex-sync scan` populates ~/.memex/inbox/
+  // but `memex overview` errored with "memex.db not found" until the
+  // user restarted their MCP client. Now the daemon creates an empty
+  // DB at install-time; the MCP server picks up where it left off.
+  try {
+    const { initializeDb } = await import('./lib/db-init.js');
+    const db = initializeDb(DB_PATH);
+    db.close();
+    console.log(`db:     ${DB_PATH} (schema initialised)`);
+  } catch (e) {
+    // Non-fatal — install succeeded; DB just isn't pre-created.
+    console.warn(`warn: could not pre-initialise DB at ${DB_PATH}: ${e.message}`);
+    console.warn(`      (DB will be created on first MCP server start instead)`);
+  }
 
   // v0.10.13: back-fill any Telegram exports that already exist in
   // ~/Downloads/Telegram Desktop/. The daemon's chokidar watcher with

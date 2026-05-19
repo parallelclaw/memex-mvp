@@ -106,178 +106,11 @@ function log(...args) {
 }
 
 // -------------------- Database --------------------
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS messages (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    source          TEXT NOT NULL,
-    conversation_id TEXT NOT NULL,
-    msg_id          TEXT,
-    role            TEXT,
-    sender          TEXT,
-    text            TEXT,
-    ts              INTEGER,
-    metadata        TEXT,
-    UNIQUE(source, conversation_id, msg_id)
-  );
-  CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages(ts);
-  CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
-  CREATE INDEX IF NOT EXISTS idx_messages_source ON messages(source);
-
-  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-    text, sender, conversation_id, source,
-    content=messages, content_rowid=id,
-    tokenize='unicode61 remove_diacritics 2'
-  );
-
-  CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
-    INSERT INTO messages_fts(rowid, text, sender, conversation_id, source)
-    VALUES (new.id, new.text, new.sender, new.conversation_id, new.source);
-  END;
-  CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-    DELETE FROM messages_fts WHERE rowid = old.id;
-  END;
-  CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
-    DELETE FROM messages_fts WHERE rowid = old.id;
-    INSERT INTO messages_fts(rowid, text, sender, conversation_id, source)
-    VALUES (new.id, new.text, new.sender, new.conversation_id, new.source);
-  END;
-
-  CREATE TABLE IF NOT EXISTS conversations (
-    conversation_id TEXT PRIMARY KEY,
-    source          TEXT NOT NULL,
-    title           TEXT,
-    first_ts        INTEGER,
-    last_ts         INTEGER,
-    message_count   INTEGER DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS imports (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_name       TEXT,
-    source          TEXT,
-    imported_at     INTEGER,
-    message_count   INTEGER
-  );
-`);
-
-// -------------------- Migrations --------------------
-// archived_at on conversations (added 0.2): NULL = active, unix-ts = archived.
-// SQLite ALTER TABLE ADD COLUMN throws if the column exists, so we swallow
-// that specific error and rethrow anything else.
-try {
-  db.exec(`ALTER TABLE conversations ADD COLUMN archived_at INTEGER`);
-} catch (err) {
-  if (!String(err.message).includes('duplicate column name')) throw err;
-}
-// parent_conversation_id (added 0.3) — links Cowork subagent transcripts to
-// their parent main session. NULL for top-level conversations.
-try {
-  db.exec(`ALTER TABLE conversations ADD COLUMN parent_conversation_id TEXT`);
-} catch (err) {
-  if (!String(err.message).includes('duplicate column name')) throw err;
-}
-try {
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_parent ON conversations(parent_conversation_id)`);
-} catch (err) {
-  // index creation is idempotent via IF NOT EXISTS
-}
-// project_path on conversations (added 0.5) — absolute filesystem path of
-// the project this conversation took place in (cwd for Claude Code/Cowork,
-// vault root for Obsidian, NULL for Telegram). Lets `memex_search` filter
-// to one project's history. Partial index excludes NULL rows (Telegram).
-try {
-  db.exec(`ALTER TABLE conversations ADD COLUMN project_path TEXT`);
-} catch (err) {
-  if (!String(err.message).includes('duplicate column name')) throw err;
-}
-try {
-  db.exec(
-    `CREATE INDEX IF NOT EXISTS idx_conversations_project
-       ON conversations(project_path)
-     WHERE project_path IS NOT NULL`
-  );
-} catch (_) {}
-// Dedupe imports (added 0.4): the same file dropped into the inbox more than
-// once — or two server.js instances watching the inbox at the same time —
-// used to produce N identical rows. Collapse pre-existing duplicates (keep
-// the row with the highest id, i.e. latest imported_at) before installing
-// the unique index, otherwise the CREATE would fail on existing data.
-db.exec(`
-  DELETE FROM imports
-   WHERE id NOT IN (
-     SELECT MAX(id) FROM imports
-      GROUP BY file_name, source, message_count
-   )
-`);
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_imports_unique
-    ON imports(file_name, source, message_count)
-`);
-// edited_at on messages (added 0.4): unix-ts of the latest edit we've
-// recorded for this row. NULL = we've only seen an unedited version.
-// Drives the upsert in insertMessage so re-imports overwrite text only
-// when the incoming export is provably newer than what we already have.
-try {
-  db.exec(`ALTER TABLE messages ADD COLUMN edited_at INTEGER`);
-} catch (err) {
-  if (!String(err.message).includes('duplicate column name')) throw err;
-}
-// uuid on messages (added 0.6): the source-system record uuid (Claude Code
-// writes one per JSONL line). Used to stitch cross-file continuation chains
-// after /compact starts a new JSONL — the new file's first record has a
-// parentUuid pointing back at the previous file's last record. Indexed so
-// the lookup is cheap. NULL for sources that don't have one (Telegram).
-try {
-  db.exec(`ALTER TABLE messages ADD COLUMN uuid TEXT`);
-} catch (err) {
-  if (!String(err.message).includes('duplicate column name')) throw err;
-}
-try {
-  db.exec(
-    `CREATE INDEX IF NOT EXISTS idx_messages_uuid
-       ON messages(uuid)
-     WHERE uuid IS NOT NULL`
-  );
-} catch (_) {}
-// pending_parent_uuid on conversations (added 0.6): when a child conversation
-// is imported but its parent (the file that ended in /compact) hasn't been
-// imported yet, we stash the parentUuid here. After every import we sweep
-// pending rows and resolve any that can now be linked. Without this the
-// link would silently drop when files arrive out of temporal order.
-try {
-  db.exec(`ALTER TABLE conversations ADD COLUMN pending_parent_uuid TEXT`);
-} catch (err) {
-  if (!String(err.message).includes('duplicate column name')) throw err;
-}
-
-// FTS5 triggers (rewritten 0.6) — exclude role IN ('boundary','summary')
-// from messages_fts so the synthetic compaction summary doesn't double-count
-// against the original raw turns it summarises. Drop+recreate is idempotent
-// and necessary because pre-0.6 DBs have triggers without the WHEN clause.
-db.exec(`
-  DROP TRIGGER IF EXISTS messages_fts_ai;
-  DROP TRIGGER IF EXISTS messages_fts_ad;
-  DROP TRIGGER IF EXISTS messages_fts_au;
-  CREATE TRIGGER messages_fts_ai AFTER INSERT ON messages
-    WHEN new.role NOT IN ('boundary', 'summary')
-  BEGIN
-    INSERT INTO messages_fts(rowid, text, sender, conversation_id, source)
-    VALUES (new.id, new.text, new.sender, new.conversation_id, new.source);
-  END;
-  CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN
-    DELETE FROM messages_fts WHERE rowid = old.id;
-  END;
-  CREATE TRIGGER messages_fts_au AFTER UPDATE ON messages BEGIN
-    DELETE FROM messages_fts WHERE rowid = old.id;
-    INSERT INTO messages_fts(rowid, text, sender, conversation_id, source)
-      SELECT new.id, new.text, new.sender, new.conversation_id, new.source
-       WHERE new.role NOT IN ('boundary', 'summary');
-  END;
-`);
+// Schema-init lives in lib/db-init.js so memex-sync (the daemon, on
+// install) can run it too — guarantees memex.db exists with the full
+// schema before any reader (e.g. CLI `memex overview`) touches it.
+const { initializeDb } = await import('./lib/db-init.js');
+const db = initializeDb(DB_PATH);
 
 // Re-imports of edited messages: a row already exists (UNIQUE on
 // source/conversation_id/msg_id), but the source app has since updated
@@ -795,6 +628,7 @@ function importFile(filePath) {
       if (baseName.startsWith('cowork-')) source = 'claude-cowork';
       else if (baseName.startsWith('cursor-')) source = 'cursor';
       else if (baseName.startsWith('obsidian-')) source = 'obsidian';
+      else if (baseName.startsWith('openclaw-')) source = 'openclaw';
       else source = 'claude-code';
       imported = importClaudeCodeJsonl(filePath, source);
     }

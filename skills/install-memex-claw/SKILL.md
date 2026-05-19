@@ -1,7 +1,7 @@
 ---
 name: install-memex-claw
 description: Wire memex (the local-first MCP memory server) into an OpenClaw gateway — works wherever OpenClaw runs (Linux or macOS, VPS or workstation). Auto-captures every OpenClaw session in ~/.openclaw/agents/main/sessions/ and exposes 18 MCP tools (memex_search, memex_recent, memex_overview, memex_store_document, memex_import_file, etc.) to the local OpenClaw agent. Auto-detects whether memex is already installed on this machine (e.g. via the generic install-memex skill for Claude Code) — if yes, skips install and just merges memex into the OpenClaw gateway config; if no, does the full platform-aware install (Linux → systemd user-service, macOS → LaunchAgent). Back-fills past sessions in one shot. Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. PAIRS with the generic install-memex skill — if the user ALSO uses Claude Code, Cursor, Cline, Continue, Zed, or has Telegram chats to capture on this same machine, recommend they run install-memex separately for those flows.
-version: 1.0.1
+version: 1.0.2
 metadata:
   openclaw:
     emoji: "🧠"
@@ -63,16 +63,14 @@ This skill installs `memex-mvp` from npm (if not already present) and wires it a
 
 ## Before this skill can be installed (one-time OpenClaw bootstrap)
 
-If the user runs `openclaw skill install install-memex-claw` and gets back **"plugin not allowed"** or similar — the OpenClaw `skill` plugin isn't enabled in the gateway config by default on fresh installs. This is OpenClaw's own permission model preventing arbitrary code execution; it's not specific to memex.
+If the user runs `openclaw skill install install-memex-claw` and gets back **"plugin not allowed" / "permission denied" / "skill plugin disabled"** — the OpenClaw gateway's permission model is blocking arbitrary skill execution by default. This is **OpenClaw's** safety guard, not specific to memex.
 
-**One-time fix** before any ClawHub skill can be installed:
+The exact permission name varies between OpenClaw versions — common ones:
+- `plugins.allow: ["skill", …]` in `~/.openclaw/openclaw.json`
+- A separate `skills.enabled: true` setting
+- A capability called `skill-install` or `skill-runtime`
 
-1. Open `~/.openclaw/openclaw.json` (or wherever your OpenClaw gateway config lives — often `/root/.openclaw/openclaw.json` on a fresh root-owned VPS).
-2. Find the `plugins.allow` array. Add `"skill"` to it (merge, don't overwrite other entries).
-3. Restart the OpenClaw gateway so the new permission takes effect.
-4. Retry `openclaw skill install install-memex-claw`.
-
-After this is done once, the `skill` plugin stays allowed forever — every future ClawHub skill works out of the box.
+**Check your OpenClaw docs** for the exact permission name in your version, set it once, restart the gateway, and retry. After this bootstrap is done once, every future ClawHub skill works out of the box.
 
 Once this skill is loaded and you're reading the rest of this file: continue to "Prerequisite" below.
 
@@ -220,35 +218,39 @@ You (OpenClaw agent) know your own gateway config structure. **Read it, merge in
 2. **Merge, don't overwrite.** Read the JSON, set `.mcpServers.memex`, write the whole thing back. Other entries stay untouched.
 3. **Atomic write:** write to `<path>.tmp`, then `mv` to `<path>`. If the gateway is mid-read, an atomic rename is safe; a partial write is not.
 
-## Step 6 — Verify
+## Step 6 — Verify (what you CAN check before gateway restart)
+
+After install + scan, only a few things are verifiable. The full data ingestion happens when the OpenClaw gateway restarts and spawns the memex MCP server — **that's when staged inbox files get processed into memex.db**. Until then, `memex overview` may show zero messages even though the back-fill worked.
+
+So Step 6 checks only what's deterministically true RIGHT NOW:
 
 ```sh
-# Daemon is up?
+# 1. Daemon is up?
 memex-sync status
 
-# Sessions ingested?
-memex overview
-
-# Search works?
-memex search "openclaw" --limit 3
+# 2. Are inbox files staged for the MCP server to process?
+ls ~/.memex/inbox/ | wc -l
 ```
 
-Expected `memex overview` after back-fill:
+Expected output:
 
 ```
-memex overview
-  total messages: 1255
-  conversations:  126
-  sources:
-    • openclaw  1255 messages, 126 conversations
+memex-sync status
+  daemon:    installed (systemd user-service · …)
+  process:   running (PID 12345)
+  watching:  1 openclaw main session(s) · 6 entries total
   last activity: just now
+
+$ ls ~/.memex/inbox/ | wc -l
+6     # = number of OpenClaw sessions staged for ingestion
 ```
 
-**Don't declare success unless all three checks pass.** Diagnostic flowchart if any fail:
+**Don't try `memex overview` or `memex search` until AFTER the gateway is restarted (Step 7).** Why: the inbox→DB import happens inside the memex MCP server, which gets spawned by the OpenClaw gateway on first MCP request after restart. Running queries before that yields "memex.db not found" or "0 messages" — confusing but expected.
 
-- `memex-sync status` shows "not running" → check `journalctl --user -u memex-sync -n 30` (Linux) or `tail ~/.memex/data/launchd.err.log` (macOS)
-- `memex overview` zero messages → wait 30s for daemon, retry, OR rerun `memex-sync scan`
-- `memex search` returns nothing → check actual session files: `ls ~/.openclaw/agents/main/sessions/ | wc -l`
+**Diagnostic flowchart if either check fails:**
+
+- `memex-sync status` shows "process: not running" → check `journalctl --user -u memex-sync -n 30` (Linux) or `tail ~/.memex/data/launchd.err.log` (macOS). On Linux without linger this is the most common cause.
+- `ls inbox/` is empty after scan → `memex-sync scan` couldn't find anything. Double-check `ls ~/.openclaw/agents/main/sessions/ | grep -v -E '\.(checkpoint|trajectory|reset)\.'` — if THAT is empty too, the user has no OpenClaw sessions yet (no problem, daemon will capture new ones going forward).
 
 ## Step 7 — Final message to the user
 
@@ -277,6 +279,33 @@ a browser: `memex web --open`.
 **Bonus suggestion** (mention only if relevant):
 
 > "If you ALSO use Claude Code / Cursor / Cline on this same machine, OR have Telegram chats you want indexed, run `install-memex` (the generic skill) separately to capture those too. memex shares the same database across all sources."
+
+## Step 8 — Verify (after user restarts the gateway)
+
+After the user restarts the OpenClaw gateway and the memex MCP server has processed its first inbox files, these commands will return real data — ask the user to run them (or run them yourself if they reconnect):
+
+```sh
+# Real corpus stats — should now show the back-filled OpenClaw sessions
+memex overview
+
+# Smoke search — should find content from a recent session
+memex search "<recent topic>"
+```
+
+Expected `memex overview`:
+
+```
+memex corpus snapshot
+
+Total: 1255 messages in 6 conversations
+By source:
+  • openclaw       1255 msgs in 6 conversations (last: just now)
+```
+
+If `memex overview` still shows 0 messages 30 seconds after gateway restart:
+- Check that the gateway actually launched memex MCP: `ps aux | grep memex` should show a memex process spawned by openclaw
+- Check the OpenClaw config's `mcpServers.memex.command` IS the absolute path from `which memex` (no shell PATH inheritance over MCP stdio)
+- As a last resort, manually import each staged inbox file: `for f in ~/.memex/inbox/openclaw-*.jsonl; do memex import "$f"; done`
 
 ---
 

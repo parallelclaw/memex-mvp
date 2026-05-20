@@ -1,0 +1,12 @@
+name: memex
+version: 0.1.0
+description: |
+  Verbatim local-first memory for Hermes Agent.
+
+  Stores every turn raw — no LLM extraction, no cloud, no auth, no API keys.
+  Pairs with memex-mvp (npm) for a unified corpus across Hermes, Claude Code,
+  Telegram, and other clients. Counter-positioned vs Mem0 / Supermemory /
+  hermes-memory: those extract facts, memex keeps originals.
+
+# stdlib only — no extra packages needed.
+pip_dependencies: []

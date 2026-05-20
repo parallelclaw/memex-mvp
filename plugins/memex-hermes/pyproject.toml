@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memex-hermes"
+version = "0.1.0"
+description = "Verbatim local-first memory for Hermes Agent — store raw turns in SQLite, no extraction, no cloud, no auth."
+readme = "README.md"
+authors = [{ name = "parallelclaw", email = "sedelev@gmail.com" }]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database :: Front-Ends",
+    "Intended Audience :: Developers",
+    "Environment :: Console",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+keywords = [
+    "hermes",
+    "hermes-agent",
+    "nous-research",
+    "memory",
+    "verbatim",
+    "local-first",
+    "sqlite",
+    "fts5",
+    "memex",
+    "parallelclaw",
+    "mcp",
+    "ai-memory",
+]
+# stdlib only — sqlite3, json, threading, hashlib, time, pathlib, logging
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+
+[project.urls]
+Homepage = "https://memex.parallelclaw.ai"
+Repository = "https://github.com/parallelclaw/memex-mvp"
+Issues = "https://github.com/parallelclaw/memex-mvp/issues"
+Documentation = "https://github.com/parallelclaw/memex-mvp/tree/main/plugins/memex-hermes"
+
+# Hermes plugin auto-discovery. After `pip install memex-hermes`, the
+# Hermes runtime finds us at startup and instantiates the provider via
+# the register() function exported from memex_hermes.__init__.
+[project.entry-points."hermes_agent.plugins"]
+memex = "memex_hermes"
+
+# CLI: one-shot backfill of Hermes state.db -> memex.db
+[project.scripts]
+memex-hermes-backfill = "memex_hermes.backfill:main"
+
+[tool.setuptools]
+packages = ["memex_hermes"]
+
+[tool.setuptools.package-data]
+memex_hermes = ["plugin.yaml"]

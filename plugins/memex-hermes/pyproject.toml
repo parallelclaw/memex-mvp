@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memex-hermes"
-version = "0.1.1"
+version = "0.1.2"
 description = "Verbatim local-first memory for Hermes Agent — store raw turns in SQLite, no extraction, no cloud, no auth."
 readme = "README.md"
 authors = [{ name = "parallelclaw", email = "sedelev@gmail.com" }]

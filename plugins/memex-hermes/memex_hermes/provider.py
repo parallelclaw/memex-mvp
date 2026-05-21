@@ -27,8 +27,10 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 import threading
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Import the Hermes ABC. The exact import path may vary by Hermes version;
@@ -107,6 +109,16 @@ class MemexMemoryProvider(MemoryProvider):
         self._agent_context: str = "primary"
         self._conv_id: str = ""
         self._sync_lock = threading.RLock()
+        # v0.1.2: state.db tailing — Hermes doesn't call sync_turn for
+        # resumed sessions, but it always writes new turns to state.db
+        # for its own persistence. We tail that file on every prefetch
+        # call (which DOES fire for resumed sessions) to capture missed
+        # turns. Idempotent via UNIQUE constraint.
+        self._hermes_home: Optional[str] = None
+        self._state_db_path: Optional[Path] = None
+        self._last_state_db_msg_id: int = 0
+        self._db_path_resolved: Optional[str] = None  # for re-open after shutdown
+        self._shutdown_requested: bool = False
 
     def initialize(self, session_id: str, **kwargs: Any) -> None:
         """Called by Hermes at the start of every session.
@@ -129,12 +141,33 @@ class MemexMemoryProvider(MemoryProvider):
         self._agent_context = kwargs.get("agent_context", "primary")
 
         self._conv_id = derive_conv_id(self._platform, self._user_id, self._session_id)
+        self._hermes_home = kwargs.get("hermes_home")
+        self._shutdown_requested = False
 
         # Allow user to override DB path via config; otherwise default.
         # Config arrives via Hermes' setup wizard → ~/.hermes/memex.json.
-        db_path = self._read_config_db_path(kwargs.get("hermes_home"))
+        db_path = self._read_config_db_path(self._hermes_home)
+        self._db_path_resolved = db_path  # remember so we can re-open after shutdown race
         self._store = MemexStore(db_path)
         self._prefetch = PrefetchCache(self._store)
+
+        # State.db tailing setup. Hermes writes every turn to
+        # ~/.hermes/state.db regardless of resumed/fresh — we ride on
+        # that for reliable per-turn capture.
+        if self._hermes_home:
+            candidate = Path(self._hermes_home) / "state.db"
+            if candidate.exists():
+                self._state_db_path = candidate
+
+        # Catch up on anything we missed in state.db before this session
+        # started (defensive — usually 0 rows on fresh init).
+        self._last_state_db_msg_id = self._lookup_last_imported_state_id()
+        try:
+            caught_up = self._tail_state_db()
+            if caught_up:
+                log.info("memex-hermes: caught up %d state.db row(s) on init", caught_up)
+        except Exception:  # noqa: BLE001
+            log.exception("memex-hermes: initial state.db tail failed")
 
         # Seed conversations table with a sensible title.
         title_hint = kwargs.get("session_title") or self._conv_id
@@ -175,6 +208,163 @@ class MemexMemoryProvider(MemoryProvider):
             log.exception("memex-hermes: could not read %s/memex.json", hermes_home)
             return None
 
+    # ----- Resilience + state.db tailing helpers (v0.1.2) -----
+
+    def _ensure_store(self) -> Optional[MemexStore]:
+        """Return a usable MemexStore, re-opening if Hermes called
+        shutdown() in the wrong order before some other hook.
+
+        Empirically Hermes v0.10.x sometimes calls on_session_end AFTER
+        shutdown — closes our DB connection before the safety-net
+        flush can run. This helper makes every hook resilient: if the
+        store is dead, transparently re-open against the same path.
+
+        Returns None if the store can't be opened at all (rare — usually
+        means memex.db is on a filesystem that became unavailable).
+        """
+        if self._store is not None:
+            # Probe the connection. SQLite's `_conn` may be closed even
+            # while the Python object exists. A cheap PRAGMA query is
+            # the fastest "are you alive?" check.
+            try:
+                self._store._conn.execute("PRAGMA user_version")  # noqa: SLF001
+                return self._store
+            except sqlite3.ProgrammingError:
+                # Connection closed under us — fall through to re-open.
+                pass
+            except Exception:  # noqa: BLE001
+                pass
+        # Re-open
+        try:
+            self._store = MemexStore(self._db_path_resolved)
+            log.debug("memex-hermes: re-opened store after shutdown race")
+            return self._store
+        except Exception:  # noqa: BLE001
+            log.exception("memex-hermes: could not re-open store")
+            return None
+
+    def _lookup_last_imported_state_id(self) -> int:
+        """Find the highest Hermes message-id we've already imported for
+        this session. New tails start from this + 1 so we don't redo
+        work (UNIQUE would dedup anyway, but the early-out saves IO).
+        """
+        if not self._session_id or not self._db_path_resolved:
+            return 0
+        try:
+            store = self._ensure_store()
+            if not store:
+                return 0
+            row = store._conn.execute(  # noqa: SLF001
+                """
+                SELECT MAX(CAST(json_extract(metadata, '$.hermes_message_id') AS INTEGER))
+                  FROM messages
+                 WHERE source = 'hermes'
+                   AND json_extract(metadata, '$.session_id') = ?
+                """,
+                (self._session_id,),
+            ).fetchone()
+            return int(row[0] or 0) if row else 0
+        except Exception:  # noqa: BLE001
+            return 0
+
+    def _tail_state_db(self) -> int:
+        """Pull any new rows from Hermes' state.db for the current
+        session that we haven't yet captured. Idempotent via UNIQUE.
+
+        Called from:
+          • initialize  — catch-up at session start
+          • queue_prefetch — every turn (the reliable hook even for
+                              resumed sessions where sync_turn is
+                              skipped by Hermes)
+
+        Returns count of new rows inserted.
+        """
+        if (
+            self._shutdown_requested
+            or not self._state_db_path
+            or not self._state_db_path.exists()
+            or not self._session_id
+        ):
+            return 0
+        store = self._ensure_store()
+        if not store:
+            return 0
+
+        rows: List[tuple] = []
+        try:
+            conn = sqlite3.connect(
+                f"file:{self._state_db_path}?mode=ro",
+                uri=True,
+                timeout=2.0,
+            )
+            try:
+                cur = conn.execute(
+                    """
+                    SELECT id, role, content, timestamp
+                      FROM messages
+                     WHERE session_id = ?
+                       AND id > ?
+                       AND role IN ('user', 'assistant')
+                       AND content IS NOT NULL
+                       AND content != ''
+                     ORDER BY id ASC
+                    """,
+                    (self._session_id, int(self._last_state_db_msg_id)),
+                )
+                rows = cur.fetchall()
+            finally:
+                conn.close()
+        except Exception:  # noqa: BLE001
+            log.exception("memex-hermes: state.db tail query failed")
+            return 0
+
+        if not rows:
+            return 0
+
+        inserted = 0
+        for hermes_id, role, content, ts in rows:
+            text = content or ""
+            if not text.strip():
+                continue
+            msg_id = derive_msg_id(role, text, self._conv_id)
+            metadata: Dict[str, Any] = {
+                "raw_type": "hermes-state-tail",
+                "session_id": self._session_id,
+                "platform": self._platform,
+                "user_id": self._user_id,
+                "hermes_message_id": int(hermes_id),
+            }
+            try:
+                wrote = store.insert_message(
+                    conversation_id=self._conv_id,
+                    msg_id=msg_id,
+                    role=role,
+                    text=text,
+                    ts=int(ts or time.time()),
+                    channel=self._platform,
+                    metadata=metadata,
+                )
+                if wrote:
+                    inserted += 1
+            except Exception:  # noqa: BLE001
+                log.exception("memex-hermes: tail insert failed")
+            # Advance the pointer even on dup so we don't loop on the same row.
+            self._last_state_db_msg_id = max(
+                self._last_state_db_msg_id, int(hermes_id)
+            )
+
+        if inserted:
+            try:
+                store.upsert_conversation(
+                    conversation_id=self._conv_id,
+                    title=self._conv_id,
+                    last_ts=int(time.time()),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        return inserted
+
     # ----- Capture: primary per-turn hook -----
 
     def sync_turn(
@@ -210,7 +400,7 @@ class MemexMemoryProvider(MemoryProvider):
         session_id: str,
     ) -> None:
         """Actual write — runs in background thread."""
-        if not self._store:
+        if not self._ensure_store():
             return
         with self._sync_lock:
             ts = int(time.time())
@@ -284,9 +474,24 @@ class MemexMemoryProvider(MemoryProvider):
         Safety net — if any sync_turn writes failed (background thread
         crashed, DB locked, etc.), this re-inserts the entire session
         history idempotently via UNIQUE(msg_id) dedup.
+
+        v0.1.2: re-opens the store via _ensure_store() because Hermes
+        sometimes calls this AFTER shutdown() has already closed it.
+        Also tails state.db one final time to catch the last turn(s)
+        Hermes never sync_turn'd for resumed sessions.
         """
-        if not self._store or not messages:
+        if not messages:
             return
+        if not self._ensure_store():
+            return
+
+        # Final state.db tail to grab anything queue_prefetch missed
+        # (e.g. the most recent turn fires session_end before any
+        # subsequent prefetch).
+        try:
+            self._tail_state_db()
+        except Exception:  # noqa: BLE001
+            log.exception("memex-hermes: final state.db tail failed")
         try:
             now = int(time.time())
             for i, msg in enumerate(messages):
@@ -319,7 +524,8 @@ class MemexMemoryProvider(MemoryProvider):
         dedicated conv_id `hermes-memory-file-<target>` so it doesn't
         clutter dialogue threads.
         """
-        if not self._store:
+        store = self._ensure_store()
+        if not store:
             return
         if not content or not content.strip():
             return
@@ -327,7 +533,7 @@ class MemexMemoryProvider(MemoryProvider):
             mirror_conv = derive_memory_file_conv_id(target)
             text = f"[{action} {target}] {content}"
             msg_id = derive_msg_id("system", text, mirror_conv)
-            self._store.insert_message(
+            store.insert_message(
                 conversation_id=mirror_conv,
                 msg_id=msg_id,
                 role="system",
@@ -342,7 +548,7 @@ class MemexMemoryProvider(MemoryProvider):
                     "session_id": self._session_id,
                 },
             )
-            self._store.upsert_conversation(
+            store.upsert_conversation(
                 conversation_id=mirror_conv,
                 title=f"[memory] {target}",
                 last_ts=int(time.time()),
@@ -359,7 +565,9 @@ class MemexMemoryProvider(MemoryProvider):
         the compression summary so the model knows the original details
         are recoverable via memex_search/memex_get.
         """
-        if not self._store or not messages:
+        if not messages:
+            return ""
+        if not self._ensure_store():
             return ""
         try:
             saved = 0
@@ -403,7 +611,7 @@ class MemexMemoryProvider(MemoryProvider):
         the result it returned. Subagent's own session is captured under
         its own session_id; this hook adds the parent-side observation.
         """
-        if not self._store:
+        if not self._ensure_store():
             return
         try:
             now = int(time.time())
@@ -445,7 +653,27 @@ class MemexMemoryProvider(MemoryProvider):
             return ""
 
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
-        """Asynchronous background recall after a turn — caches for next turn."""
+        """Asynchronous background recall after a turn — caches for next turn.
+
+        v0.1.2: ALSO tails Hermes' state.db here. Hermes skips sync_turn
+        for resumed sessions, but it always writes to state.db for its
+        own persistence. queue_prefetch fires on every turn including
+        resumed ones — so we ride that hook to catch missed turns.
+        Background thread: tail runs in a daemon, doesn't block Hermes.
+        """
+        def _background() -> None:
+            try:
+                inserted = self._tail_state_db()
+                if inserted:
+                    log.debug(
+                        "memex-hermes: state.db tail captured %d row(s)",
+                        inserted,
+                    )
+            except Exception:  # noqa: BLE001
+                log.exception("memex-hermes: tail in queue_prefetch failed")
+
+        threading.Thread(target=_background, daemon=True, name="memex-hermes-tail").start()
+
         if not self._prefetch:
             return
         try:
@@ -517,8 +745,17 @@ class MemexMemoryProvider(MemoryProvider):
     # ----- Shutdown -----
 
     def shutdown(self) -> None:
-        """Cleanup on Hermes exit. Flush in-flight syncs, close DB."""
+        """Cleanup on Hermes exit. Flush in-flight syncs, close DB.
+
+        v0.1.2: Hermes sometimes calls on_session_end AFTER shutdown
+        in v0.10.x. We set a flag so background work (state.db tail)
+        stops, but we keep the store openable — every hook now uses
+        _ensure_store() which re-opens transparently if a post-shutdown
+        call arrives. Sets `_shutdown_requested = True` so any future
+        tail no-ops.
+        """
         log.info("memex-hermes shutting down")
+        self._shutdown_requested = True
         try:
             if self._prefetch:
                 self._prefetch.shutdown()
@@ -529,3 +766,9 @@ class MemexMemoryProvider(MemoryProvider):
                 self._store.close()
         except Exception:  # noqa: BLE001
             log.exception("memex-hermes store close failed")
+        # NOTE: we deliberately do NOT set self._store = None. If Hermes
+        # calls on_session_end after shutdown (observed empirically in
+        # v0.10.x), _ensure_store() detects the closed connection and
+        # re-opens. Setting None would force a full re-init that races
+        # with the connection close. Leaving the object lets the next
+        # hook see "old conn, broken" → re-open cleanly.

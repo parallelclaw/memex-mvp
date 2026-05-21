@@ -44,16 +44,27 @@ class TestShimInstall(unittest.TestCase):
     def test_init_creates_files(self):
         rc = install_shim.cmd_init(self._args())
         self.assertEqual(rc, 0)
-        init_py = self.hermes_home / "plugins" / "memory" / "memex" / "__init__.py"
-        plugin_yaml = self.hermes_home / "plugins" / "memory" / "memex" / "plugin.yaml"
+        # Correct path per Hermes' _iter_provider_dirs (user-installed
+        # plugins live directly in ~/.hermes/plugins/<name>/, no memory/
+        # subdir). v0.1.0 had the wrong path; v0.1.1+ fixed.
+        init_py = self.hermes_home / "plugins" / "memex" / "__init__.py"
+        plugin_yaml = self.hermes_home / "plugins" / "memex" / "plugin.yaml"
         self.assertTrue(init_py.exists())
         self.assertTrue(plugin_yaml.exists())
+
+    def test_init_does_NOT_use_legacy_memory_subdir(self):
+        """v0.1.0 created the shim at plugins/memory/memex/ — wrong path.
+        v0.1.1+ must NOT create that directory."""
+        install_shim.cmd_init(self._args())
+        wrong_path = self.hermes_home / "plugins" / "memory" / "memex"
+        self.assertFalse(wrong_path.exists(),
+                         "shim must not be at the legacy 0.1.0 path")
 
     def test_init_satisfies_hermes_text_scan(self):
         """Hermes scans __init__.py text for MemoryProvider OR register_memory_provider.
         Our shim must contain at least one of those strings."""
         install_shim.cmd_init(self._args())
-        init_py = self.hermes_home / "plugins" / "memory" / "memex" / "__init__.py"
+        init_py = self.hermes_home / "plugins" / "memex" / "__init__.py"
         content = init_py.read_text(encoding="utf-8")
         has_marker = (
             "MemoryProvider" in content
@@ -64,9 +75,9 @@ class TestShimInstall(unittest.TestCase):
     def test_init_idempotent(self):
         # Two inits in a row → both succeed, file content stays same.
         install_shim.cmd_init(self._args())
-        content_a = (self.hermes_home / "plugins" / "memory" / "memex" / "__init__.py").read_text()
+        content_a = (self.hermes_home / "plugins" / "memex" / "__init__.py").read_text()
         install_shim.cmd_init(self._args())
-        content_b = (self.hermes_home / "plugins" / "memory" / "memex" / "__init__.py").read_text()
+        content_b = (self.hermes_home / "plugins" / "memex" / "__init__.py").read_text()
         self.assertEqual(content_a, content_b)
 
     def test_init_missing_hermes_home_errors(self):
@@ -77,18 +88,77 @@ class TestShimInstall(unittest.TestCase):
 
     def test_plugin_yaml_has_name_and_version(self):
         install_shim.cmd_init(self._args())
-        yaml_path = self.hermes_home / "plugins" / "memory" / "memex" / "plugin.yaml"
+        yaml_path = self.hermes_home / "plugins" / "memex" / "plugin.yaml"
         content = yaml_path.read_text(encoding="utf-8")
         self.assertIn("name: memex", content)
         self.assertIn("version:", content)
 
     def test_uninstall_removes_shim(self):
         install_shim.cmd_init(self._args())
-        shim_dir = self.hermes_home / "plugins" / "memory" / "memex"
+        shim_dir = self.hermes_home / "plugins" / "memex"
         self.assertTrue(shim_dir.exists())
         rc = install_shim.cmd_uninstall(self._args())
         self.assertEqual(rc, 0)
         self.assertFalse(shim_dir.exists())
+
+    def test_init_migrates_legacy_0_1_0_path(self):
+        """v0.1.0 left the shim at the wrong path. v0.1.1+ init should
+        detect and clean it up so users don't have to manually mv."""
+        # Simulate a 0.1.0 install: shim at wrong path.
+        legacy_dir = self.hermes_home / "plugins" / "memory" / "memex"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "__init__.py").write_text("from memex_hermes import register\n")
+
+        rc = install_shim.cmd_init(self._args())
+        self.assertEqual(rc, 0)
+
+        # Legacy path gone, new path present.
+        self.assertFalse(legacy_dir.exists(), "legacy 0.1.0 shim should be removed")
+        new_dir = self.hermes_home / "plugins" / "memex"
+        self.assertTrue(new_dir.exists())
+        self.assertTrue((new_dir / "__init__.py").exists())
+
+    def test_init_migrates_and_removes_empty_memory_parent(self):
+        """When migrating from 0.1.0, the now-empty plugins/memory/
+        directory should also be cleaned up (if nothing else is in it)."""
+        legacy_dir = self.hermes_home / "plugins" / "memory" / "memex"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "__init__.py").write_text("# stub")
+
+        install_shim.cmd_init(self._args())
+
+        # plugins/memory/ was created only for our shim — should be gone.
+        legacy_parent = self.hermes_home / "plugins" / "memory"
+        self.assertFalse(legacy_parent.exists())
+
+    def test_init_preserves_other_plugins_in_legacy_dir(self):
+        """If user has other plugins in plugins/memory/ (e.g. they
+        manually placed them there for some reason), don't delete it."""
+        legacy_dir = self.hermes_home / "plugins" / "memory" / "memex"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "__init__.py").write_text("# old")
+        # Decoy: another plugin in the same parent
+        decoy = self.hermes_home / "plugins" / "memory" / "other-plugin"
+        decoy.mkdir()
+        (decoy / "__init__.py").write_text("# someone else's")
+
+        install_shim.cmd_init(self._args())
+
+        # Our legacy gone, decoy preserved, parent kept.
+        self.assertFalse(legacy_dir.exists())
+        self.assertTrue(decoy.exists())
+        self.assertTrue((decoy / "__init__.py").exists())
+
+    def test_uninstall_also_removes_legacy(self):
+        """Uninstall should clean up both correct path AND legacy path
+        in case a user installed 0.1.0 and never re-ran init."""
+        legacy_dir = self.hermes_home / "plugins" / "memory" / "memex"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "__init__.py").write_text("# stub")
+
+        rc = install_shim.cmd_uninstall(self._args())
+        self.assertEqual(rc, 0)
+        self.assertFalse(legacy_dir.exists())
 
     def test_uninstall_when_not_installed(self):
         # Should be a no-op exit-0, not an error.
@@ -124,7 +194,7 @@ class TestEnvHermesHome(unittest.TestCase):
                 ns = argparse.Namespace(hermes_home=None)
                 rc = install_shim.cmd_init(ns)
                 self.assertEqual(rc, 0)
-                self.assertTrue((hermes / "plugins" / "memory" / "memex" / "__init__.py").exists())
+                self.assertTrue((hermes / "plugins" / "memex" / "__init__.py").exists())
             finally:
                 os.environ.pop("HERMES_HOME", None)
 

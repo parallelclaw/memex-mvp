@@ -1,13 +1,18 @@
 """Install / uninstall the Hermes plugin shim.
 
 Hermes Agent discovers plugins by **scanning folders** at:
-  • <hermes_agent>/plugins/memory/<name>/   (bundled)
-  • ~/.hermes/plugins/<name>/                (user-installed)
+  • <hermes_agent>/plugins/memory/<name>/   (bundled — note the memory/ subdir)
+  • ~/.hermes/plugins/<name>/                (user-installed — NO memory/ subdir!)
 
-It does NOT use pip entry_points — verified empirically against Hermes
-v0.10.x by reading plugins/memory/__init__.py (the loader has zero
-references to importlib.metadata). So just `pip install memex-hermes`
-is not enough — Hermes won't see the plugin.
+The asymmetry between bundled and user paths is real and surprising —
+verified empirically against Hermes v0.10.x in plugins/memory/__init__.py
+function `_iter_provider_dirs()` (lines 87-96): it iterates
+`user_dir.iterdir()` directly where `user_dir = ~/.hermes/plugins/`.
+
+Hermes does NOT use pip entry_points for memory providers — that loader
+has zero references to importlib.metadata. So `pip install memex-hermes`
+alone is not enough; Hermes won't see the plugin until something exists
+at `~/.hermes/plugins/memex/__init__.py`.
 
 This module ships a thin CLI (`memex-hermes init`) that creates the
 required folder + a 3-line shim file that imports from the pip-installed
@@ -19,6 +24,11 @@ package. Benefits:
     site-packages.
   • Passes Hermes' textual scan (looks for `register_memory_provider`
     OR `MemoryProvider` in __init__.py).
+
+Also detects and migrates the (incorrect) 0.1.0 path at
+`~/.hermes/plugins/memory/memex/` left over from the pre-publish test
+build — moves it to the correct `~/.hermes/plugins/memex/` so retest
+without manual `mv` works.
 
 If Hermes adds entry_points support later, the pyproject.toml entry
 point declaration is already there for free — no work needed at that
@@ -75,6 +85,22 @@ def _resolve_hermes_home(explicit: Optional[str] = None) -> Path:
 
 
 def _shim_path(hermes_home: Path) -> Path:
+    """Where the shim must live for Hermes to discover it.
+
+    User-installed plugins go DIRECTLY in ~/.hermes/plugins/<name>/.
+    The `memory/` subdir convention is bundled-only — Hermes' loader
+    iterates `~/.hermes/plugins/` directly via `_iter_provider_dirs()`.
+    """
+    return hermes_home / "plugins" / SHIM_DIR_NAME
+
+
+def _legacy_shim_path(hermes_home: Path) -> Path:
+    """Path used by memex-hermes 0.1.0 (wrong — had extra `memory/` subdir).
+
+    Kept for one-time migration: when 0.1.1+ `init` runs, if shim exists
+    at this path, we move it to the correct one so users who installed
+    0.1.0 don't have to manually `mv` again.
+    """
     return hermes_home / "plugins" / "memory" / SHIM_DIR_NAME
 
 
@@ -92,6 +118,25 @@ def cmd_init(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # One-time migration: 0.1.0 created the shim at the wrong path
+    # (`plugins/memory/memex/` instead of `plugins/memex/`). Detect and
+    # clean up to spare users a manual `mv`. The wrong path was inert —
+    # Hermes never read from it — so removing the legacy directory is
+    # safe.
+    legacy = _legacy_shim_path(hermes_home)
+    legacy_migrated = False
+    if legacy.exists() and legacy.is_dir():
+        shutil.rmtree(legacy)
+        legacy_migrated = True
+        # Also remove the now-orphan `plugins/memory/` dir if it's empty
+        # (it was created only because we wrote into it).
+        legacy_parent = legacy.parent
+        try:
+            if not any(legacy_parent.iterdir()):
+                legacy_parent.rmdir()
+        except OSError:
+            pass
 
     shim_dir = _shim_path(hermes_home)
     shim_dir.mkdir(parents=True, exist_ok=True)
@@ -122,6 +167,8 @@ pip_dependencies: []
     print(f"   • {init_file}")
     print(f"   • {plugin_yaml}")
     print(f"   • Python import check: {_ok}")
+    if legacy_migrated:
+        print(f"   • Migrated from legacy 0.1.0 path: {legacy}")
     print()
     print("Next steps:")
     print(f"   1. Add to ~/.hermes/config.yaml:")
@@ -136,11 +183,21 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     """Remove the shim folder. Does NOT uninstall the pip package itself."""
     hermes_home = _resolve_hermes_home(args.hermes_home)
     shim_dir = _shim_path(hermes_home)
-    if not shim_dir.exists():
-        print(f"Nothing to uninstall — no shim at {shim_dir}.")
+    legacy = _legacy_shim_path(hermes_home)
+
+    removed_any = False
+    if shim_dir.exists():
+        shutil.rmtree(shim_dir)
+        print(f"✅ Removed shim at {shim_dir}")
+        removed_any = True
+    if legacy.exists():
+        shutil.rmtree(legacy)
+        print(f"✅ Removed legacy 0.1.0 shim at {legacy}")
+        removed_any = True
+
+    if not removed_any:
+        print(f"Nothing to uninstall — no shim at {shim_dir} (or legacy path).")
         return 0
-    shutil.rmtree(shim_dir)
-    print(f"✅ Removed shim at {shim_dir}")
     print("   The pip package memex-hermes is still installed.")
     print("   To remove that too: `pip uninstall memex-hermes`")
     return 0

@@ -44,7 +44,7 @@ memex-hermes init
 # 4. Restart Hermes. The plugin auto-activates.
 ```
 
-**Why the extra `init` step?** Hermes' memory-provider discovery is folder-based, not entry-point-based (verified by reading `plugins/memory/__init__.py` in hermes-agent v0.10.x). The `init` command creates a 3-line shim at `~/.hermes/plugins/memory/memex/__init__.py` that imports from the pip-installed package. Benefits:
+**Why the extra `init` step?** Hermes' memory-provider discovery is folder-based, not entry-point-based (verified by reading `plugins/memory/__init__.py` in hermes-agent v0.10.x). The `init` command creates a 3-line shim at `~/.hermes/plugins/memex/__init__.py` that imports from the pip-installed package. (Note the asymmetry: **bundled** Hermes plugins live at `<hermes-agent>/plugins/memory/<name>/`, but **user** plugins live at `~/.hermes/plugins/<name>/` — no `memory/` subdir. We follow Hermes' actual discovery code.) Benefits:
 
 - **Auto-upgrades**: `pip install -U memex-hermes` updates the plugin on next Hermes restart. No need to re-run init.
 - **Tiny on-disk footprint** in `~/.hermes/`: just a stub, all real code lives in pip site-packages.

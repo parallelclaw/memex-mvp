@@ -14,7 +14,28 @@
  * while we write.
  */
 
-import Database from 'better-sqlite3';
+// v0.1.1: dynamic import + helpful error message for environments where
+// better-sqlite3's native binary failed to install (small-VPS OOM during
+// gyp rebuild, --ignore-scripts during plugin install, etc.). Bug 4 from
+// the 2026-05-21 VPS test report.
+let Database;
+try {
+  Database = (await import('better-sqlite3')).default;
+} catch (err) {
+  const helpful = new Error(
+    'memex-openclaw: failed to load better-sqlite3 native binary.\n' +
+    '  Original error: ' + err.message + '\n' +
+    '  This usually means the prebuilt binary download failed during\n' +
+    '  `openclaw plugins install` (often blocked by --ignore-scripts).\n' +
+    '  Manual fix:\n' +
+    '    cd ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw\n' +
+    '    npm rebuild better-sqlite3\n' +
+    '  Then `openclaw gateway restart`.\n' +
+    '  On low-memory VPS where rebuild OOMs: `npm rebuild better-sqlite3 --build-from-source=false` to force prebuilt-only.',
+  );
+  helpful.cause = err;
+  throw helpful;
+}
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { homedir } from 'node:os';

@@ -2,34 +2,45 @@
  * memex-openclaw — OpenClaw plugin that captures every turn verbatim
  * into the memex unified SQLite corpus.
  *
- * Replaces the v0.11.x file-watcher daemon approach. This plugin:
- *   • Subscribes to `agent_end` for per-turn capture — no file watching
- *   • Subscribes to `before_compaction` to preserve messages before
- *     they're dropped from active context
- *   • Subscribes to `session_end` as a safety-net flush
- *   • Registers a `MemoryCorpusSupplement` so the model's built-in
- *     `memory_search` tool sees memex content alongside workspace memory
- *
- * Channel detection: zero parsing. OpenClaw 2026.5+ hands us
- * `ctx.messageProvider` (e.g. "telegram") and `ctx.channelId` (e.g.
- * "97592799") directly in the hook context.
- *
- * Storage: ~/.memex/data/memex.db (override via plugin config db_path).
- * Schema parity with memex-mvp (npm) and memex-hermes (pip) — all three
- * write to the same database with the same UNIQUE-constraint dedup.
+ * v0.1.1 changes from 0.1.0:
+ *   • Removed `kind: "memory"` — conflicted with memory-core's exclusive
+ *     memory slot (bug 3 from 2026-05-21 VPS test report).
+ *   • Replaced `registerMemoryCorpusSupplement` with `api.registerTool`
+ *     — corpus supplement API is not exported to external (npm) plugins
+ *     in OpenClaw 2026.5.x (bug 2).
+ *   • Hardened defensive logging: writes to /tmp/memex-openclaw-debug.log
+ *     at the very first line of register() so we can verify register()
+ *     fires at all on gateway restart (bug 1 diagnostic instrumentation).
  *
  * @see openclaw.plugin.json for manifest
  * @see package.json for npm distribution
  */
 
-import {
-  definePluginEntry,
-  registerMemoryCorpusSupplement,
-} from 'openclaw/plugin-sdk/core';
+import { definePluginEntry } from 'openclaw/plugin-sdk/core';
+import { appendFileSync } from 'node:fs';
 
 import { MemexStore } from './lib/store.js';
 import { deriveConvId, deriveMsgId, extractText } from './lib/conv_id.js';
-import { buildCorpusSupplement } from './lib/corpus_supplement.js';
+import { registerMemexTools } from './lib/tools.js';
+
+// v0.1.1 BUG-1 DIAGNOSTIC: trace register() invocations to a file the
+// user can grep. v0.1.0 had a problem where register() was called
+// during `openclaw plugins install` but NOT on `gateway restart` for
+// external (npm-installed) plugins. This trace will tell us if the
+// problem persists in 0.1.1 or got fixed by changes to manifest.
+function traceRegister(msg) {
+  try {
+    appendFileSync(
+      '/tmp/memex-openclaw-debug.log',
+      `[${new Date().toISOString()}] ${msg}\n`,
+      { mode: 0o644 },
+    );
+  } catch {
+    /* /tmp not writable? whatever — diag-only */
+  }
+}
+
+traceRegister('module loaded (top-level)');
 
 export default definePluginEntry({
   id: 'memex-openclaw',
@@ -37,55 +48,66 @@ export default definePluginEntry({
   description:
     'Captures every OpenClaw turn verbatim into the memex unified SQLite corpus. ' +
     'Pair with memex-mvp (npm) to search OpenClaw + Hermes + Claude Code + Telegram from one place.',
-  kind: 'memory',
 
   register(api) {
+    traceRegister('register() called — gateway recognised plugin');
+
     const logger = api.logger;
     const cfg = api.pluginConfig || {};
     let store;
 
     try {
       store = new MemexStore(cfg.dbPath);
-      logger.info(`memex-openclaw: opened ${store.dbPath} (current rows: ${store.count()})`);
+      const initialCount = store.count();
+      logger.info(
+        `memex-openclaw: opened ${store.dbPath} (current rows: ${initialCount})`,
+      );
+      traceRegister(`store opened: ${store.dbPath}, rows=${initialCount}`);
     } catch (err) {
       logger.error(`memex-openclaw: failed to open memex.db: ${err.message}`);
-      return; // can't operate without store
+      traceRegister(`store open FAILED: ${err.message}`);
+      // v0.1.1: do NOT early-return. We still register tools (even if they
+      // fail later) so the user can see the plugin is at least live and
+      // diagnose. Capture hooks will no-op cleanly if store is null.
     }
 
-    // -------------------------------------------------------------
-    // 1. Primary capture — every turn that completes successfully
-    // -------------------------------------------------------------
+    // ------------------------------------------------------------
+    // 1. Primary capture — every successful turn
+    // ------------------------------------------------------------
     api.on('agent_end', async (event, ctx) => {
-      if (!event?.success) return; // failed turns are skipped (LLM error, etc.)
+      if (!store) return;
+      if (!event?.success) return;
       try {
         const platform = ctx?.messageProvider || 'unknown';
         const channelId = ctx?.channelId;
         const sessionId = ctx?.sessionId;
         const agentId = ctx?.agentId || 'main';
-        const convId = deriveConvId({ messageProvider: platform, channelId, sessionId });
+        const convId = deriveConvId({
+          messageProvider: platform,
+          channelId,
+          sessionId,
+        });
 
-        // Capture only the LAST TURN's user + assistant messages —
-        // earlier history was captured by prior agent_end invocations.
-        // (OpenClaw passes full conversation history but most of it is
-        // already in memex.db from previous turns; UNIQUE dedup makes
-        // re-inserting harmless but wasteful.)
+        // Capture only the LAST TURN's user + assistant messages.
+        // OpenClaw passes full history but earlier turns were already
+        // captured by prior agent_end invocations; UNIQUE dedup makes
+        // re-insertion harmless but wasteful.
         const messages = Array.isArray(event.messages) ? event.messages : [];
         const lastTurn = messages.slice(-2);
-
         const baseTs = Math.floor(Date.now() / 1000);
+
         for (let i = 0; i < lastTurn.length; i++) {
           const msg = lastTurn[i];
           if (!msg || (msg.role !== 'user' && msg.role !== 'assistant')) continue;
           const text = extractText(msg);
           if (!text || !text.trim()) continue;
 
-          const msgId = deriveMsgId({ role: msg.role, text, convId });
           store.insertMessage({
             conversationId: convId,
-            msgId,
+            msgId: deriveMsgId({ role: msg.role, text, convId }),
             role: msg.role,
             text,
-            ts: baseTs + i, // tiny offset to preserve order
+            ts: baseTs + i,
             channel: platform,
             metadata: {
               raw_type: 'openclaw-agent-end',
@@ -100,7 +122,6 @@ export default definePluginEntry({
           });
         }
 
-        // Keep conversations.last_ts current.
         store.upsertConversation({
           conversationId: convId,
           title: convId,
@@ -112,10 +133,11 @@ export default definePluginEntry({
       }
     });
 
-    // -------------------------------------------------------------
+    // ------------------------------------------------------------
     // 2. Preserve messages before they're compacted out of context
-    // -------------------------------------------------------------
+    // ------------------------------------------------------------
     api.on('before_compaction', async (event, ctx) => {
+      if (!store) return;
       try {
         const messages = Array.isArray(event?.messages) ? event.messages : [];
         if (messages.length === 0) return;
@@ -123,9 +145,13 @@ export default definePluginEntry({
         const platform = ctx?.messageProvider || 'unknown';
         const channelId = ctx?.channelId;
         const sessionId = ctx?.sessionId;
-        const convId = deriveConvId({ messageProvider: platform, channelId, sessionId });
-
+        const convId = deriveConvId({
+          messageProvider: platform,
+          channelId,
+          sessionId,
+        });
         const baseTs = Math.floor(Date.now() / 1000);
+
         let saved = 0;
         for (let i = 0; i < messages.length; i++) {
           const msg = messages[i];
@@ -158,45 +184,48 @@ export default definePluginEntry({
       }
     });
 
-    // -------------------------------------------------------------
-    // 3. Session-end safety net — flush the full final history
-    // -------------------------------------------------------------
+    // ------------------------------------------------------------
+    // 3. Session-end safety net
+    // ------------------------------------------------------------
     api.on('session_end', async (event, ctx) => {
+      if (!store) return;
       try {
-        // session_end doesn't carry messages[] in OpenClaw 2026.5 —
-        // we have sessionId + sessionKey + reason. The hook serves as
-        // a marker that this conv is "done"; we update conv last_ts
-        // and let agent_end captures already-in-DB stand.
         const platform = ctx?.messageProvider || 'unknown';
         const channelId = ctx?.channelId;
         const sessionId = event?.sessionId || ctx?.sessionId;
-        const convId = deriveConvId({ messageProvider: platform, channelId, sessionId });
+        const convId = deriveConvId({
+          messageProvider: platform,
+          channelId,
+          sessionId,
+        });
         store.upsertConversation({
           conversationId: convId,
           title: convId,
           lastTs: Math.floor(Date.now() / 1000),
         });
-        logger.debug(`memex-openclaw: session_end conv=${convId} reason=${event?.reason}`);
       } catch (err) {
         logger.error(`memex-openclaw: session_end failed: ${err.message}`);
       }
     });
 
-    // -------------------------------------------------------------
-    // 4. Expose memex contents to OpenClaw's built-in memory_search
-    // -------------------------------------------------------------
-    try {
-      const supplement = buildCorpusSupplement(store, logger);
-      registerMemoryCorpusSupplement('memex-openclaw', supplement);
-      logger.info('memex-openclaw: registered as memory corpus supplement');
-    } catch (err) {
-      // Non-fatal — capture still works without supplement registration.
-      logger.warn(
-        `memex-openclaw: could not register corpus supplement: ${err.message} ` +
-        '(capture still active; built-in memory_search will not surface memex rows)',
-      );
+    // ------------------------------------------------------------
+    // 4. Register tools the LLM can call directly
+    //    (v0.1.1: replaces registerMemoryCorpusSupplement which is
+    //    not exported to external plugins in OpenClaw 2026.5.x)
+    // ------------------------------------------------------------
+    if (store) {
+      try {
+        registerMemexTools(api, store, logger);
+        traceRegister('tools registered: memex_search, memex_get');
+      } catch (err) {
+        logger.error(`memex-openclaw: tool registration failed: ${err.message}`);
+        traceRegister(`tool registration FAILED: ${err.message}`);
+      }
+    } else {
+      logger.warn('memex-openclaw: store unavailable, skipping tool registration');
     }
 
-    logger.info('memex-openclaw: plugin activated');
+    logger.info('memex-openclaw: plugin activated (v0.1.1)');
+    traceRegister('register() returned — hooks active');
   },
 });

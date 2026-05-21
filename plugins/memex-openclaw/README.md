@@ -9,16 +9,22 @@ Replaces the v0.11.x `memex-sync` file-watcher daemon. Captures via OpenClaw's n
 
 ## What it does
 
-Three lifecycle hooks + one corpus supplement:
+Three lifecycle hooks + two LLM-facing tools:
 
 | Hook | What we do |
 |---|---|
 | `agent_end` | Insert the just-completed turn's user + assistant messages into memex.db, verbatim. Channel comes from `ctx.messageProvider` — no parsing. |
 | `before_compaction` | Save messages that are about to be dropped from active context. They become searchable from memex even after OpenClaw forgets them. |
 | `session_end` | Update conversation last_ts. Safety-net marker. |
-| `registerMemoryCorpusSupplement` | Memex contents are surfaced through OpenClaw's built-in `memory_search` / `memory_get` tools — the model sees memex rows alongside workspace memory in one search result. |
+
+| Tool | What it does |
+|---|---|
+| `memex_search(query, limit?)` | FTS5 lexical search across all captured sources. Returns IDs + 100-char previews (cheap — Tier 1 of progressive disclosure). |
+| `memex_get(ids)` | Full verbatim text by record ID. Use after `memex_search` to read the records that look relevant (Tier 2). |
 
 Storage: `~/.memex/data/memex.db` (override via plugin config `dbPath`). Same SQLite schema as memex-mvp (npm) and memex-hermes (pip) — all three can write to the same DB concurrently.
+
+> **v0.1.0 used `registerMemoryCorpusSupplement` to surface memex content through OpenClaw's built-in `memory_search`.** Turned out that API is not exported to npm-installed (external) plugins in OpenClaw 2026.5.x — only to bundled ones. v0.1.1 switched to standalone tools, which work everywhere.
 
 ## Install
 
@@ -73,6 +79,40 @@ Restart OpenClaw:
 ```bash
 openclaw gateway restart
 ```
+
+### If `MemexStore` fails to open (better-sqlite3 native binary missing)
+
+`openclaw plugins install` may run npm install with `--ignore-scripts`, which skips better-sqlite3's postinstall script that downloads the prebuilt native binary. Result: at runtime the plugin can't open the DB.
+
+Manual fix:
+
+```bash
+cd ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw
+npm rebuild better-sqlite3
+# On low-memory VPS where gyp rebuild OOMs, force prebuilt-only:
+#   npm rebuild better-sqlite3 --build-from-source=false
+openclaw gateway restart
+```
+
+### Bug-1 diagnostic (v0.1.1)
+
+If after install the plugin appears `loaded` in `openclaw plugins inspect memex-openclaw` but no rows are captured, check the diagnostic trace file we write at the top of every `register()` invocation:
+
+```bash
+cat /tmp/memex-openclaw-debug.log
+```
+
+A correct sequence looks like:
+
+```
+2026-... module loaded (top-level)
+2026-... register() called — gateway recognised plugin
+2026-... store opened: ~/.memex/data/memex.db, rows=N
+2026-... tools registered: memex_search, memex_get
+2026-... register() returned — hooks active
+```
+
+If only the first line is present and nothing else fires on `openclaw gateway restart`, OpenClaw is not invoking the plugin's `register()` function for external (npm-installed) plugins. Open an issue on the repo with the full diagnostic file content.
 
 ## Conversation routing
 

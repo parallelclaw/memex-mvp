@@ -1,0 +1,66 @@
+{
+  "name": "@parallelclaw/memex-openclaw",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin that captures every turn verbatim into the memex unified SQLite corpus. Pair with memex-mvp for one searchable history across OpenClaw, Hermes, Claude Code, Telegram, and more.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.5.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": false
+    }
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "memex",
+    "memory",
+    "verbatim",
+    "local-first",
+    "sqlite",
+    "fts5",
+    "parallelclaw",
+    "ai-memory"
+  ],
+  "author": {
+    "name": "parallelclaw",
+    "email": "sedelev@gmail.com",
+    "url": "https://memex.parallelclaw.ai"
+  },
+  "license": "MIT",
+  "homepage": "https://memex.parallelclaw.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parallelclaw/memex-mvp.git",
+    "directory": "plugins/memex-openclaw"
+  },
+  "bugs": {
+    "url": "https://github.com/parallelclaw/memex-mvp/issues"
+  }
+}

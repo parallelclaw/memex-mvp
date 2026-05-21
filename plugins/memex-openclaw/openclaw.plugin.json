@@ -1,0 +1,17 @@
+{
+  "id": "memex-openclaw",
+  "name": "Memex",
+  "description": "Captures every OpenClaw turn verbatim into the memex unified SQLite corpus. Pair with memex-mvp (npm) to search OpenClaw + Hermes + Claude Code + Telegram from one place.",
+  "version": "0.1.0",
+  "kind": "memory",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "memoryCorpusSupplements": ["memex-openclaw"]
+  },
+  "uiHints": {
+    "category": "memory",
+    "displayName": "Memex (verbatim corpus)"
+  }
+}

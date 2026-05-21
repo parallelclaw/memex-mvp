@@ -36,6 +36,16 @@ If the user ALREADY ran [`install-memex`](https://clawhub.ai/sedelev/install-mem
 
 Conversely, if the user has Claude Code / Cursor / Telegram on this same machine and wants those captured too, recommend running `install-memex` separately AFTER this skill completes. This skill focuses strictly on the OpenClaw wiring.
 
+**If the user ALSO runs Hermes Agent** ([NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)) on this machine, suggest they additionally install [`memex-hermes`](https://pypi.org/project/memex-hermes/) — a sibling plugin published separately:
+
+```bash
+pip install memex-hermes
+memex-hermes init
+# then add `memory.provider: "memex"` to ~/.hermes/config.yaml
+```
+
+It uses the same `~/.memex/data/memex.db` so Hermes conversations join the unified corpus.
+
 **The contract: zero questions to the user. Discovery → actions → verification. Each step prints a single line of result. The final message tells the user exactly what to do next (restart gateway, try a search).**
 
 ---

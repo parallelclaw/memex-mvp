@@ -24,7 +24,7 @@ memex is the **substrate**. Pair it with Mem0 / Supermemory if you want extracti
 
 ## Install
 
-Three steps: install the pip package, generate a tiny shim folder Hermes will discover, activate in config.
+Four steps. Live on [PyPI](https://pypi.org/project/memex-hermes/) — no git URL needed.
 
 ```bash
 # 1. Install into Hermes' Python environment (recommended)
@@ -33,8 +33,8 @@ uv pip install memex-hermes --python $HOME/.hermes/hermes-agent/venv/bin/python
 pip install memex-hermes
 
 # 2. Create the shim folder Hermes discovers
-#    (Hermes scans ~/.hermes/plugins/memory/ — pip entry_points are NOT used
-#    for memory provider discovery as of Hermes v0.10.x.)
+#    (Hermes scans ~/.hermes/plugins/<name>/ directly — no entry_points
+#    are used for memory provider discovery as of Hermes v0.10.x.)
 memex-hermes init
 
 # 3. Activate in Hermes config — edit ~/.hermes/config.yaml:

@@ -2,9 +2,21 @@
   "id": "memex-openclaw",
   "name": "Memex",
   "description": "Captures every OpenClaw turn verbatim into the memex unified SQLite corpus. Pair with memex-mvp (npm) to search OpenClaw + Hermes + Claude Code + Telegram from one place.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "activation": {
     "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "dbPath": {
+        "type": "string",
+        "title": "memex.db path",
+        "description": "Override location of the memex SQLite file. Default is ~/.memex/data/memex.db (shared with memex-mvp + memex-hermes).",
+        "default": "~/.memex/data/memex.db"
+      }
+    },
+    "additionalProperties": false
   },
   "contracts": {
     "tools": ["memex_search", "memex_get"]

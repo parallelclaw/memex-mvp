@@ -1,6 +1,6 @@
 {
   "name": "@parallelclaw/memex-openclaw",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenClaw plugin that captures every turn verbatim into the memex unified SQLite corpus. Pair with memex-mvp for one searchable history across OpenClaw, Hermes, Claude Code, Telegram, and more.",
   "type": "module",
   "main": "index.js",

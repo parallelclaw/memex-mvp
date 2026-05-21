@@ -16,7 +16,10 @@
  * @see package.json for npm distribution
  */
 
-import { definePluginEntry } from 'openclaw/plugin-sdk/core';
+import {
+  definePluginEntry,
+  buildJsonPluginConfigSchema,
+} from 'openclaw/plugin-sdk/core';
 import { appendFileSync } from 'node:fs';
 
 import { MemexStore } from './lib/store.js';
@@ -42,12 +45,33 @@ function traceRegister(msg) {
 
 traceRegister('module loaded (top-level)');
 
+// v0.1.2: configSchema is REQUIRED by OpenClaw 2026.5+ plugin manifest
+// validator. Bug 5 from the 2026-05-22 VPS test. Even plugins with no
+// real config need to declare a (possibly empty) schema. We expose one
+// optional field — `dbPath` — for users who want memex.db at a custom
+// location.
+const CONFIG_SCHEMA = buildJsonPluginConfigSchema({
+  type: 'object',
+  properties: {
+    dbPath: {
+      type: 'string',
+      title: 'memex.db path',
+      description:
+        'Override location of the memex SQLite file. Default is ' +
+        '~/.memex/data/memex.db (shared with memex-mvp + memex-hermes).',
+      default: '~/.memex/data/memex.db',
+    },
+  },
+  additionalProperties: false,
+});
+
 export default definePluginEntry({
   id: 'memex-openclaw',
   name: 'Memex',
   description:
     'Captures every OpenClaw turn verbatim into the memex unified SQLite corpus. ' +
     'Pair with memex-mvp (npm) to search OpenClaw + Hermes + Claude Code + Telegram from one place.',
+  configSchema: CONFIG_SCHEMA,
 
   register(api) {
     traceRegister('register() called — gateway recognised plugin');

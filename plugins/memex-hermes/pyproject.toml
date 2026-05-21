@@ -50,14 +50,19 @@ Repository = "https://github.com/parallelclaw/memex-mvp"
 Issues = "https://github.com/parallelclaw/memex-mvp/issues"
 Documentation = "https://github.com/parallelclaw/memex-mvp/tree/main/plugins/memex-hermes"
 
-# Hermes plugin auto-discovery. After `pip install memex-hermes`, the
-# Hermes runtime finds us at startup and instantiates the provider via
-# the register() function exported from memex_hermes.__init__.
+# Hermes plugin entry point — declared for forward compat with future
+# Hermes versions that may use importlib.metadata. As of Hermes v0.10.x,
+# this is IGNORED — Hermes discovers plugins purely by scanning folders
+# at ~/.hermes/plugins/memory/<name>/. The `memex-hermes init` CLI below
+# creates the required shim folder.
 [project.entry-points."hermes_agent.plugins"]
 memex = "memex_hermes"
 
-# CLI: one-shot backfill of Hermes state.db -> memex.db
+# CLIs:
+#   memex-hermes          install/uninstall/status the Hermes plugin shim
+#   memex-hermes-backfill one-shot import of ~/.hermes/state.db → memex.db
 [project.scripts]
+memex-hermes = "memex_hermes.install_shim:main"
 memex-hermes-backfill = "memex_hermes.backfill:main"
 
 [tool.setuptools]

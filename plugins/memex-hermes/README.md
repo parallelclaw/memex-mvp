@@ -24,23 +24,35 @@ memex is the **substrate**. Pair it with Mem0 / Supermemory if you want extracti
 
 ## Install
 
-```bash
-# Into Hermes' Python environment (recommended pattern from Nous docs)
-uv pip install memex-hermes --python $HOME/.hermes/hermes-agent/venv/bin/python
+Three steps: install the pip package, generate a tiny shim folder Hermes will discover, activate in config.
 
-# Or with vanilla pip (any Python that Hermes uses)
+```bash
+# 1. Install into Hermes' Python environment (recommended)
+uv pip install memex-hermes --python $HOME/.hermes/hermes-agent/venv/bin/python
+# Or with vanilla pip:
 pip install memex-hermes
 
-# Activate in Hermes config
-hermes memory setup memex
-# OR edit ~/.hermes/config.yaml directly:
+# 2. Create the shim folder Hermes discovers
+#    (Hermes scans ~/.hermes/plugins/memory/ — pip entry_points are NOT used
+#    for memory provider discovery as of Hermes v0.10.x.)
+memex-hermes init
+
+# 3. Activate in Hermes config — edit ~/.hermes/config.yaml:
 #   memory:
 #     provider: "memex"
 
-# Restart Hermes — the plugin activates on next startup
+# 4. Restart Hermes. The plugin auto-activates.
 ```
 
-memex is **zero-config** — there's nothing to set up. The DB lives at `~/.memex/data/memex.db` (override with `MEMEX_DB` env var or `~/.hermes/memex.json` containing `{"db_path": "..."}`).
+**Why the extra `init` step?** Hermes' memory-provider discovery is folder-based, not entry-point-based (verified by reading `plugins/memory/__init__.py` in hermes-agent v0.10.x). The `init` command creates a 3-line shim at `~/.hermes/plugins/memory/memex/__init__.py` that imports from the pip-installed package. Benefits:
+
+- **Auto-upgrades**: `pip install -U memex-hermes` updates the plugin on next Hermes restart. No need to re-run init.
+- **Tiny on-disk footprint** in `~/.hermes/`: just a stub, all real code lives in pip site-packages.
+- **Forward-compatible**: if a future Hermes adds entry_point support, our `pyproject.toml` already declares it and the same code works for both paths.
+
+To uninstall the plugin without touching the pip package: `memex-hermes uninstall`. To check current status: `memex-hermes status`.
+
+memex is **zero-config** — there's nothing else to set up. The DB lives at `~/.memex/data/memex.db` (override with `MEMEX_DB` env var or `~/.hermes/memex.json` containing `{"db_path": "..."}`).
 
 ## Backfill historical Hermes sessions
 

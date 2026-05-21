@@ -1,12 +1,15 @@
 name: memex
-version: 0.1.0
+version: 0.1.3
 description: |
-  Verbatim local-first memory for Hermes Agent.
+  Bridges Hermes Agent into the memex unified-memory corpus.
 
-  Stores every turn raw — no LLM extraction, no cloud, no auth, no API keys.
-  Pairs with memex-mvp (npm) for a unified corpus across Hermes, Claude Code,
-  Telegram, and other clients. Counter-positioned vs Mem0 / Supermemory /
-  hermes-memory: those extract facts, memex keeps originals.
+  If you ONLY use Hermes, its built-in memory (state.db + MEMORY.md +
+  Active Memory) likely covers your needs — installing this plugin is
+  redundant. memex-hermes earns its place when you ALSO use Claude Code /
+  OpenClaw / Cursor / Telegram and want one searchable history across all
+  of them via memex-mvp (npm).
+
+  Turns are stored verbatim — no LLM extraction, no cloud, no auth.
 
 # stdlib only — no extra packages needed.
 pip_dependencies: []

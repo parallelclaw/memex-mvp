@@ -1,28 +1,80 @@
 # memex-hermes
 
-**Verbatim local-first memory for [Hermes Agent](https://github.com/NousResearch/hermes-agent).**
-Stores every turn raw — no LLM extraction, no cloud, no auth, no API keys.
+**Bridge that joins [Hermes Agent](https://github.com/NousResearch/hermes-agent) into the memex unified-memory corpus.**
 
-## Why memex-hermes (vs Mem0 / Supermemory / hermes-memory)
+If you use Hermes alongside Claude Code / OpenClaw / Telegram / Cursor / Obsidian — this plugin lets one search find conversations across **all** of them. Hermes turns are stored verbatim in a local SQLite file shared with [memex-mvp](https://www.npmjs.com/package/memex-mvp) (npm), which captures the other clients.
 
-Most memory layers for Hermes extract "facts" from your conversations and discard the originals. That's lossy by design — if the extractor misses nuance, you can never recover it.
+> [!IMPORTANT]
+> **Status: 0.1.x — early.** Memex-hermes is in active beta. The technical surface is stable (122 tests, verified on live VPS), but the *product* still has to prove itself. **See "When you might NOT need this" below before installing.**
 
-memex-hermes does the opposite:
+## When you might NOT need this
 
-| | memex-hermes | Mem0 / Supermemory | hermes-memory |
-|---|---|---|---|
-| What's stored | **raw turns, full text** | extracted facts | structured memory |
-| Backend | local SQLite + FTS5 | cloud SaaS | local SQLite |
-| Auth / API key | **none** | required | none |
-| LLM cost at capture | **zero** | per-turn extraction | depends |
-| Restore originals | **always possible** | impossible | partial |
-| Backfill old history | ✅ `memex-hermes-backfill` | ❌ | ❌ |
-| Cross-client corpus | ✅ shared with Claude Code, OpenClaw, Telegram via `memex-mvp` | ❌ | ❌ |
-| Anthropic-eats-this risk | low (we're the substrate) | high (we'd be the layer that becomes redundant) | medium |
+Be honest with yourself first.
 
-memex is the **substrate**. Pair it with Mem0 / Supermemory if you want extraction *on top* — they'll happily index memex's verbatim store while you still hold the originals.
+Hermes ships **strong built-in memory** out of the box:
+
+- `~/.hermes/state.db` — every turn already persisted in SQLite + FTS5 (same stack we use)
+- `~/.hermes/MEMORY.md` / `USER.md` — curated long-term notes with pre-compaction auto-flush
+- Active Memory subagent — proactive recall before each reply
+- `hermes memory` CLI for searching the local store
+
+**If Hermes is your only AI assistant — built-in memory probably covers 80%+ of what you need.** Don't add memex-hermes just because it sounds cool. You'd be running two systems that write the same data, twice the IO, twice the surface area.
+
+memex-hermes only earns its install **when** you have at least one of:
+
+- ✅ You also use Claude Code / Cursor / Cline / Continue / Zed and want unified search across them
+- ✅ You also have OpenClaw (memex-mvp captures it via separate daemon) and want one corpus
+- ✅ You exported Telegram chats and want them searchable alongside Hermes sessions
+- ✅ You want a single `memex` CLI (or web dashboard) for all your AI history
+- ✅ You explicitly want the **verbatim guarantee** even for MEMORY.md edits (we mirror them)
+
+If you tick zero of those boxes — install [memex-mvp](https://www.npmjs.com/package/memex-mvp) first, get value from it with one client, then come back when you actually need the bridge.
+
+## What this plugin actually does
+
+When you have memex-mvp set up for other clients, memex-hermes makes Hermes join the party:
+
+```
+                              ┌──────────────────────────┐
+                              │   ~/.memex/data/         │
+                              │     memex.db             │
+                              │   (one unified corpus)   │
+                              └────────▲─────────────────┘
+                                       │
+              ┌─────────────┬──────────┼──────────────┬───────────────┐
+              │             │          │              │               │
+        ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌──────────┐  ┌──────────────┐
+        │ Hermes   │  │ Claude     │  │ OpenClaw   │  │ Telegram │  │ Cursor /     │
+        │          │  │ Code       │  │ (Linux VPS)│  │ exports  │  │ Continue/etc │
+        │ memex-   │  │            │  │            │  │          │  │              │
+        │ hermes   │  │ memex-mvp  │  │ memex-mvp  │  │ memex-mvp│  │ memex-mvp    │
+        │ (this)   │  │ daemon     │  │ daemon     │  │ MCP tool │  │ daemon       │
+        └──────────┘  └────────────┘  └────────────┘  └──────────┘  └──────────────┘
+
+  Then: one `memex search "tax forms"` → finds it in all of the above,
+        regardless of which client you originally discussed it in.
+```
+
+memex-hermes is the **Hermes-shaped edge** of that diagram. Without memex-mvp + at least one other source, you're paying installation cost for an isolated feature that Hermes already provides natively.
+
+## Position vs other Hermes memory plugins
+
+This isn't "the best memory for Hermes" — Hermes built-in is excellent for single-client use. It's a **different product**:
+
+| | memex-hermes | Hermes built-in | Mem0 / Supermemory | Mnemosyne / hermes-memory |
+|---|---|---|---|---|
+| Designed for | multi-client unified history | Hermes-only | extract + recall across sessions | sophisticated Hermes-only recall |
+| Storage | verbatim SQLite | verbatim SQLite (state.db) | extracted facts, cloud | structured/vector |
+| Shared corpus with other clients | ✅ via memex-mvp | ❌ | ❌ | ❌ |
+| Auth / API key | none | none | required (Mem0 cloud) | none |
+| Verbatim recall | always | always | impossible | partial |
+| Vector search | ❌ (planned v0.2) | ❌ | ✅ | ✅ |
+| Right pick if you... | use 2+ AI clients | only use Hermes | want LLM-extracted facts | want fancy in-Hermes recall |
 
 ## Install
+
+> [!TIP]
+> **First install [memex-mvp](https://www.npmjs.com/package/memex-mvp) (`npm i -g memex-mvp`) and set it up for at least one other client** (Claude Code is the easiest start). Then memex-hermes has something to bridge into. Installing memex-hermes alone makes little sense — see "When you might NOT need this" above.
 
 Four steps. Live on [PyPI](https://pypi.org/project/memex-hermes/) — no git URL needed.
 
@@ -140,10 +192,22 @@ sqlite3 ~/.memex/data/memex.db \
 
 ## What memex-hermes is NOT
 
-- ❌ It is not a fact-extractor. If you want extraction, install Mem0 alongside.
-- ❌ It is not a vector store. Search is FTS5 (text). Optional sqlite-vec hybrid recall is on the memex-mvp roadmap.
-- ❌ It is not a multi-tenant cloud. Local-first; one SQLite file per machine.
-- ❌ It is not the only writer. memex.db is shared — memex-mvp daemons, MCP imports, this plugin, all coexist via `UNIQUE(source, conv_id, msg_id)`.
+- ❌ **Not a replacement for Hermes' built-in memory.** It augments. Hermes' own `state.db` + `MEMORY.md` keep working unchanged.
+- ❌ **Not a stand-alone product** — it's a bridge to memex-mvp's unified corpus. Without memex-mvp + another captured client, you get no benefit you couldn't get from Hermes' built-in store.
+- ❌ **Not a fact-extractor.** If you want extraction, install Mem0 alongside (memex stores raw, Mem0 indexes facts on top).
+- ❌ **Not a vector store** (yet). Search is FTS5 only. sqlite-vec hybrid recall is planned for v0.2.
+- ❌ **Not a multi-tenant cloud.** Local-first; one SQLite file per machine.
+- ❌ **Not the only writer.** `memex.db` is shared — memex-mvp daemons, MCP imports, this plugin, all coexist via `UNIQUE(source, conv_id, msg_id)`.
+
+## Roadmap
+
+This is an early release (0.1.x). The technical foundation is solid (122 tests, verified on live VPS), but the product story still needs to mature:
+
+- **v0.2** — sqlite-vec hybrid retrieval (close the vector-search gap with Mnemosyne/Hindsight)
+- **v0.2** — GitHub Actions CI for test + auto-publish
+- **v0.2** — strict mypy + `py.typed` marker
+- **v0.3** — opt-in OpenTelemetry hooks for users who want observability
+- **future** — Mac ↔ VPS sync of memex.db (so your laptop + your VPS Hermes share one corpus across hosts)
 
 ## License
 

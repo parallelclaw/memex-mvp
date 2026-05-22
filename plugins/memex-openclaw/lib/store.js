@@ -14,32 +14,32 @@
  * while we write.
  */
 
-// v0.1.1: dynamic import + helpful error message for environments where
-// better-sqlite3's native binary failed to install (small-VPS OOM during
-// gyp rebuild, --ignore-scripts during plugin install, etc.). Bug 4 from
-// the 2026-05-21 VPS test report.
-let Database;
-try {
-  Database = (await import('better-sqlite3')).default;
-} catch (err) {
-  const helpful = new Error(
-    'memex-openclaw: failed to load better-sqlite3 native binary.\n' +
-    '  Original error: ' + err.message + '\n' +
-    '  This usually means the prebuilt binary download failed during\n' +
-    '  `openclaw plugins install` (often blocked by --ignore-scripts).\n' +
-    '  Manual fix:\n' +
-    '    cd ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw\n' +
-    '    npm rebuild better-sqlite3\n' +
-    '  Then `openclaw gateway restart`.\n' +
-    '  On low-memory VPS where rebuild OOMs: `npm rebuild better-sqlite3 --build-from-source=false` to force prebuilt-only.',
-  );
-  helpful.cause = err;
-  throw helpful;
-}
+import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+
+// v0.1.3 ROOT CAUSE FIX FOR BUG 1:
+//   v0.1.1 used `let Database; try { Database = (await import(...)).default }`
+//   to give a friendly error when better-sqlite3's native binary was missing
+//   (Bug 4 mitigation). That introduced top-level `await`.
+//   OpenClaw's external-plugin loader uses jiti, which does NOT support
+//   top-level await — the whole module failed to parse with
+//   `SyntaxError: Unexpected identifier 'Promise'`. The module silently
+//   stopped loading → register() never fired → Bug 1.
+//
+// Synchronous createRequire + try/catch achieves the same goal (helpful
+// error when better-sqlite3 binary is missing) without any await, so the
+// module parses cleanly in jiti AND in node-native ESM.
+const _require = createRequire(import.meta.url);
+
+let Database = null;
+let dbLoadError = null;
+try {
+  Database = _require('better-sqlite3');
+} catch (err) {
+  dbLoadError = err;
+}
 
 export const DEFAULT_DB_PATH = '~/.memex/data/memex.db';
 
@@ -139,6 +139,21 @@ export function initialiseSchema(db) {
 
 export class MemexStore {
   constructor(dbPath) {
+    if (!Database) {
+      // Friendly error from the deferred require failure at module load.
+      const cause = dbLoadError?.message || 'unknown error during require()';
+      throw new Error(
+        'memex-openclaw: better-sqlite3 native binary missing or failed to load.\n' +
+        '  Original error: ' + cause + '\n' +
+        '  This usually means the prebuilt binary download was skipped during\n' +
+        '  `openclaw plugins install` (often via --ignore-scripts). Manual fix:\n' +
+        '    cd ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw\n' +
+        '    npm rebuild better-sqlite3\n' +
+        '  Then `openclaw gateway restart`.\n' +
+        '  On low-memory VPS where gyp rebuild OOMs, force prebuilt-only:\n' +
+        '    npm rebuild better-sqlite3 --build-from-source=false',
+      );
+    }
     this.dbPath = resolveDbPath(dbPath);
     mkdirSync(dirname(this.dbPath), { recursive: true });
     this.db = new Database(this.dbPath);

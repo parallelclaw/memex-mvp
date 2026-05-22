@@ -3,17 +3,39 @@
  *
  * v0.1.0 attempted to expose memex contents via OpenClaw's bundled-only
  * `registerMemoryCorpusSupplement()` — that function turned out NOT to
- * be exported to external (npm-installed) plugins. v0.1.1 switches to
+ * be exported to external (npm-installed) plugins. v0.1.1 switched to
  * the universally-available `api.registerTool()` API.
  *
- * Trade-off: the model now has TWO distinct tools (memex_search +
- * memex_get) instead of the OpenClaw-merged memory_search experience.
- * In exchange we don't depend on internal API surface.
+ * v0.1.4 fixes Bug 5 from the 2026-05-22 VPS test: the registration
+ * signature was wrong. v0.1.1–0.1.3 called
+ *   api.registerTool('memex_search', { handler, ... })  // two args
+ * but OpenClaw 2026.5.x expects ONE object with `name` and `execute`:
+ *   api.registerTool({ name, label, description, parameters, execute })
+ * The wrong signature caused `definition.name.trim()` to throw on
+ * `'memex_search'.name` (= undefined) → register() logged
+ * "tool registration FAILED" → no tools available to the model.
+ *
+ * Confirmed against bundled `tavily` plugin's `createTavilySearchTool`
+ * — same shape, including the `jsonResult()` helper that pairs a
+ * pretty-printed `content[0].text` with a raw `details` payload.
  *
  * Progressive disclosure pattern preserved:
  *   memex_search(query)  → IDs + 100-char previews (cheap, Tier 1)
  *   memex_get(ids)       → full verbatim text (only when needed, Tier 2)
  */
+
+/**
+ * OpenClaw-compatible tool result. Mirrors the internal `jsonResult()`
+ * helper used by bundled plugins (tavily, etc.):
+ *   - content[0].text → JSON.stringify(payload, null, 2) (model-visible)
+ *   - details         → raw payload (for UI / tracing, not parsed by model)
+ */
+function jsonResult(payload) {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+    details: payload,
+  };
+}
 
 /**
  * Register memex_search + memex_get tools on the OpenClaw plugin API.
@@ -24,7 +46,9 @@
  */
 export function registerMemexTools(api, store, logger) {
   // Tool 1: memex_search — Tier 1 (cheap, returns IDs + previews)
-  api.registerTool('memex_search', {
+  api.registerTool({
+    name: 'memex_search',
+    label: 'Memex Search',
     description:
       'Search the memex verbatim corpus across all captured sources (OpenClaw + Hermes + Claude Code + Telegram + etc.). ' +
       'Returns abbreviated records — id, role, channel, 100-char preview. ' +
@@ -46,44 +70,36 @@ export function registerMemexTools(api, store, logger) {
       },
       required: ['query'],
     },
-    handler: async ({ query, limit }) => {
+    execute: async (_toolCallId, rawParams) => {
+      const query = rawParams?.query || '';
+      const limit = Math.min(
+        Math.max(parseInt(rawParams?.limit, 10) || 10, 1),
+        50,
+      );
       try {
-        const rows = store.search(query || '', limit || 10);
+        const rows = store.search(query, limit);
         if (!rows.length) {
-          return {
-            content: [{
-              type: 'text',
-              text: JSON.stringify({
-                results: [],
-                hint: 'No matches. Try different keywords.',
-              }),
-            }],
-          };
+          return jsonResult({
+            results: [],
+            hint: 'No matches. Try different keywords.',
+          });
         }
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              results: rows,
-              count: rows.length,
-              hint: 'Call memex_get(ids=[...]) for full verbatim text of records you want to read.',
-            }),
-          }],
-        };
+        return jsonResult({
+          results: rows,
+          count: rows.length,
+          hint: 'Call memex_get(ids=[...]) for full verbatim text of records you want to read.',
+        });
       } catch (err) {
         logger?.error?.(`memex_search failed: ${err.message}`);
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ error: err.message }),
-          }],
-        };
+        return jsonResult({ error: err.message });
       }
     },
   });
 
   // Tool 2: memex_get — Tier 2 (full text by ID)
-  api.registerTool('memex_get', {
+  api.registerTool({
+    name: 'memex_get',
+    label: 'Memex Get',
     description:
       'Fetch full verbatim text of specific records by ID. ' +
       'Call this after memex_search to read the records that look relevant. ' +
@@ -99,15 +115,13 @@ export function registerMemexTools(api, store, logger) {
       },
       required: ['ids'],
     },
-    handler: async ({ ids }) => {
+    execute: async (_toolCallId, rawParams) => {
+      const ids = rawParams?.ids;
       try {
         if (!Array.isArray(ids) || ids.length === 0) {
-          return {
-            content: [{
-              type: 'text',
-              text: JSON.stringify({ error: 'ids must be a non-empty array of integers' }),
-            }],
-          };
+          return jsonResult({
+            error: 'ids must be a non-empty array of integers',
+          });
         }
         // Cap at 20 to avoid runaway token usage.
         const capped = ids.slice(0, 20);
@@ -120,20 +134,10 @@ export function registerMemexTools(api, store, logger) {
           out.truncated = true;
           out.hint = `Capped at 20 records; ${ids.length - 20} more were not fetched.`;
         }
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(out),
-          }],
-        };
+        return jsonResult(out);
       } catch (err) {
         logger?.error?.(`memex_get failed: ${err.message}`);
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ error: err.message }),
-          }],
-        };
+        return jsonResult({ error: err.message });
       }
     },
   });

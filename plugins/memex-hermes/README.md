@@ -84,9 +84,10 @@ uv pip install memex-hermes --python $HOME/.hermes/hermes-agent/venv/bin/python
 # Or with vanilla pip:
 pip install memex-hermes
 
-# 2. Create the shim folder Hermes discovers
-#    (Hermes scans ~/.hermes/plugins/<name>/ directly — no entry_points
-#    are used for memory provider discovery as of Hermes v0.10.x.)
+# 2. Create the shim Hermes discovers AND auto-import your prior history.
+#    `init` reads ~/.hermes/state.db and pulls every past session into
+#    memex.db, so `memex search "..."` works on day one. (Add --no-backfill
+#    if you'd rather start clean.)
 memex-hermes init
 
 # 3. Activate in Hermes config — edit ~/.hermes/config.yaml:
@@ -95,6 +96,19 @@ memex-hermes init
 
 # 4. Restart Hermes. The plugin auto-activates.
 ```
+
+### Asking your Hermes agent to install this for you
+
+If you'd rather have your running Hermes agent do the install — supported.
+Tell it (or any other agent that can run shell commands on the same box):
+
+> "Install the memex plugin for me. Use `pip install memex-hermes && memex-hermes init`, then ask me to restart you."
+
+The agent ends up running `pip` inside its own venv (`sys.executable`), so
+the package lands where Hermes actually loads from — sidestepping the
+"wrong venv" footgun that hits manual installs. After `memex-hermes init`
+auto-imports your history, the agent should remind you to edit
+`~/.hermes/config.yaml` (step 3) and restart Hermes (step 4).
 
 **Why the extra `init` step?** Hermes' memory-provider discovery is folder-based, not entry-point-based (verified by reading `plugins/memory/__init__.py` in hermes-agent v0.10.x). The `init` command creates a 3-line shim at `~/.hermes/plugins/memex/__init__.py` that imports from the pip-installed package. (Note the asymmetry: **bundled** Hermes plugins live at `<hermes-agent>/plugins/memory/<name>/`, but **user** plugins live at `~/.hermes/plugins/<name>/` — no `memory/` subdir. We follow Hermes' actual discovery code.) Benefits:
 
@@ -108,13 +122,13 @@ memex is **zero-config** — there's nothing else to set up. The DB lives at `~/
 
 ## Backfill historical Hermes sessions
 
-memex-hermes ships a one-shot backfill so you can import everything Hermes already remembers:
+As of **v0.1.5**, `memex-hermes init` auto-runs backfill by default — most users never need to invoke it directly. The `memex-hermes-backfill` CLI still exists for the cases that aren't covered by the default:
 
 ```bash
-# Default: reads ~/.hermes/state.db, writes to ~/.memex/data/memex.db
+# Re-import after init, e.g. after upgrading the plugin
 memex-hermes-backfill
 
-# Dry-run to see what would happen
+# Dry-run to predict what an import would do (honest counts as of v0.1.4)
 memex-hermes-backfill --dry-run
 
 # Only sessions since a date
@@ -124,7 +138,7 @@ memex-hermes-backfill --since 2026-04-01
 memex-hermes-backfill --hermes-home /opt/hermes --memex-db /data/memex.db
 ```
 
-Idempotent — re-running is safe (`UNIQUE(source, conversation_id, msg_id)` dedups).
+Idempotent — re-running is safe (`UNIQUE(source, conversation_id, msg_id)` dedups, and `--dry-run` reports honestly since v0.1.4).
 
 ## What gets captured
 

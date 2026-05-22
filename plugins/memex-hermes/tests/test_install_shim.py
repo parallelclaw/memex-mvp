@@ -9,6 +9,7 @@ loader. These tests verify:
   • `memex-hermes uninstall` removes the shim folder
   • `memex-hermes status`   reports correctly in both states
   • Idempotency: init twice is fine
+  • v0.1.5: init auto-backfills history from state.db unless --no-backfill
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import argparse
 import io
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -25,6 +27,53 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from memex_hermes import install_shim  # noqa: E402
+from memex_hermes.store import MemexStore  # noqa: E402
+
+
+def _seed_hermes_state_db(state_path: Path) -> None:
+    """Create a synthetic ~/.hermes/state.db with one Telegram session
+    containing 2 dialogue messages. Used to exercise the v0.1.5 init
+    auto-backfill behavior end-to-end without needing a real Hermes.
+    """
+    conn = sqlite3.connect(str(state_path))
+    conn.executescript(
+        """
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            user_id TEXT,
+            model TEXT,
+            started_at REAL NOT NULL,
+            ended_at REAL,
+            message_count INTEGER DEFAULT 0,
+            title TEXT
+        );
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT,
+            timestamp REAL NOT NULL,
+            tool_call_id TEXT,
+            tool_calls TEXT,
+            tool_name TEXT,
+            token_count INTEGER
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO sessions (id, source, user_id, started_at) VALUES (?,?,?,?)",
+        ("sess-1", "telegram", "97592799", 1700000000),
+    )
+    conn.executemany(
+        "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?,?,?,?)",
+        [
+            ("sess-1", "user", "Привет", 1700000010),
+            ("sess-1", "assistant", "Здарова", 1700000011),
+        ],
+    )
+    conn.commit()
+    conn.close()
 
 
 class TestShimInstall(unittest.TestCase):
@@ -164,6 +213,149 @@ class TestShimInstall(unittest.TestCase):
         # Should be a no-op exit-0, not an error.
         rc = install_shim.cmd_uninstall(self._args())
         self.assertEqual(rc, 0)
+
+    # ---------- v0.1.5: auto-backfill on init ----------
+
+    def _args_with_backfill_opts(self, *, no_backfill=False, memex_db=None, since=None):
+        """Build argparse.Namespace mirroring what main() would create
+        with the new v0.1.5 flags on `init`. Helper for the backfill tests."""
+        ns = argparse.Namespace()
+        ns.hermes_home = str(self.hermes_home)
+        ns.no_backfill = no_backfill
+        ns.memex_db = memex_db
+        ns.since = since
+        return ns
+
+    def test_init_auto_backfills_history_by_default(self):
+        """v0.1.5: init must default to importing pre-install history
+        from state.db so the user gets a usable memex.db immediately
+        (the "wow moment" the design calls for)."""
+        _seed_hermes_state_db(self.hermes_home / "state.db")
+        memex_db = str(Path(self.tmp.name) / "memex.db")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_init(
+                self._args_with_backfill_opts(memex_db=memex_db),
+            )
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn("Importing your Hermes history", out)
+        self.assertIn("new messages added:", out)
+
+        # And the data is actually in memex.db.
+        store = MemexStore(memex_db)
+        try:
+            self.assertEqual(store.count(), 2, "both seeded messages should land in memex.db")
+        finally:
+            store.close()
+
+    def test_init_no_backfill_flag_skips_import(self):
+        """--no-backfill must skip the import (for users with sensitive
+        history or huge corpora who want to control timing)."""
+        _seed_hermes_state_db(self.hermes_home / "state.db")
+        memex_db = str(Path(self.tmp.name) / "memex.db")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_init(
+                self._args_with_backfill_opts(no_backfill=True, memex_db=memex_db),
+            )
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn("backfill skipped", out.lower())
+        self.assertNotIn("Importing your Hermes history", out)
+
+        # The memex.db should either not exist OR be empty — definitely
+        # no Hermes rows.
+        if Path(memex_db).exists():
+            store = MemexStore(memex_db)
+            try:
+                self.assertEqual(store.count(), 0)
+            finally:
+                store.close()
+
+    def test_init_handles_missing_state_db_gracefully(self):
+        """First-time Hermes users may not have state.db yet (e.g. they
+        installed the plugin before ever running Hermes). init must
+        succeed with a friendly message rather than blow up."""
+        # No state.db seeded — clean hermes_home only contains plugins/ dir
+        # (created by cmd_init implicitly).
+        memex_db = str(Path(self.tmp.name) / "memex.db")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_init(
+                self._args_with_backfill_opts(memex_db=memex_db),
+            )
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn("No Hermes history found yet", out)
+        # No memex.db rows; file might not even exist.
+        if Path(memex_db).exists():
+            store = MemexStore(memex_db)
+            try:
+                self.assertEqual(store.count(), 0)
+            finally:
+                store.close()
+
+    def test_init_handles_backfill_error_gracefully(self):
+        """If state.db is corrupt or unreadable, init must NOT fail —
+        live capture should still work after restart, so plugin install
+        is the more important guarantee."""
+        # Write a non-SQLite file at state.db path → backfill will raise.
+        bad_state = self.hermes_home / "state.db"
+        bad_state.write_bytes(b"this is not a sqlite database")
+        memex_db = str(Path(self.tmp.name) / "memex.db")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_init(
+                self._args_with_backfill_opts(memex_db=memex_db),
+            )
+        self.assertEqual(rc, 0, "init must succeed even when backfill blows up")
+        out = buf.getvalue()
+        self.assertTrue(
+            "Backfill failed" in out or "errors" in out.lower(),
+            f"expected a non-fatal backfill error message, got:\n{out}",
+        )
+
+    def test_init_via_main_default_runs_backfill(self):
+        """Smoke-test through main() argv parsing — the CLI surface the
+        user actually invokes (or that an agent invokes on their behalf)."""
+        _seed_hermes_state_db(self.hermes_home / "state.db")
+        memex_db = str(Path(self.tmp.name) / "memex.db")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.main([
+                "init",
+                "--hermes-home", str(self.hermes_home),
+                "--memex-db", memex_db,
+            ])
+        self.assertEqual(rc, 0)
+        self.assertIn("Importing your Hermes history", buf.getvalue())
+        store = MemexStore(memex_db)
+        try:
+            self.assertEqual(store.count(), 2)
+        finally:
+            store.close()
+
+    def test_init_via_main_no_backfill_flag(self):
+        """Smoke-test --no-backfill through main()."""
+        _seed_hermes_state_db(self.hermes_home / "state.db")
+        memex_db = str(Path(self.tmp.name) / "memex.db")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.main([
+                "init",
+                "--hermes-home", str(self.hermes_home),
+                "--memex-db", memex_db,
+                "--no-backfill",
+            ])
+        self.assertEqual(rc, 0)
+        self.assertIn("backfill skipped", buf.getvalue().lower())
 
     def test_status_reports_installed(self):
         install_shim.cmd_init(self._args())

@@ -169,13 +169,57 @@ pip_dependencies: []
     print(f"   • Python import check: {_ok}")
     if legacy_migrated:
         print(f"   • Migrated from legacy 0.1.0 path: {legacy}")
+
+    # v0.1.5: auto-backfill is default-on. Pulls Hermes' pre-install history
+    # from ~/.hermes/state.db into memex.db so that a first `memex search`
+    # right after install can find old conversations — the wow moment.
+    # Opt-out via `memex-hermes init --no-backfill`.
+    skip_backfill = bool(getattr(args, "no_backfill", False))
+    state_db = hermes_home / "state.db"
+
+    print()
+    if skip_backfill:
+        print("ℹ️  History backfill skipped (--no-backfill).")
+        print("   To import later:  memex-hermes-backfill")
+    elif not state_db.exists():
+        print("ℹ️  No Hermes history found yet (state.db absent).")
+        print("   Live capture will start with your next Hermes session.")
+    else:
+        print("📥 Importing your Hermes history into memex.db...")
+        try:
+            # Lazy import to avoid circular dep at module load.
+            from memex_hermes.backfill import run_backfill
+
+            since_arg = getattr(args, "since", None)
+            memex_db_arg = getattr(args, "memex_db", None)
+            totals = run_backfill(
+                hermes_home=str(hermes_home),
+                memex_db=memex_db_arg,
+                since=since_arg,
+                dry_run=False,
+                verbose=False,
+            )
+            print(f"   • sessions processed:  {totals.get('sessions', 0)}")
+            print(f"   • new messages added:  {totals.get('inserted', 0)}")
+            print(f"   • already in memex:    {totals.get('skipped', 0)} (deduped)")
+            if totals.get("errors"):
+                print(f"   • ⚠️  errors:            {totals['errors']} (non-fatal — live capture still works)")
+            if totals.get("inserted", 0) > 0:
+                print(f"   ✨ Try it: `memex search \"...\"`")
+        except Exception as e:  # noqa: BLE001
+            # Backfill is non-essential for init — failures must not block
+            # plugin install. Live capture works regardless.
+            print(f"   ⚠️  Backfill failed: {e}")
+            print(f"      Live capture will still work. Retry later: memex-hermes-backfill")
+
     print()
     print("Next steps:")
     print(f"   1. Add to ~/.hermes/config.yaml:")
     print(f"        memory:")
     print(f'          provider: "memex"')
-    print(f"   2. Restart Hermes.")
-    print(f"   3. (Optional) Backfill history: `memex-hermes-backfill`")
+    print(f"   2. Restart Hermes Agent so the plugin gets picked up.")
+    print(f"      (typical: `systemctl --user restart hermes`")
+    print(f"       or:      `pkill -HUP -f hermes-agent`)")
     return 0
 
 
@@ -244,7 +288,29 @@ def main(argv: Optional[list] = None) -> int:
     p_init = sub.add_parser(
         "init",
         parents=[common],
-        help="Create the shim folder in ~/.hermes/plugins/memory/memex/ so Hermes can discover the plugin.",
+        help=(
+            "Create the shim folder so Hermes can discover the plugin, "
+            "and auto-import pre-install history from ~/.hermes/state.db. "
+            "Use --no-backfill to skip history import."
+        ),
+    )
+    p_init.add_argument(
+        "--no-backfill",
+        action="store_true",
+        help="Skip the automatic import of pre-install Hermes history.",
+    )
+    p_init.add_argument(
+        "--since",
+        default=None,
+        help=(
+            "When importing history, include only sessions after this date "
+            "(YYYY-MM-DD or unix epoch). Default: import full history."
+        ),
+    )
+    p_init.add_argument(
+        "--memex-db",
+        default=None,
+        help="Override memex.db location. Default: ~/.memex/data/memex.db",
     )
     p_init.set_defaults(func=cmd_init)
 

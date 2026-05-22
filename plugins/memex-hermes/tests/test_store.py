@@ -58,6 +58,30 @@ class TestStoreBasics(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(self.store.count(), 0)
 
+    def test_exists_returns_false_for_missing(self):
+        # Empty DB — no record can exist.
+        self.assertFalse(self.store.exists("conv-1", "m-1"))
+
+    def test_exists_returns_true_after_insert(self):
+        self.store.insert_message(
+            conversation_id="conv-1",
+            msg_id="m-1",
+            role="user",
+            text="hello",
+            ts=1700000000,
+        )
+        self.assertTrue(self.store.exists("conv-1", "m-1"))
+        # Same conv but different msg_id → still False.
+        self.assertFalse(self.store.exists("conv-1", "m-2"))
+        # Same msg_id but different conv → still False.
+        self.assertFalse(self.store.exists("conv-other", "m-1"))
+
+    def test_exists_safe_against_empty_args(self):
+        # Defensive: never blow up on missing inputs.
+        self.assertFalse(self.store.exists("", "m-1"))
+        self.assertFalse(self.store.exists("conv-1", ""))
+        self.assertFalse(self.store.exists("", ""))
+
     def test_search_finds_match(self):
         self.store.insert_message(
             conversation_id="conv-1",

@@ -146,11 +146,43 @@ class TestBackfill(unittest.TestCase):
             memex_db=self.memex_db,
             dry_run=True,
         )
-        self.assertEqual(totals["inserted"], 8)  # reported as "would have"
+        # On an empty memex.db every dialogue row is genuinely new — all 8
+        # should report as "would insert", 0 as "would dedup".
+        self.assertEqual(totals["inserted"], 8)
+        self.assertEqual(totals["skipped"], 0)
         # But DB has nothing
         store = MemexStore(self.memex_db)
         self.assertEqual(store.count(), 0)
         store.close()
+
+    def test_backfill_dry_run_reports_dedup_after_data_present(self):
+        """v0.1.4: --dry-run must pre-check UNIQUE and predict dedup correctly.
+
+        Before this fix, dry-run blindly incremented `inserted` for every
+        row regardless of whether it already existed — which led to the
+        VPS test report saying "would insert 84" when in fact a real run
+        would dedup all 84 because live-capture had already written them.
+        """
+        # First load everything for real.
+        first = run_backfill(
+            hermes_home=str(self.hermes_home),
+            memex_db=self.memex_db,
+        )
+        self.assertEqual(first["inserted"], 8)
+        self.assertEqual(first["skipped"], 0)
+
+        # Now a dry-run against the SAME memex.db should predict 0 inserts
+        # and 8 dedups — matching what a second real run would do.
+        dry = run_backfill(
+            hermes_home=str(self.hermes_home),
+            memex_db=self.memex_db,
+            dry_run=True,
+        )
+        self.assertEqual(dry["inserted"], 0,
+            "dry-run must not count existing rows as new")
+        self.assertEqual(dry["skipped"], 8,
+            "dry-run must report existing rows as would-be-deduplicated")
+        self.assertEqual(dry["sessions"], 3)
 
     def test_backfill_since_filter(self):
         # All test sessions have started_at = 17xxxxxxxx (Nov 2023). Pick

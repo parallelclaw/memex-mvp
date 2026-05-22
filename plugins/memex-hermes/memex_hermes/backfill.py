@@ -121,7 +121,16 @@ def _backfill_session(
             "hermes_message_id": m["id"],
         }
         if dry_run:
-            inserted += 1
+            # v0.1.4 fix: pre-check UNIQUE(source, conv_id, msg_id) so the
+            # dry-run report matches what a real run would do. Earlier
+            # versions blindly counted every row as inserted, which was
+            # misleading when memex.db already had the live-captured
+            # rows — users would see "would insert 84" and panic about
+            # duplication, when in fact a real run would dedup all 84.
+            if store.exists(conv_id, msg_id):
+                skipped += 1
+            else:
+                inserted += 1
             continue
         wrote = store.insert_message(
             conversation_id=conv_id,

@@ -350,3 +350,27 @@ class MemexStore:
                     "SELECT COUNT(*) FROM messages WHERE source = 'hermes'"
                 ).fetchone()
         return int(row[0]) if row else 0
+
+    def exists(self, conversation_id: str, msg_id: str) -> bool:
+        """Check whether a (source='hermes', conversation_id, msg_id) triple
+        already exists in memex.db. Used by backfill --dry-run to predict
+        what an actual run would dedup vs. insert.
+
+        Matches exactly the UNIQUE constraint used by insert_message, so
+        existence here ⇔ INSERT OR IGNORE would be a no-op.
+        """
+        if not conversation_id or not msg_id:
+            return False
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT 1
+                  FROM messages
+                 WHERE source = 'hermes'
+                   AND conversation_id = ?
+                   AND msg_id = ?
+                 LIMIT 1
+                """,
+                (conversation_id, msg_id),
+            ).fetchone()
+        return row is not None

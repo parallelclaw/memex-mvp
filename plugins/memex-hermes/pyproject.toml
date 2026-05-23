@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memex-hermes"
-version = "0.2.0"
+version = "0.2.1"
 description = "Bridges Hermes Agent into the memex unified-memory corpus — pair with memex-mvp for one searchable history across Hermes, Claude Code, OpenClaw, Telegram, and more. Single-client Hermes users likely don't need this; Hermes built-in memory already covers that case."
 readme = "README.md"
 authors = [{ name = "parallelclaw", email = "sedelev@gmail.com" }]

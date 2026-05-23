@@ -491,16 +491,34 @@ def _format_agent_instructions(result: Dict[str, Any], lang: str = "en") -> str:
 
     history_line = ""
     if backfill.get("status") == "imported":
-        if backfill.get("inserted", 0) > 0:
+        total = int(backfill.get("messages_total", 0))
+        pending = int(backfill.get("pending_inserts", 0))
+        if total > 0:
+            # Honest framing: we can't reliably tell apart "freshly
+            # imported by this setup" vs "already there from earlier
+            # live capture" without intercepting cmd_init's real-run
+            # output. The user-facing truth that matters is "your
+            # history is searchable in memex now".
             history_line = (
-                f"I imported {backfill['inserted']} of your past Hermes "
-                f"messages into memex. "
+                f"You now have {total} of your past Hermes messages "
+                f"searchable in memex. "
             )
-        elif backfill.get("skipped", 0) > 0:
-            history_line = (
-                f"Your history was already in memex ({backfill['skipped']} "
-                f"messages, all deduplicated). "
-            )
+            if pending > 0:
+                history_line += (
+                    f"(Heads-up: dry-run says {pending} messages would still "
+                    f"be added by another backfill — usually means the real "
+                    f"backfill didn't fully finish.) "
+                )
+    elif backfill.get("status") == "no_history":
+        history_line = (
+            "I didn't find any prior Hermes history (no state.db yet). "
+            "Live capture will start with your next session. "
+        )
+    elif backfill.get("status") == "failed":
+        history_line = (
+            f"⚠️ History import failed: {backfill.get('error', 'unknown')}. "
+            f"Live capture will still work after restart. "
+        )
 
     config_line = ""
     action = config.get("action")
@@ -553,17 +571,18 @@ def _print_human_setup_summary(result: Dict[str, Any]) -> None:
 
     bf = result.get("backfill", {})
     if bf.get("status") == "imported":
-        ins = bf.get("inserted", 0)
-        dup = bf.get("skipped", 0)
+        total = bf.get("messages_total", 0)
         sess = bf.get("sessions", 0)
-        if ins > 0:
-            print(f"📥 History imported:    {ins} new messages from {sess} session(s)")
-            if dup:
-                print(f"                        {dup} already present (deduped)")
-        elif dup > 0:
-            print(f"📥 History already in memex: {dup} messages (nothing new to import)")
+        pending = bf.get("pending_inserts", 0)
+        if total > 0:
+            print(f"📥 History:             {total} messages from {sess} session(s) now searchable in memex")
+            if pending > 0:
+                print(
+                    f"                        ⚠️ {pending} would still be added by another "
+                    f"backfill — real run may have been interrupted"
+                )
         else:
-            print(f"📥 History:             empty — no past Hermes sessions found")
+            print("📥 History:             empty — no past Hermes sessions found")
     elif bf.get("status") == "no_history":
         print("📥 History:             no Hermes state.db yet (live capture starts after restart)")
     elif bf.get("status") == "skipped":
@@ -689,9 +708,20 @@ def cmd_setup(args: argparse.Namespace) -> int:
     elif getattr(args, "no_backfill", False):
         result["backfill"]["status"] = "skipped"
     else:
-        # cmd_init just ran backfill non-dry; a follow-up dry-run gives
-        # us accurate "would dedup N / would insert M" — at this point
-        # everything should be dedup since we just inserted it.
+        # cmd_init just ran the real backfill. We follow up with a
+        # dry-run to inspect the resulting state of memex.db. The
+        # dry-run returns honest counts (v0.1.4):
+        #   `inserted` = "would still be added if we ran for real"
+        #               — should be 0 after a successful real run
+        #   `skipped`  = "would be deduplicated (already in memex)"
+        #               — equals the total now searchable
+        #
+        # v0.2.0 had a bug: we put the dry-run skipped value into a
+        # field named `inserted`, which read as a lie ("you imported
+        # 112 NEW messages" when in fact most were already there from
+        # earlier live captures). v0.2.1 reports honest field names
+        # plus a `messages_total` for what the user actually wants to
+        # know — how many messages of theirs are now searchable.
         try:
             from memex_hermes.backfill import run_backfill
             totals = run_backfill(
@@ -701,18 +731,21 @@ def cmd_setup(args: argparse.Namespace) -> int:
                 dry_run=True,
                 verbose=False,
             )
-            # In a fresh install: inserted (from cmd_init) maps to the
-            # dedup count we see here.
+            pending = int(totals.get("inserted", 0))
+            already = int(totals.get("skipped", 0))
             result["backfill"]["status"] = "imported"
-            result["backfill"]["sessions"] = totals.get("sessions", 0)
-            # After cmd_init's real run, dry-run should show 0 new + N dedup.
-            # We report dedup as 'inserted' for human clarity ("you have N
-            # messages stored from your past"). If something was already in
-            # memex before our init (e.g. via live capture earlier), the
-            # split is: dedup = total now searchable.
-            result["backfill"]["inserted"] = totals.get("skipped", 0)
-            result["backfill"]["skipped"] = totals.get("inserted", 0)  # would-be-new = 0 if all imported
-            result["backfill"]["errors"] = totals.get("errors", 0)
+            result["backfill"]["sessions"] = int(totals.get("sessions", 0))
+            # The total number of Hermes messages now searchable via memex.
+            result["backfill"]["messages_total"] = pending + already
+            # How many would STILL be inserted if we ran backfill again.
+            # Sanity check: should be 0 after a successful setup. Non-zero
+            # means cmd_init's real run didn't finish — surface as a hint.
+            result["backfill"]["pending_inserts"] = pending
+            # How many are already deduplicated (i.e. present in memex.db
+            # before this dry-run ran). After a successful setup this
+            # equals messages_total.
+            result["backfill"]["already_in_memex"] = already
+            result["backfill"]["errors"] = int(totals.get("errors", 0))
         except Exception as e:  # noqa: BLE001
             result["backfill"]["status"] = "failed"
             result["backfill"]["error"] = str(e)

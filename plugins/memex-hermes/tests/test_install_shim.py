@@ -716,8 +716,41 @@ class TestCmdSetup(unittest.TestCase):
         # Backfill imported the 2 seeded messages.
         self.assertEqual(data["backfill"]["status"], "imported")
         self.assertEqual(data["backfill"]["sessions"], 1)
-        # After the real run, dry-run dedup count == messages now in memex.
-        self.assertEqual(data["backfill"]["inserted"], 2)
+        # v0.2.1 — honest field names: 2 messages now searchable, 0 pending.
+        self.assertEqual(data["backfill"]["messages_total"], 2)
+        self.assertEqual(data["backfill"]["pending_inserts"], 0)
+        self.assertEqual(data["backfill"]["already_in_memex"], 2)
+
+    def test_setup_does_not_expose_misleading_inserted_skipped(self):
+        """v0.2.1 regression test for the v0.2.0 bug:
+        cmd_setup used to swap inserted/skipped values, leading agents
+        and humans to see misleading numbers like '112 new imported'
+        when in fact all 112 were already present from earlier live
+        capture. Honest field names only — no `inserted`/`skipped` keys
+        in backfill that would invite misinterpretation.
+        """
+        _seed_hermes_state_db(self.hermes_home / "state.db")
+        # First run — actually imports both messages.
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            install_shim.cmd_setup(self._args(json=True))
+        # Second run — should report "all already present", NOT "2 new
+        # imported".
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            install_shim.cmd_setup(self._args(json=True))
+        data = json.loads(buf.getvalue())
+        bf = data["backfill"]
+        self.assertEqual(bf["messages_total"], 2,
+            "second run sees same 2 messages, none new")
+        self.assertEqual(bf["pending_inserts"], 0,
+            "after re-run all should be deduped, nothing pending")
+        # The old buggy fields must NOT exist (forces consumers to use
+        # the honest ones).
+        self.assertNotIn("inserted", bf,
+            "ambiguous field — use messages_total / pending_inserts instead")
+        self.assertNotIn("skipped", bf,
+            "ambiguous field — use messages_total / already_in_memex instead")
 
     def test_setup_no_wire_config_leaves_config_alone(self):
         cfg = self.hermes_home / "config.yaml"
@@ -749,9 +782,13 @@ class TestAgentInstructions(unittest.TestCase):
     """The agent_instructions string is what the LLM relays to the user.
     Verify it adapts to each combination of outcomes."""
 
-    def test_mentions_imported_history_when_present(self):
+    def test_mentions_total_history_when_present(self):
         result = {
-            "backfill": {"status": "imported", "inserted": 42, "skipped": 0},
+            "backfill": {"status": "imported",
+                          "messages_total": 42,
+                          "pending_inserts": 0,
+                          "already_in_memex": 42,
+                          "sessions": 3},
             "config": {"action": "wired"},
             "restart": {"method": "systemd-user",
                         "command": "systemctl --user restart hermes",
@@ -760,15 +797,59 @@ class TestAgentInstructions(unittest.TestCase):
         }
         text = install_shim._format_agent_instructions(result)
         self.assertIn("42", text)
-        self.assertIn("imported", text.lower())
+        self.assertIn("searchable", text.lower())
         self.assertIn("restart", text.lower())
+
+    def test_warns_about_pending_inserts(self):
+        """If dry-run after real run still has pending inserts, that's
+        a real signal — surface it to the user."""
+        result = {
+            "backfill": {"status": "imported",
+                          "messages_total": 100,
+                          "pending_inserts": 12,
+                          "already_in_memex": 88,
+                          "sessions": 3},
+            "config": {"action": "wired"},
+            "restart": {"method": "manual"},
+        }
+        text = install_shim._format_agent_instructions(result)
+        self.assertIn("100", text)
+        self.assertIn("12", text)  # pending count surfaced
+
+    def test_says_no_history_when_state_db_absent(self):
+        result = {
+            "backfill": {"status": "no_history"},
+            "config": {"action": "created"},
+            "restart": {"method": "manual"},
+        }
+        text = install_shim._format_agent_instructions(result)
+        self.assertIn("no", text.lower())
+        self.assertIn("live capture", text.lower())
+
+    def test_reports_backfill_failure(self):
+        result = {
+            "backfill": {"status": "failed", "error": "disk full"},
+            "config": {"action": "wired"},
+            "restart": {"method": "systemd-user",
+                        "command": "systemctl --user restart hermes",
+                        "auto_restart": "scheduled",
+                        "delay_seconds": 3},
+        }
+        text = install_shim._format_agent_instructions(result)
+        self.assertIn("disk full", text)
+        # Should reassure user that live capture still works.
+        self.assertIn("live capture", text.lower())
 
     def test_explains_no_terminal_path_when_manual(self):
         """For Telegram users without VPS shell — manual restart should
         tell them to ask the agent to restart itself, NOT to open a
         terminal."""
         result = {
-            "backfill": {"status": "imported", "inserted": 0, "skipped": 10},
+            "backfill": {"status": "imported",
+                          "messages_total": 10,
+                          "pending_inserts": 0,
+                          "already_in_memex": 10,
+                          "sessions": 1},
             "config": {"action": "already_set"},
             "restart": {"method": "manual"},
         }

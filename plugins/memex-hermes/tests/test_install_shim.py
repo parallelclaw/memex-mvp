@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import os
 import sqlite3
 import sys
@@ -421,6 +422,373 @@ class TestMainCLI(unittest.TestCase):
             install_shim.main(["init", "--hermes-home", str(self.hermes_home)])
             rc = install_shim.main(["uninstall", "--hermes-home", str(self.hermes_home)])
         self.assertEqual(rc, 0)
+
+
+# ============================================================
+# v0.2.0 — `memex-hermes setup` one-shot install
+# ============================================================
+
+class TestWireHermesConfig(unittest.TestCase):
+    """Unit tests for wire_hermes_config()."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.hermes_home = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_creates_config_when_absent(self):
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "created")
+        cfg_path = self.hermes_home / "config.yaml"
+        self.assertTrue(cfg_path.exists())
+        content = cfg_path.read_text()
+        self.assertIn("memory:", content)
+        self.assertIn("memex", content)
+
+    def test_appends_when_memory_section_absent(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        cfg_path.write_text("other_setting: value\n")
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "wired")
+        # Original setting must still be present.
+        content = cfg_path.read_text()
+        self.assertIn("other_setting", content)
+        self.assertIn("memex", content)
+
+    def test_no_op_when_already_memex(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        cfg_path.write_text('memory:\n  provider: "memex"\n')
+        mtime_before = cfg_path.stat().st_mtime
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "already_set")
+        # File should not have been rewritten.
+        self.assertEqual(cfg_path.stat().st_mtime, mtime_before)
+
+    def test_refuses_to_overwrite_other_provider(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        cfg_path.write_text('memory:\n  provider: "mem0"\n')
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "conflicting")
+        self.assertEqual(result["existing_provider"], "mem0")
+        # File must be unchanged.
+        self.assertIn("mem0", cfg_path.read_text())
+        self.assertNotIn("memex", cfg_path.read_text())
+
+    def test_force_overrides_conflict(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        cfg_path.write_text('memory:\n  provider: "mem0"\n')
+        result = install_shim.wire_hermes_config(self.hermes_home, force=True)
+        self.assertEqual(result["action"], "force_overwritten")
+        self.assertEqual(result["replaced_provider"], "mem0")
+        self.assertIn("memex", cfg_path.read_text())
+        self.assertNotIn("mem0", cfg_path.read_text())
+
+    def test_parse_failed_when_invalid_yaml(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        # Tabs in YAML mappings = invalid for safe_load
+        cfg_path.write_text("memory:\n\tprovider: bad\n")
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "parse_failed")
+        self.assertIn("warning", result)
+
+    def test_parse_failed_when_top_level_not_dict(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        cfg_path.write_text("- just a list\n- nothing more\n")
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "parse_failed")
+
+    def test_parse_failed_when_memory_section_not_dict(self):
+        cfg_path = self.hermes_home / "config.yaml"
+        cfg_path.write_text('memory: "just a string"\n')
+        result = install_shim.wire_hermes_config(self.hermes_home)
+        self.assertEqual(result["action"], "parse_failed")
+
+
+class TestDetectRestartMechanism(unittest.TestCase):
+    """detect_restart_mechanism — heuristically exercised via mocks.
+
+    We can't realistically `systemctl is-active hermes` from a test —
+    instead, patch subprocess.run to return canned responses and verify
+    the function picks the right branch and emits the right command.
+    """
+
+    def _make_run_mock(self, responses):
+        """Build a fake subprocess.run that pops a planned response per call.
+
+        Each response is a dict with keys returncode + stdout.
+        After responses run out, returns a default failure.
+        """
+        import subprocess as sp
+
+        class _R:
+            def __init__(self, rc, out):
+                self.returncode = rc
+                self.stdout = out
+
+        def fake_run(cmd, *args, **kwargs):
+            if responses:
+                r = responses.pop(0)
+                return _R(r["returncode"], r["stdout"])
+            return _R(1, "")
+        return fake_run
+
+    def test_systemd_user_detected_first(self):
+        from unittest import mock
+
+        # First call: `systemctl --user is-active hermes` → active
+        responses = [{"returncode": 0, "stdout": "active\n"}]
+        with mock.patch("memex_hermes.install_shim.subprocess.run",
+                         side_effect=self._make_run_mock(responses)), \
+             mock.patch("memex_hermes.install_shim.shutil.which",
+                        return_value="/usr/bin/systemctl"):
+            result = install_shim.detect_restart_mechanism()
+        self.assertEqual(result["method"], "systemd-user")
+        self.assertIn("systemctl --user restart hermes", result["command"])
+
+    def test_pkill_fallback_when_only_process_found(self):
+        from unittest import mock
+
+        # All systemctl probes fail; launchctl absent (not macOS); pgrep works.
+        def fake_which(name):
+            return "/usr/bin/" + name if name in ("systemctl", "pgrep") else None
+
+        # 4 systemctl probes fail, then pgrep succeeds with a PID.
+        responses = [
+            {"returncode": 1, "stdout": ""},  # systemctl --user hermes
+            {"returncode": 1, "stdout": ""},  # systemctl --user hermes-agent
+            {"returncode": 1, "stdout": ""},  # systemctl hermes
+            {"returncode": 1, "stdout": ""},  # systemctl hermes-agent
+            {"returncode": 0, "stdout": "12345\n"},  # pgrep
+        ]
+        with mock.patch("memex_hermes.install_shim.subprocess.run",
+                         side_effect=self._make_run_mock(responses)), \
+             mock.patch("memex_hermes.install_shim.shutil.which",
+                        side_effect=fake_which), \
+             mock.patch("memex_hermes.install_shim.platform.system",
+                        return_value="Linux"):
+            result = install_shim.detect_restart_mechanism()
+        self.assertEqual(result["method"], "pkill")
+        self.assertIn("pkill", result["command"])
+
+    def test_manual_when_nothing_detected(self):
+        from unittest import mock
+
+        with mock.patch("memex_hermes.install_shim.shutil.which",
+                         return_value=None), \
+             mock.patch("memex_hermes.install_shim.platform.system",
+                        return_value="Linux"):
+            result = install_shim.detect_restart_mechanism()
+        self.assertEqual(result["method"], "manual")
+        self.assertEqual(result["command"], "")
+
+    def test_handles_subprocess_timeouts_gracefully(self):
+        from unittest import mock
+        import subprocess as sp
+
+        def fake_run(*a, **kw):
+            raise sp.TimeoutExpired(cmd=a[0], timeout=3)
+
+        with mock.patch("memex_hermes.install_shim.subprocess.run",
+                         side_effect=fake_run), \
+             mock.patch("memex_hermes.install_shim.shutil.which",
+                        return_value="/usr/bin/systemctl"):
+            # Should fall through to manual instead of crashing.
+            result = install_shim.detect_restart_mechanism()
+        self.assertEqual(result["method"], "manual")
+
+
+class TestScheduleSelfRestart(unittest.TestCase):
+    """schedule_self_restart — must Popen with start_new_session=True
+    and never block on the parent. We can't actually trigger a real
+    restart in tests; mock Popen to verify the call shape.
+    """
+
+    def test_returns_scheduled_true_on_success(self):
+        from unittest import mock
+        with mock.patch("memex_hermes.install_shim.subprocess.Popen") as p:
+            result = install_shim.schedule_self_restart(
+                "echo test", delay_seconds=2,
+            )
+        self.assertTrue(result["scheduled"])
+        self.assertEqual(result["delay_seconds"], 2)
+        # Popen was called with start_new_session — detaches background work.
+        kwargs = p.call_args.kwargs
+        self.assertTrue(kwargs.get("start_new_session"))
+        self.assertTrue(kwargs.get("shell"))
+
+    def test_returns_scheduled_false_on_popen_error(self):
+        from unittest import mock
+        with mock.patch(
+            "memex_hermes.install_shim.subprocess.Popen",
+            side_effect=OSError("simulated"),
+        ):
+            result = install_shim.schedule_self_restart("echo test")
+        self.assertFalse(result["scheduled"])
+        self.assertIn("simulated", result["error"])
+
+    def test_rejects_empty_command(self):
+        result = install_shim.schedule_self_restart("")
+        self.assertFalse(result["scheduled"])
+        result2 = install_shim.schedule_self_restart("   ")
+        self.assertFalse(result2["scheduled"])
+
+    def test_clamps_negative_delay_to_minimum(self):
+        from unittest import mock
+        with mock.patch("memex_hermes.install_shim.subprocess.Popen"):
+            result = install_shim.schedule_self_restart("echo test", delay_seconds=-5)
+        # Implementation clamps to 1.
+        self.assertEqual(result["delay_seconds"], 1)
+
+
+class TestCmdSetup(unittest.TestCase):
+    """End-to-end smoke tests for cmd_setup — composes all the pieces."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.hermes_home = Path(self.tmp.name) / "hermes-home"
+        self.hermes_home.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _args(self, **overrides):
+        ns = argparse.Namespace(
+            hermes_home=str(self.hermes_home),
+            no_backfill=False,
+            no_wire_config=False,
+            auto_restart=False,
+            no_auto_restart=True,  # for tests, never actually restart
+            restart_delay=3,
+            force=False,
+            since=None,
+            memex_db=str(Path(self.tmp.name) / "memex.db"),
+            json=False,
+        )
+        for k, v in overrides.items():
+            setattr(ns, k, v)
+        return ns
+
+    def test_setup_human_output_no_history_no_restart(self):
+        # Fresh hermes_home, no state.db → backfill says "no_history".
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_setup(self._args())
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn("setup complete", out.lower())
+        self.assertIn("Config wired", out)  # config.yaml created
+        # Shim exists.
+        self.assertTrue((self.hermes_home / "plugins" / "memex" / "__init__.py").exists())
+        # Config.yaml created with memex provider.
+        cfg = self.hermes_home / "config.yaml"
+        self.assertTrue(cfg.exists())
+        self.assertIn("memex", cfg.read_text())
+
+    def test_setup_json_output_parseable(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_setup(self._args(json=True))
+        self.assertEqual(rc, 0)
+        # Parse the JSON
+        out = buf.getvalue().strip()
+        # In JSON mode we may have init_log + the structured JSON. The
+        # JSON is the ONLY thing on stdout (init's prints captured).
+        data = json.loads(out)
+        self.assertEqual(data["status"], "ready")
+        self.assertIn("shim", data)
+        self.assertEqual(data["shim"]["status"], "ok")
+        self.assertIn("backfill", data)
+        self.assertIn("config", data)
+        self.assertIn("restart", data)
+        self.assertIn("agent_instructions", data)
+        # Restart was opt-out → no scheduling.
+        self.assertEqual(data["restart"].get("auto_restart"), "opt_out")
+
+    def test_setup_with_seeded_history_imports_and_reports(self):
+        _seed_hermes_state_db(self.hermes_home / "state.db")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_setup(self._args(json=True))
+        self.assertEqual(rc, 0)
+        data = json.loads(buf.getvalue())
+        # Backfill imported the 2 seeded messages.
+        self.assertEqual(data["backfill"]["status"], "imported")
+        self.assertEqual(data["backfill"]["sessions"], 1)
+        # After the real run, dry-run dedup count == messages now in memex.
+        self.assertEqual(data["backfill"]["inserted"], 2)
+
+    def test_setup_no_wire_config_leaves_config_alone(self):
+        cfg = self.hermes_home / "config.yaml"
+        cfg.write_text("other: value\n")
+        original = cfg.read_text()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.cmd_setup(self._args(no_wire_config=True))
+        self.assertEqual(rc, 0)
+        # Config untouched.
+        self.assertEqual(cfg.read_text(), original)
+
+    def test_setup_via_main_smoke(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = install_shim.main([
+                "setup",
+                "--hermes-home", str(self.hermes_home),
+                "--memex-db", str(Path(self.tmp.name) / "memex.db"),
+                "--no-auto-restart",
+                "--json",
+            ])
+        self.assertEqual(rc, 0)
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["status"], "ready")
+
+
+class TestAgentInstructions(unittest.TestCase):
+    """The agent_instructions string is what the LLM relays to the user.
+    Verify it adapts to each combination of outcomes."""
+
+    def test_mentions_imported_history_when_present(self):
+        result = {
+            "backfill": {"status": "imported", "inserted": 42, "skipped": 0},
+            "config": {"action": "wired"},
+            "restart": {"method": "systemd-user",
+                        "command": "systemctl --user restart hermes",
+                        "auto_restart": "scheduled",
+                        "delay_seconds": 3},
+        }
+        text = install_shim._format_agent_instructions(result)
+        self.assertIn("42", text)
+        self.assertIn("imported", text.lower())
+        self.assertIn("restart", text.lower())
+
+    def test_explains_no_terminal_path_when_manual(self):
+        """For Telegram users without VPS shell — manual restart should
+        tell them to ask the agent to restart itself, NOT to open a
+        terminal."""
+        result = {
+            "backfill": {"status": "imported", "inserted": 0, "skipped": 10},
+            "config": {"action": "already_set"},
+            "restart": {"method": "manual"},
+        }
+        text = install_shim._format_agent_instructions(result)
+        self.assertIn("restart yourself", text.lower())
+        # Should NOT instruct user to open a terminal.
+        self.assertNotIn("open", text.lower())
+
+    def test_warns_about_conflicting_provider(self):
+        result = {
+            "backfill": {"status": "no_history"},
+            "config": {"action": "conflicting", "existing_provider": "mem0"},
+            "restart": {"method": "systemd-user",
+                        "command": "systemctl --user restart hermes",
+                        "auto_restart": "scheduled",
+                        "delay_seconds": 3},
+        }
+        text = install_shim._format_agent_instructions(result)
+        self.assertIn("mem0", text)
+        self.assertTrue("--force" in text or "manually" in text.lower())
 
 
 if __name__ == "__main__":

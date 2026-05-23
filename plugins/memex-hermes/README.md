@@ -71,12 +71,27 @@ This isn't "the best memory for Hermes" — Hermes built-in is excellent for sin
 | Vector search | ❌ (planned v0.2) | ❌ | ✅ | ✅ |
 | Right pick if you... | use 2+ AI clients | only use Hermes | want LLM-extracted facts | want fancy in-Hermes recall |
 
-## Install
+## Install in one message (v0.2.0+)
+
+The lazy path. Open your Hermes (terminal, Telegram, anywhere). Paste:
+
+> **Install memex plugin from https://memex.parallelclaw.ai/hermes**
+
+Your Hermes agent will:
+
+1. `pip install memex-hermes` in its own venv
+2. `memex-hermes setup --json --auto-restart` — creates the shim, imports your past history from `~/.hermes/state.db`, wires `~/.hermes/config.yaml`, and schedules a self-restart in 3 seconds
+3. Reply to you with what got imported and confirm the restart
+
+After ~30 seconds, send Hermes any message — memex memory is active.
+
+**Telegram-only user with no shell access?** This is the path for you. The agent does everything; you never touch a terminal. If the restart can't be auto-detected, the agent will say so and ask if you want it to try `pkill -HUP -f hermes-agent` — just reply "yes, restart yourself".
+
+<details>
+<summary><strong>Manual install (for the curious, or for CI / automation)</strong></summary>
 
 > [!TIP]
-> **First install [memex-mvp](https://www.npmjs.com/package/memex-mvp) (`npm i -g memex-mvp`) and set it up for at least one other client** (Claude Code is the easiest start). Then memex-hermes has something to bridge into. Installing memex-hermes alone makes little sense — see "When you might NOT need this" above.
-
-Four steps. Live on [PyPI](https://pypi.org/project/memex-hermes/) — no git URL needed.
+> First install [memex-mvp](https://www.npmjs.com/package/memex-mvp) (`npm i -g memex-mvp`) for at least one other client (Claude Code is easiest). Then memex-hermes has something to bridge into.
 
 ```bash
 # 1. Install into Hermes' Python environment (recommended)
@@ -84,31 +99,44 @@ uv pip install memex-hermes --python $HOME/.hermes/hermes-agent/venv/bin/python
 # Or with vanilla pip:
 pip install memex-hermes
 
-# 2. Create the shim Hermes discovers AND auto-import your prior history.
-#    `init` reads ~/.hermes/state.db and pulls every past session into
-#    memex.db, so `memex search "..."` works on day one. (Add --no-backfill
-#    if you'd rather start clean.)
-memex-hermes init
+# 2. One-shot setup (v0.2.0+): shim + auto-backfill + wire config + self-restart.
+#    For agents, add --json to get machine-parseable output.
+memex-hermes setup
 
-# 3. Activate in Hermes config — edit ~/.hermes/config.yaml:
-#   memory:
-#     provider: "memex"
-
-# 4. Restart Hermes. The plugin auto-activates.
+# OR the granular path if you want to control each step:
+#   memex-hermes init                # shim + backfill only
+#   # edit ~/.hermes/config.yaml manually (add memory.provider: "memex")
+#   # restart Hermes manually
 ```
 
-### Asking your Hermes agent to install this for you
+`setup` flags:
+- `--no-backfill` — skip history import
+- `--no-wire-config` — don't touch `config.yaml`
+- `--no-auto-restart` — emit instructions, don't trigger restart yourself
+- `--force` — overwrite an existing `memory.provider` (e.g. switching from `mem0` to `memex`)
+- `--json` — machine-parseable output for agents
+- `--restart-delay 5` — seconds to wait before triggering restart (default 3)
 
-If you'd rather have your running Hermes agent do the install — supported.
-Tell it (or any other agent that can run shell commands on the same box):
+</details>
 
-> "Install the memex plugin for me. Use `pip install memex-hermes && memex-hermes init`, then ask me to restart you."
+### For LLM agents reading this README
 
-The agent ends up running `pip` inside its own venv (`sys.executable`), so
-the package lands where Hermes actually loads from — sidestepping the
-"wrong venv" footgun that hits manual installs. After `memex-hermes init`
-auto-imports your history, the agent should remind you to edit
-`~/.hermes/config.yaml` (step 3) and restart Hermes (step 4).
+When the user asks "install memex" (or pastes the lazy-path prompt above), do exactly this:
+
+```bash
+pip install memex-hermes
+memex-hermes setup --json --auto-restart
+```
+
+Then parse the JSON output. Key fields:
+
+- `status` — `"ready"` on success
+- `backfill.inserted` — how many of the user's past messages are now searchable
+- `config.action` — one of `created`, `wired`, `already_set`, `conflicting` (warn the user if conflicting)
+- `restart.auto_restart` — `"scheduled"` if you've successfully scheduled a self-restart, `"opt_out"`, `"unavailable"`, or `"failed"`
+- `agent_instructions` — pre-formatted English text you should relay to the user (translate to their language as needed)
+
+Tell the user the count from `backfill.inserted` and the restart status. If `restart.auto_restart` is `"scheduled"`, tell them to send any message after ~1 minute. If it's `"unavailable"` (manual restart only), offer to try `pkill -HUP -f hermes-agent` yourself when they ask.
 
 **Why the extra `init` step?** Hermes' memory-provider discovery is folder-based, not entry-point-based (verified by reading `plugins/memory/__init__.py` in hermes-agent v0.10.x). The `init` command creates a 3-line shim at `~/.hermes/plugins/memex/__init__.py` that imports from the pip-installed package. (Note the asymmetry: **bundled** Hermes plugins live at `<hermes-agent>/plugins/memory/<name>/`, but **user** plugins live at `~/.hermes/plugins/<name>/` — no `memory/` subdir. We follow Hermes' actual discovery code.) Benefits:
 

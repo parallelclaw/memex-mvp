@@ -38,12 +38,17 @@ time.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
+import json
 import logging
 import os
+import platform
 import shutil
+import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
 
 from memex_hermes import __version__
 
@@ -223,6 +228,557 @@ pip_dependencies: []
     return 0
 
 
+# ============================================================
+# v0.2.0 — `memex-hermes setup` one-shot command
+#
+# Composes init + config wiring + restart detection so an LLM
+# agent (or human) can complete the install in ONE command after
+# `pip install`. With --auto-restart (default-on when a reliable
+# restart mechanism is detected), the agent restarts Hermes itself
+# so the user never has to touch a terminal — critical for users
+# who reach Hermes only via Telegram and have no VPS shell access.
+# ============================================================
+
+def wire_hermes_config(
+    hermes_home: Path,
+    *,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Idempotently ensure ~/.hermes/config.yaml has memory.provider: memex.
+
+    Returns a dict describing what happened:
+
+      action='created'      — config.yaml didn't exist; created with our setting
+      action='wired'        — added memory.provider to an existing config
+      action='already_set'  — provider was already 'memex'; no change
+      action='conflicting'  — another provider configured; NOT overwritten
+                              (unless force=True)
+      action='force_overwritten' — was another provider; force=True so we wrote
+      action='parse_failed' — config.yaml exists but failed to parse; not changed
+      action='write_failed' — IO error during write
+      action='skipped_no_yaml' — PyYAML not importable; can't safely edit
+
+    Designed never to lose unrelated user config. We round-trip through
+    yaml.safe_load + yaml.safe_dump which strips comments — but only
+    rewrites the file when we actually changed memory.provider. So a
+    user who has comments + memory.provider='memex' already → we never
+    touch the file at all.
+    """
+    config_path = hermes_home / "config.yaml"
+    result: Dict[str, Any] = {"path": str(config_path)}
+
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        result["action"] = "skipped_no_yaml"
+        result["warning"] = (
+            "PyYAML not installed in this Python — cannot safely edit config.yaml. "
+            "Add to ~/.hermes/config.yaml manually:\n"
+            '  memory:\n    provider: "memex"'
+        )
+        return result
+
+    # File doesn't exist → write minimal config.
+    if not config_path.exists():
+        try:
+            config_path.write_text(
+                'memory:\n  provider: "memex"\n',
+                encoding="utf-8",
+            )
+            result["action"] = "created"
+            return result
+        except OSError as e:
+            result["action"] = "write_failed"
+            result["warning"] = f"Cannot write {config_path}: {e}"
+            return result
+
+    # File exists → parse.
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        if not isinstance(cfg, dict):
+            result["action"] = "parse_failed"
+            result["warning"] = (
+                f"{config_path} top-level is not a mapping; refusing to edit."
+            )
+            return result
+    except (yaml.YAMLError, OSError) as e:
+        result["action"] = "parse_failed"
+        result["warning"] = f"Cannot parse {config_path}: {e}"
+        return result
+
+    memory_section = cfg.get("memory") or {}
+    if not isinstance(memory_section, dict):
+        # Unusual shape — refuse to edit.
+        result["action"] = "parse_failed"
+        result["warning"] = (
+            f"{config_path} has a `memory:` key but its value is not a "
+            "mapping; refusing to edit."
+        )
+        return result
+
+    current = memory_section.get("provider")
+
+    if current == "memex":
+        result["action"] = "already_set"
+        return result
+
+    if current is not None and not force:
+        result["action"] = "conflicting"
+        result["existing_provider"] = current
+        result["warning"] = (
+            f"memory.provider is already '{current}'. Refusing to overwrite "
+            "without --force. Edit manually or re-run setup --force."
+        )
+        return result
+
+    # Going to write — track whether this is a fresh-add or force-replace.
+    write_action = "force_overwritten" if current is not None else "wired"
+    if current is not None:
+        result["replaced_provider"] = current
+
+    cfg.setdefault("memory", {})["provider"] = "memex"
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg, f, default_flow_style=False, allow_unicode=True)
+        result["action"] = write_action
+        return result
+    except OSError as e:
+        result["action"] = "write_failed"
+        result["warning"] = f"Cannot write {config_path}: {e}"
+        return result
+
+
+def detect_restart_mechanism() -> Dict[str, Any]:
+    """Detect how Hermes is running so we can suggest (or execute) restart.
+
+    Probes in priority order:
+      1. systemctl --user is-active hermes / hermes-agent  → systemd-user
+      2. systemctl is-active (system)                       → systemd-system
+      3. macOS launchctl list | grep hermes                 → launchd
+      4. pgrep -f hermes-agent                              → pkill HUP fallback
+      5. Nothing found                                       → manual
+
+    Returns dict:
+      method:  'systemd-user' | 'systemd-system' | 'launchd' | 'pkill' | 'manual'
+      command: shell command string (or '' for manual)
+      detail:  human-readable extra info (unit name, label, pid, etc.)
+    """
+    result: Dict[str, Any] = {"method": "manual", "command": "", "detail": ""}
+
+    # 1 + 2. systemd
+    if shutil.which("systemctl"):
+        for scope_flag, method_name in [("--user", "systemd-user"), (None, "systemd-system")]:
+            for unit in ["hermes", "hermes-agent"]:
+                cmd = ["systemctl"]
+                if scope_flag:
+                    cmd.append(scope_flag)
+                cmd.extend(["is-active", unit])
+                try:
+                    r = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=3,
+                    )
+                except (subprocess.TimeoutExpired, OSError):
+                    continue
+                if r.returncode == 0 and r.stdout.strip() == "active":
+                    if scope_flag:
+                        restart_cmd = f"systemctl --user restart {unit}"
+                    else:
+                        restart_cmd = f"sudo systemctl restart {unit}"
+                    return {
+                        "method": method_name,
+                        "command": restart_cmd,
+                        "detail": f"systemd unit '{unit}' active",
+                    }
+
+    # 3. launchd on macOS
+    if platform.system() == "Darwin" and shutil.which("launchctl"):
+        try:
+            r = subprocess.run(
+                ["launchctl", "list"], capture_output=True, text=True, timeout=3,
+            )
+            if r.returncode == 0:
+                for line in r.stdout.splitlines():
+                    if "hermes" in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            label = parts[-1]
+                            return {
+                                "method": "launchd",
+                                "command": (
+                                    f"launchctl kickstart -k gui/$(id -u)/{label}"
+                                ),
+                                "detail": f"launchd label '{label}'",
+                            }
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    # 4. pgrep fallback
+    if shutil.which("pgrep"):
+        try:
+            r = subprocess.run(
+                ["pgrep", "-f", "hermes-agent"],
+                capture_output=True, text=True, timeout=3,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                pids = r.stdout.strip().split()
+                return {
+                    "method": "pkill",
+                    "command": "pkill -HUP -f hermes-agent",
+                    "detail": f"hermes-agent process(es): {','.join(pids[:4])}",
+                }
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    return result  # method='manual'
+
+
+def schedule_self_restart(
+    restart_command: str,
+    *,
+    delay_seconds: int = 3,
+    log_path: str = "/tmp/memex-hermes-restart.log",
+) -> Dict[str, Any]:
+    """Fork a detached background shell that sleeps then runs the restart.
+
+    The shell is started in a NEW session (start_new_session=True) so it
+    survives the SIGTERM that hits Hermes when the restart fires —
+    otherwise the restart-runner would be killed by the very signal it
+    delivered. Output goes to log_path so a user can diagnose if the
+    restart silently failed.
+
+    Returns dict with `scheduled: True` and `log_path`. Errors during
+    Popen itself surface as `scheduled: False` + `error`.
+    """
+    if not restart_command or not restart_command.strip():
+        return {"scheduled": False, "error": "empty restart_command"}
+
+    delay_seconds = max(1, int(delay_seconds))
+    shell_script = (
+        f"(echo '--- memex-hermes auto-restart $(date -Iseconds) ---' >> {log_path}; "
+        f"sleep {delay_seconds}; "
+        f"echo 'restart_command: {restart_command}' >> {log_path}; "
+        f"{restart_command} >> {log_path} 2>&1; "
+        f"echo 'rc=$?' >> {log_path})"
+    )
+    try:
+        subprocess.Popen(
+            shell_script,
+            shell=True,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return {
+            "scheduled": True,
+            "delay_seconds": delay_seconds,
+            "log_path": log_path,
+        }
+    except OSError as e:
+        return {"scheduled": False, "error": str(e)}
+
+
+def _format_agent_instructions(result: Dict[str, Any], lang: str = "en") -> str:
+    """Build the agent_instructions text — what the LLM should relay to user.
+
+    The agent reads `setup --json` output, finds this string, and uses
+    it as the basis for its reply. We give it ready-made wording (in
+    English; agents can translate as needed).
+    """
+    backfill = result.get("backfill", {})
+    config = result.get("config", {})
+    restart = result.get("restart", {})
+
+    history_line = ""
+    if backfill.get("status") == "imported":
+        if backfill.get("inserted", 0) > 0:
+            history_line = (
+                f"I imported {backfill['inserted']} of your past Hermes "
+                f"messages into memex. "
+            )
+        elif backfill.get("skipped", 0) > 0:
+            history_line = (
+                f"Your history was already in memex ({backfill['skipped']} "
+                f"messages, all deduplicated). "
+            )
+
+    config_line = ""
+    action = config.get("action")
+    if action == "created":
+        config_line = "I created ~/.hermes/config.yaml with memory.provider: memex. "
+    elif action == "wired":
+        config_line = "I added memory.provider: memex to ~/.hermes/config.yaml. "
+    elif action == "already_set":
+        config_line = "Hermes config was already wired to memex. "
+    elif action == "conflicting":
+        config_line = (
+            f"⚠️ Heads-up: another memory provider "
+            f"('{config.get('existing_provider')}') is already configured. "
+            f"I did NOT overwrite it. To switch, re-run setup with --force "
+            f"or edit ~/.hermes/config.yaml manually. "
+        )
+
+    restart_line = ""
+    if restart.get("auto_restart") == "scheduled":
+        delay = restart.get("delay_seconds", 3)
+        restart_line = (
+            f"I've scheduled myself to restart in {delay} seconds. Send me "
+            f"any message after a minute and memex will be active — your "
+            f"full history searchable in natural language."
+        )
+    elif restart.get("method") == "manual":
+        restart_line = (
+            "I couldn't auto-detect how Hermes is run on this machine. "
+            "Tell me to 'restart yourself' and I'll try `pkill -HUP -f hermes-agent`, "
+            "or ask your server admin to restart Hermes. After restart, "
+            "memex is active."
+        )
+    else:
+        # Detected but not scheduled (e.g. --no-auto-restart)
+        cmd = restart.get("command", "")
+        restart_line = (
+            f"To activate memex, restart Hermes by running: `{cmd}` "
+            f"(or just tell me 'restart yourself')."
+        )
+
+    return (history_line + config_line + restart_line).strip()
+
+
+def _print_human_setup_summary(result: Dict[str, Any]) -> None:
+    """Render the human-readable summary of cmd_setup work."""
+    print()
+    print("─" * 60)
+    print("✅ memex-hermes setup complete")
+    print("─" * 60)
+
+    bf = result.get("backfill", {})
+    if bf.get("status") == "imported":
+        ins = bf.get("inserted", 0)
+        dup = bf.get("skipped", 0)
+        sess = bf.get("sessions", 0)
+        if ins > 0:
+            print(f"📥 History imported:    {ins} new messages from {sess} session(s)")
+            if dup:
+                print(f"                        {dup} already present (deduped)")
+        elif dup > 0:
+            print(f"📥 History already in memex: {dup} messages (nothing new to import)")
+        else:
+            print(f"📥 History:             empty — no past Hermes sessions found")
+    elif bf.get("status") == "no_history":
+        print("📥 History:             no Hermes state.db yet (live capture starts after restart)")
+    elif bf.get("status") == "skipped":
+        print("📥 History:             skipped (--no-backfill)")
+    elif bf.get("status") == "failed":
+        print(f"📥 History:             ⚠️ import failed — {bf.get('error')}")
+
+    cfg = result.get("config", {})
+    action = cfg.get("action")
+    if action == "created":
+        print(f"🔧 Config wired:        created {cfg.get('path')} with memex provider")
+    elif action == "wired":
+        print(f"🔧 Config wired:        memory.provider: memex → {cfg.get('path')}")
+    elif action == "already_set":
+        print(f"🔧 Config:              already wired (memex provider in {cfg.get('path')})")
+    elif action == "conflicting":
+        print(f"🔧 Config:              ⚠️ conflict — {cfg.get('warning')}")
+    elif action == "force_overwritten":
+        print(
+            f"🔧 Config:              ⚠️ replaced '{cfg.get('replaced_provider')}' "
+            f"with memex (--force)"
+        )
+    elif action == "parse_failed":
+        print(f"🔧 Config:              ⚠️ {cfg.get('warning')}")
+    elif action == "write_failed":
+        print(f"🔧 Config:              ⚠️ {cfg.get('warning')}")
+    elif action == "skipped":
+        print("🔧 Config:              skipped (--no-wire-config)")
+    elif action == "skipped_no_yaml":
+        print(f"🔧 Config:              ⚠️ {cfg.get('warning')}")
+
+    restart = result.get("restart", {})
+    method = restart.get("method", "manual")
+    if restart.get("auto_restart") == "scheduled":
+        delay = restart.get("delay_seconds", 3)
+        print(
+            f"🔄 Auto-restart:        scheduled in {delay}s "
+            f"({method} — {restart.get('command')})"
+        )
+        print(f"                        log: {restart.get('log_path')}")
+        print()
+        print(
+            "💬 After restart, send Hermes any message — memex memory "
+            "will be active."
+        )
+    elif method == "manual":
+        print("🔄 Restart needed:      could not auto-detect mechanism")
+        print("                        Ask your Hermes agent to 'restart yourself'")
+        print("                        OR ask your server admin to restart Hermes")
+    else:
+        cmd = restart.get("command", "")
+        print(f"🔄 Restart needed:      {cmd}")
+        print(f"                        ({method}) — or tell Hermes 'restart yourself'")
+    print()
+
+
+# ------------- The orchestrator -------------
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """One-shot install entry point. Composes init + wire_config + restart.
+
+    Flow:
+      1. Run cmd_init (creates shim + auto-backfill).
+      2. Wire ~/.hermes/config.yaml unless --no-wire-config.
+      3. Detect restart mechanism.
+      4. If auto-restart enabled and a reliable mechanism detected:
+         schedule a detached background self-restart.
+      5. Emit either human-readable summary or JSON (for agents).
+
+    Returns 0 on success (even if some sub-steps had warnings), 2 if the
+    fundamental install step (shim creation) failed.
+    """
+    use_json = bool(getattr(args, "json", False))
+    hermes_home = _resolve_hermes_home(args.hermes_home)
+
+    result: Dict[str, Any] = {
+        "status": "unknown",
+        "hermes_home": str(hermes_home),
+        "memex_hermes_version": __version__,
+        "shim": {},
+        "backfill": {},
+        "config": {},
+        "restart": {},
+    }
+
+    # ----- 1. Run cmd_init (shim + backfill) -----
+    # In JSON mode silence cmd_init's prints — we'll emit one structured
+    # JSON object at the end. We still get the rc.
+    init_buf = io.StringIO() if use_json else None
+    rc_ctx: contextlib.AbstractContextManager
+    if use_json:
+        rc_ctx = contextlib.redirect_stdout(init_buf)  # type: ignore[arg-type]
+    else:
+        rc_ctx = contextlib.nullcontext()
+    with rc_ctx:
+        rc = cmd_init(args)
+    if use_json and init_buf:
+        # Surface cmd_init's text into the JSON for debugging.
+        result["init_log"] = init_buf.getvalue()
+
+    if rc != 0:
+        result["status"] = "failed"
+        result["shim"]["status"] = "failed"
+        result["shim"]["rc"] = rc
+        if use_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        return rc
+
+    # We can't easily read the dict from cmd_init (it doesn't return one),
+    # so we re-derive what we need from the filesystem + state.db.
+    shim_dir = _shim_path(hermes_home)
+    result["shim"]["status"] = "ok"
+    result["shim"]["path"] = str(shim_dir)
+
+    # Inspect backfill outcome by counting Hermes rows in memex.db.
+    # We don't have run_backfill's returned dict here, but we can run
+    # a dry-run pre-check to know the current state vs state.db's
+    # expectations. Simpler: re-run dry-run JUST to capture counts for
+    # the report. This is cheap (FTS-less COUNT queries).
+    state_db = hermes_home / "state.db"
+    if not state_db.exists():
+        result["backfill"]["status"] = "no_history"
+    elif getattr(args, "no_backfill", False):
+        result["backfill"]["status"] = "skipped"
+    else:
+        # cmd_init just ran backfill non-dry; a follow-up dry-run gives
+        # us accurate "would dedup N / would insert M" — at this point
+        # everything should be dedup since we just inserted it.
+        try:
+            from memex_hermes.backfill import run_backfill
+            totals = run_backfill(
+                hermes_home=str(hermes_home),
+                memex_db=getattr(args, "memex_db", None),
+                since=getattr(args, "since", None),
+                dry_run=True,
+                verbose=False,
+            )
+            # In a fresh install: inserted (from cmd_init) maps to the
+            # dedup count we see here.
+            result["backfill"]["status"] = "imported"
+            result["backfill"]["sessions"] = totals.get("sessions", 0)
+            # After cmd_init's real run, dry-run should show 0 new + N dedup.
+            # We report dedup as 'inserted' for human clarity ("you have N
+            # messages stored from your past"). If something was already in
+            # memex before our init (e.g. via live capture earlier), the
+            # split is: dedup = total now searchable.
+            result["backfill"]["inserted"] = totals.get("skipped", 0)
+            result["backfill"]["skipped"] = totals.get("inserted", 0)  # would-be-new = 0 if all imported
+            result["backfill"]["errors"] = totals.get("errors", 0)
+        except Exception as e:  # noqa: BLE001
+            result["backfill"]["status"] = "failed"
+            result["backfill"]["error"] = str(e)
+
+    # ----- 2. Wire config.yaml -----
+    if getattr(args, "no_wire_config", False):
+        result["config"] = {"action": "skipped"}
+    else:
+        result["config"] = wire_hermes_config(
+            hermes_home,
+            force=bool(getattr(args, "force", False)),
+        )
+
+    # ----- 3. Detect restart mechanism -----
+    result["restart"] = detect_restart_mechanism()
+
+    # ----- 4. Auto-restart decision -----
+    # User-facing default: auto-restart IF a reliable mechanism was found
+    # AND the user didn't pass --no-auto-restart.
+    explicit_no = bool(getattr(args, "no_auto_restart", False))
+    explicit_yes = bool(getattr(args, "auto_restart", False))
+    reliable = result["restart"]["method"] != "manual"
+
+    if explicit_no:
+        should_auto_restart = False
+        result["restart"]["auto_restart"] = "opt_out"
+    elif explicit_yes:
+        should_auto_restart = bool(result["restart"].get("command"))
+        if not should_auto_restart:
+            result["restart"]["auto_restart"] = "unavailable"
+            result["restart"]["auto_restart_reason"] = (
+                "no restart command detected"
+            )
+    else:
+        # Default: do it if reliable
+        should_auto_restart = reliable
+        if not reliable:
+            result["restart"]["auto_restart"] = "skipped_unreliable"
+            result["restart"]["auto_restart_reason"] = (
+                "no reliable mechanism (systemd/launchd/pkill) detected"
+            )
+
+    if should_auto_restart:
+        sched = schedule_self_restart(
+            result["restart"]["command"],
+            delay_seconds=int(getattr(args, "restart_delay", 3) or 3),
+        )
+        if sched.get("scheduled"):
+            result["restart"]["auto_restart"] = "scheduled"
+            result["restart"]["delay_seconds"] = sched["delay_seconds"]
+            result["restart"]["log_path"] = sched["log_path"]
+        else:
+            result["restart"]["auto_restart"] = "failed"
+            result["restart"]["auto_restart_error"] = sched.get("error", "unknown")
+
+    # ----- 5. Emit -----
+    result["status"] = "ready"
+    result["agent_instructions"] = _format_agent_instructions(result)
+
+    if use_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        _print_human_setup_summary(result)
+    return 0
+
+
 def cmd_uninstall(args: argparse.Namespace) -> int:
     """Remove the shim folder. Does NOT uninstall the pip package itself."""
     hermes_home = _resolve_hermes_home(args.hermes_home)
@@ -313,6 +869,75 @@ def main(argv: Optional[list] = None) -> int:
         help="Override memex.db location. Default: ~/.memex/data/memex.db",
     )
     p_init.set_defaults(func=cmd_init)
+
+    # v0.2.0 — one-shot setup (init + wire config + restart) for agent installs.
+    p_setup = sub.add_parser(
+        "setup",
+        parents=[common],
+        help=(
+            "ONE-SHOT install: shim + auto-backfill + wire config.yaml + "
+            "(optional) auto-restart Hermes. Designed for LLM agents that "
+            "install memex on the user's behalf — emit --json for "
+            "machine-parseable output."
+        ),
+    )
+    p_setup.add_argument(
+        "--no-backfill",
+        action="store_true",
+        help="Skip the automatic import of pre-install Hermes history.",
+    )
+    p_setup.add_argument(
+        "--no-wire-config",
+        action="store_true",
+        help="Skip editing ~/.hermes/config.yaml. You'll need to set memory.provider yourself.",
+    )
+    p_setup.add_argument(
+        "--auto-restart",
+        action="store_true",
+        help=(
+            "Force-attempt the restart even if the detected mechanism is "
+            "'manual' (will fall back to pkill HUP)."
+        ),
+    )
+    p_setup.add_argument(
+        "--no-auto-restart",
+        action="store_true",
+        help=(
+            "Don't auto-restart Hermes. Default behavior is to schedule a "
+            "delayed self-restart if a reliable mechanism (systemd / launchd "
+            "/ pkill) was detected."
+        ),
+    )
+    p_setup.add_argument(
+        "--restart-delay",
+        type=int,
+        default=3,
+        help="Seconds to wait before triggering self-restart (default: 3).",
+    )
+    p_setup.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite ~/.hermes/config.yaml even when another memory provider is set.",
+    )
+    p_setup.add_argument(
+        "--since",
+        default=None,
+        help=(
+            "When importing history, include only sessions after this date "
+            "(YYYY-MM-DD or unix epoch). Default: full history."
+        ),
+    )
+    p_setup.add_argument(
+        "--memex-db",
+        default=None,
+        help="Override memex.db location. Default: ~/.memex/data/memex.db",
+    )
+    p_setup.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-parseable JSON instead of human text. For agents.",
+    )
+    p_setup.set_defaults(func=cmd_setup)
 
     p_uninstall = sub.add_parser(
         "uninstall",

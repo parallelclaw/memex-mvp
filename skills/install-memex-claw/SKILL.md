@@ -1,7 +1,7 @@
 ---
 name: install-memex-claw
 description: Install the memex-openclaw plugin so OpenClaw captures every turn verbatim into a local memex.db, plus wire the memex MCP server for search tools. Plugin-based capture (OpenClaw 2026.5+) — no daemon, no file watching. Auto-detects whether memex-mvp is already installed on this machine (e.g. for Claude Code via the generic install-memex skill); if yes, just adds the OpenClaw plugin + MCP wiring; if no, full install. Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. memex-openclaw is most useful as a BRIDGE — pairs with memex-mvp + other clients (Claude Code, Hermes, Telegram) for unified cross-client memory. If user only uses OpenClaw with built-in memory-core / Memoria / Mem0 — say so, that may be enough on its own.
-version: 2.0.1
+version: 2.0.2
 metadata:
   openclaw:
     emoji: "🧠"
@@ -257,9 +257,13 @@ print('allowConversationAccess:', e.get('hooks', {}).get('allowConversationAcces
 
 ---
 
-## Step 5 — Wire memex into the OpenClaw gateway's MCP-server config (optional but recommended)
+## Step 5 — Wire memex as an MCP server (REQUIRED for LLM retrieval)
 
-The plugin handles capture. The memex-mvp MCP server provides additional **search/retrieval tools** to the model (`memex_search`, `memex_recent`, `memex_overview`, etc.). If you already have the OpenClaw built-in `memory_search` tool via the plugin's corpus supplement, this is **optional** — the model can search memex through built-in `memory_search`. But for direct access to memex's full MCP tool set, wire it.
+> **Before v2.0.2 this step was marked optional. It is not optional.** Without it, the LLM agent has no way to *search* memex from inside an OpenClaw conversation. The plugin handles **capture** (write path); the MCP server handles **retrieval** (read path). Both are needed.
+>
+> Specifically: the plugin's `api.registerTool('memex_search', ...)` registrations create RPC tools in OpenClaw's gateway registry — they're callable via direct `tool.call(...)` but **do not appear in the LLM's function-calling toolset**. The LLM's toolset is populated from `mcp.servers` config at session start by the MCP runtime adapter. So if memex isn't in `mcp.servers`, the agent will fall back to raw `sqlite3` calls (or fail) when asked to search.
+
+> **Config-key gotcha** — OpenClaw 2026.5+ reads MCP servers from `cfg.mcp.servers` (nested), NOT from the top-level `cfg.mcpServers` (flat). Pre-v2.0.2 of this skill wrote to the flat key, which OpenClaw silently ignored. Verify with `openclaw mcp list` after the merge — it must show `memex`.
 
 Find the absolute path to `memex` binary (MCP stdio doesn't inherit shell PATH):
 
@@ -267,24 +271,63 @@ Find the absolute path to `memex` binary (MCP stdio doesn't inherit shell PATH):
 which memex
 ```
 
-Add to `~/.openclaw/openclaw.json` `mcpServers` section (don't overwrite other servers):
+Merge memex into `~/.openclaw/openclaw.json` at the correct path `mcp.servers.memex` (preserves other servers; idempotent on re-runs):
 
 ```sh
-python3 <<PY
-import json
+python3 <<'PY'
+import json, shutil
 from pathlib import Path
 p = Path.home() / ".openclaw" / "openclaw.json"
 cfg = json.loads(p.read_text())
-mcp = cfg.setdefault("mcpServers", {})
-import shutil
+
 memex_bin = shutil.which("memex")
 if not memex_bin:
-    print("ERROR: memex binary not in PATH; rerun Step 2")
+    print("ERROR: memex binary not in PATH; rerun Step 2 to install memex-mvp")
     raise SystemExit(1)
-mcp["memex"] = { "command": memex_bin, "args": [], "env": {} }
+
+# Correct path is mcp.servers (nested), NOT mcpServers (flat).
+# Both keys exist in different OpenClaw documentation versions; only
+# mcp.servers is actually loaded by the MCP runtime adapter in 2026.5+.
+mcp_section = cfg.setdefault("mcp", {})
+servers = mcp_section.setdefault("servers", {})
+servers["memex"] = {
+    "command": memex_bin,
+    "args": [],
+    "env": {}
+}
+
+# If a stale mcpServers.memex from old skill version exists, clean it up
+# so users aren't confused by two "memex" entries showing up in tooling.
+stale = cfg.get("mcpServers", {})
+if isinstance(stale, dict) and "memex" in stale:
+    del stale["memex"]
+    if not stale:
+        cfg.pop("mcpServers", None)
+    print("cleaned stale mcpServers.memex from previous skill version")
+
 p.write_text(json.dumps(cfg, indent=2))
-print("memex MCP wired at", p)
+print(f"memex MCP wired at {p} → {memex_bin}")
 PY
+```
+
+**Verify the merge worked (THREE checks)**:
+
+```sh
+# 1. The config has the right key:
+python3 -c "
+import json
+from pathlib import Path
+cfg = json.loads((Path.home() / '.openclaw' / 'openclaw.json').read_text())
+s = cfg.get('mcp', {}).get('servers', {}).get('memex')
+print('mcp.servers.memex:', json.dumps(s, indent=2) if s else 'MISSING')
+"
+
+# 2. OpenClaw's own listing recognises it (this is the authoritative check):
+openclaw mcp list 2>&1 | grep -i memex
+# Must show 'memex' or similar.
+
+# 3. After the next restart (Step 6), the LLM toolset includes memex_search.
+# That's verified in Step 7d below.
 ```
 
 ---
@@ -375,7 +418,19 @@ SQL
 
 You should see your recent turns captured with `conversation_id` like `openclaw-telegram-<chat_id>` or `openclaw-cli-<session8>` depending on the channel.
 
-For the model side — open OpenClaw chat, ask: "search your memory for X" — and the built-in `memory_search` should now include memex rows in results (via the corpus supplement registration).
+### 7d. LLM toolset includes memex tools (requires a FRESH session)
+
+MCP tools are loaded into the LLM's function-calling toolset at **session start**. The session in which you just ran `openclaw gateway restart` was already running before the restart, so it has the OLD toolset (no memex). To verify memex is exposed:
+
+1. Start a **fresh** OpenClaw conversation (`/new` or open a new session — depends on how the user interacts with OpenClaw: webchat / Telegram / CLI).
+2. Ask the agent something that should trigger memex usage:
+   > "Find the earliest conversations from April using memex_search."
+3. The agent should:
+   - Mention `memex_search` in its reasoning or just call it
+   - Return real results (IDs, timestamps, snippets from `~/.memex/data/memex.db`)
+   - NOT fall back to direct `sqlite3` calls
+
+If the agent says it doesn't see memex tools → re-check Step 5 (probably `mcp.servers` vs `mcpServers` key issue) and `openclaw mcp list`.
 
 ---
 

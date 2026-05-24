@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   mkdirSync,
   writeFileSync,
+  readFileSync,
   rmSync,
   existsSync,
   readdirSync,
@@ -91,6 +92,21 @@ try {
     assert(!existsSync(src), 'source should be gone after move');
     assert(existsSync(dest), 'dest should exist');
     assert(dest.startsWith(PENDING_DIR), 'dest must be inside PENDING_DIR');
+  });
+
+  // v0.11.6 — preserve user's original export in ~/Downloads/Telegram Desktop/.
+  // The live daemon watcher MUST use moveOrCopy='copy' (regression guard for
+  // ingest.js scheduleTelegramStaging). See ingest.js around line 1938.
+  test('stageExport: copy leaves source intact', () => {
+    const src = makeExport('Copy-Preserve Chat', tmpHome);
+    const dest = stageExport(src, { moveOrCopy: 'copy' });
+    assert(existsSync(src), 'source MUST still exist after copy (v0.11.6+ behavior)');
+    assert(existsSync(dest), 'dest copy should exist');
+    assert(dest.startsWith(PENDING_DIR), 'dest must be inside PENDING_DIR');
+    // Sanity: the copied directory has the same messages.html content
+    const srcHtml = readFileSync(join(src, 'messages.html'), 'utf8');
+    const destHtml = readFileSync(join(dest, 'messages.html'), 'utf8');
+    assertEq(srcHtml, destHtml);
   });
 
   test('listPending: returns preview with chat name + msg count + dates', () => {

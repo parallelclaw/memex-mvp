@@ -1935,8 +1935,15 @@ function scheduleTelegramStaging(srcPath) {
     if (!existsSync(srcPath)) return;
     try {
       const { stageExport, listPending } = await import('./lib/telegram-pending.js');
-      const dest = stageExport(srcPath, { moveOrCopy: 'move' });
-      log(`+ telegram-export staged → pending/: ${basename(dest)}`);
+      // v0.11.6: COPY (not move) — leave the user's original export
+      // untouched in ~/Downloads/Telegram Desktop/. Pre-v0.11.6 we moved
+      // exports into ~/.memex/pending/ which surprised users who later
+      // looked in their Downloads folder and found nothing. Now they
+      // see the original file where Telegram Desktop put it, AND we
+      // have a staged copy for the review flow. Re-stages of the same
+      // export are still deduped by basename+suffix in stageExport.
+      const dest = stageExport(srcPath, { moveOrCopy: 'copy' });
+      log(`+ telegram-export staged (copy) → pending/: ${basename(dest)}`);
 
       // Channel C: macOS native notification (v0.10.4+ — clickable).
       // Default OFF, opt-in via `memex telegram notifications on`. Dedup

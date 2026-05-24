@@ -1,7 +1,7 @@
 ---
 name: install-memex-claw
 description: Install the memex-openclaw plugin so OpenClaw captures every turn verbatim into a local memex.db, plus wire the memex MCP server for search tools. Plugin-based capture (OpenClaw 2026.5+) — no daemon, no file watching. Auto-detects whether memex-mvp is already installed on this machine (e.g. for Claude Code via the generic install-memex skill); if yes, just adds the OpenClaw plugin + MCP wiring; if no, full install. Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. memex-openclaw is most useful as a BRIDGE — pairs with memex-mvp + other clients (Claude Code, Hermes, Telegram) for unified cross-client memory. If user only uses OpenClaw with built-in memory-core / Memoria / Mem0 — say so, that may be enough on its own.
-version: 2.0.0
+version: 2.0.1
 metadata:
   openclaw:
     emoji: "🧠"
@@ -189,7 +189,11 @@ Should show `"memex-openclaw"` in the registry.
 
 ---
 
-## Step 4 — Enable plugin in openclaw.json
+## Step 4 — Enable plugin in openclaw.json (BOTH `enabled` AND `allowConversationAccess` required)
+
+OpenClaw 2026.5+ runs **non-bundled** (npm-installed) plugins in a sandboxed mode by default. The `agent_end` / `before_compaction` / `session_end` hooks — which memex-openclaw uses to capture turns — are **blocked** unless the user explicitly grants `hooks.allowConversationAccess: true` in the plugin's config entry. Without this, the plugin registers, tools work, but **no new conversations get captured**.
+
+> **Why this is a manual step:** OpenClaw's security model says non-bundled plugins cannot self-declare conversation-access via their own manifest. The user (or this skill on the user's behalf) must explicitly opt-in. This is by design — same model as Android runtime permissions.
 
 Edit `~/.openclaw/openclaw.json` and add the plugin entry. Use `jq` or a careful manual edit — preserve existing keys, **merge don't overwrite**:
 
@@ -202,21 +206,24 @@ print(json.dumps(cfg.get('plugins', {}).get('entries', {}), indent=2))
 "
 ```
 
-Add (or update) the `plugins.entries.memex-openclaw` block:
+Add (or update) the `plugins.entries.memex-openclaw` block — note the **two** required keys:
 
 ```json
 {
   "plugins": {
     "entries": {
       "memex-openclaw": {
-        "enabled": true
+        "enabled": true,
+        "hooks": {
+          "allowConversationAccess": true
+        }
       }
     }
   }
 }
 ```
 
-Safe merge via Python:
+Safe merge via Python (preserves existing config keys, idempotent on re-runs):
 
 ```sh
 python3 <<'PY'
@@ -224,10 +231,28 @@ import json
 from pathlib import Path
 p = Path.home() / ".openclaw" / "openclaw.json"
 cfg = json.loads(p.read_text())
-cfg.setdefault("plugins", {}).setdefault("entries", {})["memex-openclaw"] = {"enabled": True}
+entry = cfg.setdefault("plugins", {}).setdefault("entries", {}).setdefault("memex-openclaw", {})
+entry["enabled"] = True
+# CRITICAL — without this, agent_end hook is BLOCKED by OpenClaw gateway
+# and no new conversations get captured. Bug 6 in skill changelog.
+entry.setdefault("hooks", {})["allowConversationAccess"] = True
 p.write_text(json.dumps(cfg, indent=2))
-print("memex-openclaw enabled in", p)
+print("memex-openclaw enabled with allowConversationAccess in", p)
 PY
+```
+
+**Verify the merge worked**:
+
+```sh
+python3 -c "
+import json
+from pathlib import Path
+cfg = json.loads((Path.home() / '.openclaw' / 'openclaw.json').read_text())
+e = cfg.get('plugins', {}).get('entries', {}).get('memex-openclaw', {})
+print('enabled:', e.get('enabled'))
+print('allowConversationAccess:', e.get('hooks', {}).get('allowConversationAccess'))
+"
+# Both must be True
 ```
 
 ---
@@ -286,9 +311,53 @@ memex-openclaw: plugin activated
 
 ---
 
-## Step 7 — Verify
+## Step 7 — Verify (three checks — all must pass)
 
-Send yourself a test message in OpenClaw (or have one already happened). Wait ~3 seconds, then:
+### 7a. No `BLOCKED` messages in gateway log
+
+If Step 4 wasn't done right, the gateway log will say something like `typed hook "agent_end" BLOCKED because non-bundled plugins must set ... allowConversationAccess=true`. After Step 4 + Step 6 restart, this message should NOT appear for any new restarts:
+
+```sh
+journalctl --user -u openclaw -n 200 --no-pager 2>/dev/null \
+  | grep -iE 'memex-openclaw|BLOCKED|allowConversationAccess' | tail -10 \
+  || tail -300 ~/.openclaw/logs/gateway.log 2>/dev/null \
+  | grep -iE 'memex-openclaw|BLOCKED|allowConversationAccess' | tail -10
+```
+
+If `BLOCKED` still appears → re-do Step 4, then `openclaw gateway restart` again.
+
+### 7b. Capture pipeline writes a NEW row
+
+Snapshot the DB, send a test message in OpenClaw, snapshot again. Diff must be ≥ 2 (user + assistant) AND the new rows must have `raw_type='openclaw-agent-end'` — that's the marker that the **plugin** wrote them, not legacy file-watcher.
+
+```sh
+PRE=$(sqlite3 ~/.memex/data/memex.db \
+  "SELECT COUNT(*) FROM messages WHERE source='openclaw'")
+PRE_TS=$(sqlite3 ~/.memex/data/memex.db \
+  "SELECT MAX(ts) FROM messages WHERE source='openclaw'")
+echo "PRE: rows=$PRE  latest_ts=$PRE_TS"
+
+# >>> NOW send a test message in OpenClaw and wait for the reply <<<
+sleep 5
+
+POST=$(sqlite3 ~/.memex/data/memex.db \
+  "SELECT COUNT(*) FROM messages WHERE source='openclaw'")
+echo "POST: rows=$POST  diff=$((POST - PRE))"
+
+# The plugin tags its writes with raw_type='openclaw-agent-end'.
+# Legacy file-watcher writes have raw_type='openclaw-jsonl' — those DON'T
+# count as plugin-driven capture.
+sqlite3 ~/.memex/data/memex.db \
+  "SELECT id, role, ts, substr(text, 1, 60) AS preview,
+          json_extract(metadata, '$.raw_type') AS raw_type
+     FROM messages
+    WHERE source='openclaw' AND ts > $PRE_TS
+    ORDER BY ts DESC LIMIT 5"
+```
+
+Expected: 2+ new rows, all with `raw_type='openclaw-agent-end'`.
+
+### 7c. Sample messages have the right conversation_id shape
 
 ```sh
 sqlite3 ~/.memex/data/memex.db <<'SQL'

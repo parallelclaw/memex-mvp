@@ -20,11 +20,31 @@ import {
   definePluginEntry,
   buildJsonPluginConfigSchema,
 } from 'openclaw/plugin-sdk/core';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
 
 import { MemexStore } from './lib/store.js';
 import { deriveConvId, deriveMsgId, extractText } from './lib/conv_id.js';
 import { registerMemexTools } from './lib/tools.js';
+
+// v0.1.5: read OUR package.json version dynamically instead of hard-coding
+// a string. Pre-0.1.5 the activated-log message claimed "v0.1.1" forever
+// because the constant was forgotten across releases — confusing on VPS
+// where users sanity-check the version from the gateway log. Reading from
+// package.json (synchronously, at module load) guarantees the logged
+// version always matches the installed package.
+const _require = createRequire(import.meta.url);
+let PLUGIN_VERSION = 'unknown';
+try {
+  // package.json sits in the same dir as index.js — resolved relative to
+  // this file's location so it works whether the plugin is bundled or
+  // installed via npm under ~/.openclaw/npm/node_modules/.
+  PLUGIN_VERSION = _require('./package.json').version || 'unknown';
+} catch {
+  /* fall through with 'unknown' — diag-only, must not crash plugin load */
+}
 
 // v0.1.1 BUG-1 DIAGNOSTIC: trace register() invocations to a file the
 // user can grep. v0.1.0 had a problem where register() was called
@@ -249,7 +269,7 @@ export default definePluginEntry({
       logger.warn('memex-openclaw: store unavailable, skipping tool registration');
     }
 
-    logger.info('memex-openclaw: plugin activated (v0.1.1)');
+    logger.info(`memex-openclaw: plugin activated (v${PLUGIN_VERSION})`);
     traceRegister('register() returned — hooks active');
   },
 });

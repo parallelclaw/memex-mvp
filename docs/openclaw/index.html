@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Verbatim memory for OpenClaw. Install with one message — your agent does the rest. Search every past OpenClaw conversation in natural language. Local-first, no cloud, no API keys. Works on self-hosted OpenClaw + Moonshot Kimi-Claw + macOS workstations.">
+<title>memex for OpenClaw · install in one message</title>
+<link rel="canonical" href="https://memex.parallelclaw.ai/openclaw/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* === ParallelClaw brand palette — mirrors memex.parallelclaw.ai === */
+  :root {
+    --bg: #0f1115;
+    --bg-soft: #151922;
+    --bg-card: rgba(255,255,255,0.05);
+    --text: #f5f7fb;
+    --text-soft: #dbe4f3;
+    --text-muted: #a6b0c3;
+    --accent: #6ee7b7;
+    --accent-light: #a7f3d0;
+    --accent-2: #60a5fa;
+    --accent-bg: rgba(110, 231, 183, 0.12);
+    --green: #6ee7b7;
+    --red-soft: #f87171;
+    --amber: #fbbf24;
+    --border: rgba(255,255,255,0.10);
+    --shadow: 0 20px 60px rgba(0,0,0,0.35);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background:
+      radial-gradient(circle at 10% 10%, rgba(110,231,183,0.10), transparent 30%),
+      radial-gradient(circle at 90% 20%, rgba(96,165,250,0.10), transparent 25%),
+      linear-gradient(180deg, #0d1016 0%, #11151c 100%);
+    background-attachment: fixed;
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, kbd { font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  a { color: var(--accent-light); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(15, 17, 21, 0.72);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text); text-decoration: none;
+  }
+  .brand-svg { width: 32px; height: auto; display: block; flex-shrink: 0; }
+  .brand-wordmark {
+    font-weight: 800; font-size: 17px;
+    letter-spacing: -0.04em; color: var(--text); white-space: nowrap;
+  }
+  .brand-wordmark .accent { color: var(--accent); }
+  .brand-sub {
+    color: var(--text-muted); font-weight: 600; font-size: 14px;
+    border-left: 1px solid var(--border); padding-left: 10px; margin-left: 4px;
+  }
+  .nav-links { display: flex; align-items: center; gap: 8px; }
+  .lang-toggle {
+    display: inline-flex; align-items: center;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px;
+    overflow: hidden;
+  }
+  .lang-toggle button {
+    background: none; border: none; padding: 6px 12px;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    color: var(--text-soft);
+  }
+  .lang-toggle button.active { background: var(--accent); color: var(--bg); }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--text); color: var(--bg);
+    font-weight: 600; font-size: 13px;
+    transition: background 0.15s;
+  }
+  .gh-btn:hover { text-decoration: none; background: var(--accent); }
+
+  .hero {
+    padding: 80px 24px 56px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-inner { max-width: 880px; margin: 0 auto; text-align: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 999px;
+    background: var(--accent-bg); color: var(--accent-light);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
+    margin-bottom: 18px;
+    border: 1px solid rgba(110, 231, 183, 0.25);
+  }
+  h1 {
+    font-size: clamp(34px, 5.6vw, 56px);
+    font-weight: 900; letter-spacing: -0.035em;
+    line-height: 1.05; margin-bottom: 22px;
+  }
+  h1 .accent { color: var(--accent); }
+  .lede {
+    font-size: clamp(17px, 1.9vw, 21px);
+    color: var(--text-soft);
+    max-width: 720px; margin: 0 auto 32px;
+    line-height: 1.5;
+  }
+
+  /* Prompt block — the centerpiece of this page. */
+  .prompt-block {
+    max-width: 720px; margin: 0 auto 18px;
+    background: linear-gradient(180deg, rgba(110,231,183,0.10) 0%, rgba(110,231,183,0.02) 100%);
+    border: 1px solid rgba(110,231,183,0.3); border-radius: 14px;
+    padding: 22px 24px 18px;
+    text-align: left;
+  }
+  .prompt-label {
+    display: block; text-align: center;
+    font-size: 12px; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .prompt-line {
+    display: flex; align-items: stretch;
+    background: #0b1620; border: 1px solid rgba(110,231,183,0.35);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .prompt-line code {
+    flex: 1;
+    padding: 14px 16px;
+    font-size: 14px; line-height: 1.5;
+    color: var(--accent-light);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .btn-copy {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 16px;
+    background: var(--accent); color: var(--bg);
+    border: none; border-left: 1px solid rgba(0,0,0,0.15);
+    font-family: inherit; font-weight: 700; font-size: 13px;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-top-right-radius: 9px; border-bottom-right-radius: 9px;
+  }
+  .btn-copy:hover { background: var(--accent-light); }
+  .btn-copy.copied { background: var(--green); }
+  .prompt-hint {
+    font-size: 14px; line-height: 1.5;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  .cta-meta {
+    font-size: 13px; color: var(--text-muted);
+    margin-top: 18px;
+  }
+
+  /* Sections */
+  .section {
+    padding: 70px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-inner {
+    max-width: 980px; margin: 0 auto;
+  }
+  .section-title {
+    font-size: clamp(26px, 3.4vw, 38px);
+    font-weight: 800; letter-spacing: -0.025em;
+    text-align: center; margin-bottom: 12px;
+    line-height: 1.15;
+  }
+  .section-sub {
+    text-align: center;
+    font-size: 16px; color: var(--text-soft);
+    max-width: 680px; margin: 0 auto 38px;
+    line-height: 1.55;
+  }
+
+  /* Step grid — "what happens after you paste" */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    max-width: 920px; margin: 0 auto;
+  }
+  .step {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 22px 20px;
+    text-align: left;
+    position: relative;
+  }
+  .step-num {
+    position: absolute; top: -14px; left: 18px;
+    background: var(--accent); color: var(--bg);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px;
+  }
+  .step h3 {
+    font-size: 17px; font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text);
+    letter-spacing: -0.005em;
+  }
+  .step p {
+    font-size: 14px;
+    color: var(--text-soft);
+    line-height: 1.55;
+  }
+  .step code {
+    display: inline-block;
+    background: var(--bg-soft); color: var(--accent-light);
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 12.5px;
+  }
+
+  /* "Why this exists" — comparison hint */
+  .why-block {
+    max-width: 740px; margin: 0 auto;
+    text-align: left;
+  }
+  .why-block p {
+    color: var(--text-soft);
+    margin-bottom: 14px;
+    font-size: 15.5px;
+    line-height: 1.6;
+  }
+  .why-block .em { color: var(--accent-light); font-weight: 600; }
+  .why-block strong { color: var(--text); }
+
+  /* Agents box */
+  .agents-box {
+    max-width: 760px; margin: 0 auto;
+    background: rgba(96,165,250,0.05);
+    border: 1px solid rgba(96,165,250,0.25);
+    border-radius: 14px;
+    padding: 26px 26px 22px;
+  }
+  .agents-box h3 {
+    color: var(--accent-2);
+    font-size: 16px; font-weight: 700;
+    letter-spacing: -0.005em;
+    margin-bottom: 12px;
+  }
+  .agents-box p {
+    color: var(--text-soft);
+    font-size: 14.5px; line-height: 1.6;
+    margin-bottom: 12px;
+  }
+  .agents-box pre {
+    background: var(--bg-soft); color: var(--accent-light);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12.5px; line-height: 1.65;
+    overflow-x: auto;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+  }
+  .agents-box ul {
+    color: var(--text-soft);
+    font-size: 14px; line-height: 1.7;
+    padding-left: 20px;
+  }
+  .agents-box ul li { margin-bottom: 3px; }
+  .agents-box code {
+    background: var(--bg-soft); color: var(--accent-light);
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 12.5px;
+  }
+
+  /* FAQ */
+  .faq { max-width: 760px; margin: 0 auto; }
+  .faq details {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    background: var(--bg-card);
+  }
+  .faq summary {
+    cursor: pointer;
+    font-weight: 600; font-size: 15.5px;
+    color: var(--text);
+    list-style: none;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after {
+    content: '＋'; float: right;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+  .faq details[open] summary::after { content: '−'; }
+  .faq details[open] summary { color: var(--accent-light); margin-bottom: 10px; }
+  .faq p {
+    font-size: 14.5px; color: var(--text-soft);
+    line-height: 1.6; margin-bottom: 8px;
+  }
+  .faq code {
+    background: var(--bg-soft); color: var(--accent-light);
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 12.5px;
+  }
+
+  /* Final CTA */
+  .final-cta {
+    text-align: center;
+    padding: 80px 24px 70px;
+  }
+  .final-cta h2 {
+    font-size: clamp(26px, 3.4vw, 38px);
+    font-weight: 800; letter-spacing: -0.025em;
+    color: var(--text);
+    margin-bottom: 22px;
+    line-height: 1.2;
+  }
+  .final-cta h2 .accent { color: var(--accent); }
+  .final-cta-actions {
+    display: flex; gap: 12px;
+    justify-content: center; flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 13px 22px; border-radius: 999px;
+    text-decoration: none;
+    font-weight: 700; font-size: 14.5px;
+    transition: all 0.15s;
+    border: 1.5px solid transparent;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: var(--bg); border: none; }
+  .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); text-decoration: none; }
+  .btn-secondary { background: var(--bg-card); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
+
+  footer {
+    padding: 30px 24px 40px;
+    text-align: center;
+    color: var(--text-muted); font-size: 13px;
+  }
+  footer a { color: var(--accent-light); margin: 0 10px; }
+  footer .footer-tagline { margin-top: 14px; font-size: 12.5px; }
+
+  @media (max-width: 640px) {
+    .hero { padding: 56px 18px 42px; }
+    .section { padding: 50px 18px; }
+    .prompt-block { padding: 18px 16px 14px; }
+    .prompt-line code { font-size: 13px; padding: 12px 12px; }
+    .brand-sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="https://memex.parallelclaw.ai/" class="brand" aria-label="memex — by ParallelClaw">
+      <svg class="brand-svg" viewBox="0 0 180 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="memex-claw-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#6ee7b7"/>
+            <stop offset="100%" stop-color="#60a5fa"/>
+          </linearGradient>
+          <linearGradient id="memex-bolt-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fef08a"/>
+            <stop offset="50%" stop-color="#fbbf24"/>
+            <stop offset="100%" stop-color="#f59e0b"/>
+          </linearGradient>
+          <filter id="memex-bolt-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g transform="translate(10,5)">
+          <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#memex-claw-grad)"/>
+          <path d="M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z" fill="url(#memex-claw-grad)"/>
+          <path d="M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z" fill="url(#memex-claw-grad)"/>
+          <path d="M45 15 Q35 5 30 8" stroke="url(#memex-claw-grad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M75 15 Q85 5 90 8" stroke="url(#memex-claw-grad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <circle cx="45" cy="35" r="6" fill="#0d1016"/>
+          <circle cx="75" cy="35" r="6" fill="#0d1016"/>
+          <circle cx="46" cy="34" r="2" fill="#6ee7b7"/>
+          <circle cx="76" cy="34" r="2" fill="#6ee7b7"/>
+        </g>
+        <path d="M130 5 L108 55 L128 55 L100 115 L152 55 L130 55 L158 5 L130 5Z" fill="url(#memex-bolt-grad)" filter="url(#memex-bolt-glow)" transform="rotate(-8 130 60)"/>
+      </svg>
+      <span class="brand-wordmark">me<span class="accent">mex</span></span>
+      <span class="brand-sub">for OpenClaw</span>
+    </a>
+    <div class="nav-links">
+      <div class="lang-toggle">
+        <button data-lang="en" onclick="setLang('en')">EN</button>
+        <button class="active" data-lang="ru" onclick="setLang('ru')">RU</button>
+      </div>
+      <a class="gh-btn" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.08-2.7-1.08-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <span class="pill" data-en="🤖 memex-mvp 0.11.7 · For OpenClaw 2026.5+" data-ru="🤖 memex-mvp 0.11.7 · Для OpenClaw 2026.5+">🤖 memex-mvp 0.11.7 · Для OpenClaw 2026.5+</span>
+
+    <h1>
+      <span data-en="Memory for OpenClaw." data-ru="Память для OpenClaw.">Память для OpenClaw.</span><br>
+      <span class="accent" data-en="Install in one message." data-ru="Установка в одно сообщение.">Установка в одно сообщение.</span>
+    </h1>
+
+    <p class="lede"
+       data-en="Your OpenClaw agent installs memex itself. Paste the prompt below into OpenClaw (web, terminal, or Telegram — doesn't matter). Past sessions get back-filled, the gateway auto-restarts, memex search activates in the next session. ~30 seconds. No terminal needed."
+       data-ru="OpenClaw-агент сам установит memex. Вставь промпт ниже в OpenClaw (web, терминал, Telegram — без разницы). Прошлые сессии заберутся в память, gateway сам перезагрузится, поиск активен в следующей сессии. ~30 секунд. Терминал не нужен.">
+      OpenClaw-агент сам установит memex. Вставь промпт ниже в OpenClaw (web, терминал, Telegram — без разницы). Прошлые сессии заберутся в память, gateway сам перезагрузится, поиск активен в следующей сессии. ~30 секунд. Терминал не нужен.
+    </p>
+
+    <div class="prompt-block">
+      <span class="prompt-label" data-en="📋 Paste this into your OpenClaw" data-ru="📋 Вставь это своему OpenClaw">📋 Вставь это своему OpenClaw</span>
+
+      <div class="prompt-line">
+        <code id="short-prompt" data-en="Install memex from https://memex.parallelclaw.ai/openclaw"
+                                data-ru="Установи memex с https://memex.parallelclaw.ai/openclaw">Установи memex с https://memex.parallelclaw.ai/openclaw</code>
+        <button class="btn-copy" id="short-copy-btn" onclick="copyShortPrompt()" aria-label="Copy prompt">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+          <span id="short-copy-label" data-en="Copy" data-ru="Копировать">Копировать</span>
+        </button>
+      </div>
+
+      <p class="prompt-hint"
+         data-en="OpenClaw follows this URL, finds install steps below, runs them. No copy-pasting commands. <a href='#detailed-prompt'>Want a longer, more explicit version?</a>"
+         data-ru="OpenClaw откроет ссылку, найдёт инструкцию для агентов ниже, выполнит. Команды копировать не надо. <a href='#detailed-prompt'>Нужна более развёрнутая версия?</a>">
+        OpenClaw откроет ссылку, найдёт инструкцию для агентов ниже, выполнит. Команды копировать не надо. <a href='#detailed-prompt'>Нужна более развёрнутая версия?</a>
+      </p>
+    </div>
+
+    <p class="cta-meta"
+       data-en="MIT · Local-first · No cloud · No API keys · Works on self-hosted OpenClaw, Moonshot Kimi-Claw, and macOS workstations"
+       data-ru="MIT · Local-first · Без облака · Без API-ключей · Работает на self-hosted OpenClaw, Moonshot Kimi-Claw, macOS workstations">
+      MIT · Local-first · Без облака · Без API-ключей · Работает на self-hosted OpenClaw, Moonshot Kimi-Claw, macOS workstations
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     What happens after you paste — 4-step explainer
+     ============================================================ -->
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title"
+        data-en="What happens after you paste"
+        data-ru="Что произойдёт после вставки">
+      Что произойдёт после вставки
+    </h2>
+    <p class="section-sub"
+       data-en="The agent does four things, then tells you what happened. Your only job: send one message after it restarts."
+       data-ru="Агент сделает четыре вещи и расскажет, что получилось. Твоя единственная задача — написать одно сообщение после рестарта.">
+      Агент сделает четыре вещи и расскажет, что получилось. Твоя единственная задача — написать одно сообщение после рестарта.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3 data-en="Installs memex-mvp" data-ru="Ставит memex-mvp">Ставит memex-mvp</h3>
+        <p data-en="<code>npm install -g memex-mvp</code> — the local-first MCP memory server. Pure JS, no native plugin into OpenClaw's sandbox."
+           data-ru="<code>npm install -g memex-mvp</code> — local-first MCP-сервер памяти. Чистый JS, никаких плагинов в sandbox OpenClaw.">
+          <code>npm install -g memex-mvp</code> — local-first MCP-сервер памяти. Чистый JS, никаких плагинов в sandbox OpenClaw.
+        </p>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3 data-en="Starts the capture daemon" data-ru="Запускает capture daemon">Запускает capture daemon</h3>
+        <p data-en="<code>memex-sync install</code> registers an auto-start daemon (LaunchAgent on macOS, systemd-user on Linux) that watches <code>~/.openclaw/agents/main/sessions/</code> and writes every turn to memex.db. <code>memex-sync scan</code> back-fills past sessions."
+           data-ru="<code>memex-sync install</code> ставит daemon (LaunchAgent на macOS, systemd-user на Linux) — он следит за <code>~/.openclaw/agents/main/sessions/</code> и пишет каждый turn в memex.db. <code>memex-sync scan</code> подгребает прошлые сессии.">
+          <code>memex-sync install</code> ставит daemon (LaunchAgent на macOS, systemd-user на Linux) — он следит за <code>~/.openclaw/agents/main/sessions/</code> и пишет каждый turn в memex.db. <code>memex-sync scan</code> подгребает прошлые сессии.
+        </p>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3 data-en="Wires config + restarts" data-ru="Правит конфиг + рестарт">Правит конфиг + рестарт</h3>
+        <p data-en="<code>memex-sync wire-openclaw --auto-restart</code> adds memex to <code>~/.openclaw/openclaw.json</code> as an MCP server and triggers a delayed restart of the gateway (~3s) so the new MCP entry takes effect."
+           data-ru="<code>memex-sync wire-openclaw --auto-restart</code> добавляет memex в <code>~/.openclaw/openclaw.json</code> как MCP-сервер и запускает отложенный рестарт gateway (~3 сек), чтобы новая запись подхватилась.">
+          <code>memex-sync wire-openclaw --auto-restart</code> добавляет memex в <code>~/.openclaw/openclaw.json</code> как MCP-сервер и запускает отложенный рестарт gateway (~3 сек), чтобы новая запись подхватилась.
+        </p>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3 data-en="You message OpenClaw back" data-ru="Ты пишешь сообщение">Ты пишешь сообщение</h3>
+        <p data-en="Wait ~1 minute, send anything. The new session has <code>memex_search</code> in its toolset. Try <em>«find what we discussed last week about X»</em>."
+           data-ru="Подожди ~минуту, напиши что угодно. В новой сессии в toolset появится <code>memex_search</code>. Попробуй <em>«найди о чём мы говорили на прошлой неделе про X»</em>.">
+          Подожди ~минуту, напиши что угодно. В новой сессии в toolset появится <code>memex_search</code>. Попробуй <em>«найди о чём мы говорили на прошлой неделе про X»</em>.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     Why this exists — quick "what + why" so user understands
+     they're making the right choice
+     ============================================================ -->
+<section class="section">
+  <div class="section-inner why-block">
+    <h2 class="section-title"
+        data-en="Why memex for OpenClaw"
+        data-ru="Зачем memex для OpenClaw">
+      Зачем memex для OpenClaw
+    </h2>
+
+    <p data-en="OpenClaw stores every session as JSONL files in <code>~/.openclaw/agents/main/sessions/</code>. They're great for replay, but raw — no search, no cross-session aggregation, no way to ask <em>«what did we decide about X last month?»</em>. memex turns those files into a queryable corpus."
+       data-ru="OpenClaw хранит каждую сессию как JSONL в <code>~/.openclaw/agents/main/sessions/</code>. Хорошо для replay, но никакого поиска, никакой агрегации между сессиями, нельзя спросить <em>«что мы решили про X в прошлом месяце?»</em>. memex превращает эти файлы в индексированный корпус.">
+      OpenClaw хранит каждую сессию как JSONL в <code>~/.openclaw/agents/main/sessions/</code>. Хорошо для replay, но никакого поиска, никакой агрегации между сессиями, нельзя спросить <em>«что мы решили про X в прошлом месяце?»</em>. memex превращает эти файлы в индексированный корпус.
+    </p>
+
+    <p data-en="The bigger value: <span class='em'>OpenClaw plus other AI clients</span> — Claude Code, Hermes, Cursor, Telegram exports — all in <strong>one search</strong>. memex captures from each, stores verbatim in a single SQLite file, and exposes it to any MCP-compatible agent (including OpenClaw itself via <code>memex_search</code>)."
+       data-ru="Главное — <span class='em'>OpenClaw плюс другие AI-клиенты</span> — Claude Code, Hermes, Cursor, Telegram-экспорты — <strong>в одном поиске</strong>. memex захватывает отовсюду, хранит дословно в одном SQLite-файле, отдаёт через MCP любому совместимому агенту (включая сам OpenClaw через <code>memex_search</code>).">
+      Главное — <span class='em'>OpenClaw плюс другие AI-клиенты</span> — Claude Code, Hermes, Cursor, Telegram-экспорты — <strong>в одном поиске</strong>. memex захватывает отовсюду, хранит дословно в одном SQLite-файле, отдаёт через MCP любому совместимому агенту (включая сам OpenClaw через <code>memex_search</code>).
+    </p>
+
+    <p data-en="Plus the <span class='em'>verbatim guarantee</span>: nothing is summarised, nothing is extracted by an LLM. If you said it three months ago, you can find the exact words today. Works regardless of whether OpenClaw is self-hosted, on a Linux VPS, on a macOS workstation, or behind Moonshot's Kimi-Claw."
+       data-ru="Плюс <span class='em'>verbatim-гарантия</span>: ничего не саммаризируется, ничего не «извлекается» LLM-ом. Сказал что-то три месяца назад — найдёшь точные слова сегодня. Работает одинаково на self-hosted OpenClaw, Linux VPS, macOS workstation и Moonshot Kimi-Claw.">
+      Плюс <span class='em'>verbatim-гарантия</span>: ничего не саммаризируется, ничего не «извлекается» LLM-ом. Сказал что-то три месяца назад — найдёшь точные слова сегодня. Работает одинаково на self-hosted OpenClaw, Linux VPS, macOS workstation и Moonshot Kimi-Claw.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     For LLM agents reading this page — the critical block
+     ============================================================ -->
+<section class="section" id="detailed-prompt">
+  <div class="section-inner">
+    <h2 class="section-title"
+        data-en="For LLM agents reading this page"
+        data-ru="Для LLM-агентов, читающих эту страницу">
+      Для LLM-агентов, читающих эту страницу
+    </h2>
+    <p class="section-sub"
+       data-en="If you're an OpenClaw agent (or any LLM with shell access) following the user's request 'install memex from memex.parallelclaw.ai/openclaw' — this section is your instruction set."
+       data-ru="Если ты OpenClaw-агент (или любая LLM с shell-доступом) и выполняешь запрос «установи memex с memex.parallelclaw.ai/openclaw» — эта секция для тебя.">
+      Если ты OpenClaw-агент (или любая LLM с shell-доступом) и выполняешь запрос «установи memex с memex.parallelclaw.ai/openclaw» — эта секция для тебя.
+    </p>
+
+    <div class="agents-box">
+      <h3 data-en="Exact steps to execute" data-ru="Точные шаги">Точные шаги</h3>
+      <pre id="agent-prompt-en" data-lang="en">1. Run: npm install -g memex-mvp@latest
+   (If EACCES, set up ~/.npm-global as the prefix instead of using sudo —
+    see https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally)
+
+2. Run: memex-sync install
+   (registers the auto-capture daemon: LaunchAgent on macOS, systemd-user on Linux)
+
+3. Run: memex-sync scan
+   (back-fills past OpenClaw sessions from ~/.openclaw/agents/main/sessions/
+    into memex.db. Idempotent — re-runs are O(0).)
+
+4. Run: memex-sync wire-openclaw --json --auto-restart
+   (wires memex into ~/.openclaw/openclaw.json at cfg.mcp.servers.memex AND
+    schedules a self-restart of the OpenClaw gateway 3 seconds out)
+
+5. Parse the JSON output. Key fields:
+     status                  "ready" | "already_in_sync" | "partial" | "failed"
+     next_action             "wait_for_restart" | "none" | etc.
+     mcp.action              "wired" | "already_correct" | "conflict" | "memex_missing"
+     restart.auto_restart    "scheduled" | "opt_out" | "unavailable" | "failed"
+     restart.delay_seconds   3 by default
+     agent_instructions      pre-formatted English summary — use as the
+                             basis for your reply to the user
+
+6. Reply to the user using agent_instructions (translate to their language).
+   Tell them: the restart is happening in 3 seconds, send any message in
+   about a minute to confirm memex is active in the new session.
+
+7. If restart.auto_restart is "scheduled", you'll be SIGTERM'd in 3 seconds
+   after your reply is sent. That's expected — the user's next message wakes
+   the restarted OpenClaw gateway with memex_search in the LLM toolset.
+
+8. If restart.auto_restart is NOT "scheduled":
+   - "unavailable" → tell the user no auto-restart mechanism was detected.
+     Offer to try `pkill -HUP -f openclaw` yourself if they say "restart yourself".
+   - "failed" → relay the error from the JSON. Suggest manual restart by
+     their server admin. /tmp/memex-openclaw-restart.log has the failure log.
+   - "opt_out" → only happens if --no-auto-restart was passed. Tell user to
+     run `openclaw gateway restart` themselves when ready.
+
+9. After restart, on a FRESH OpenClaw session, the LLM toolset includes
+   memex_search, memex_recent, memex_overview, etc. — 11 tools total from
+   the memex MCP server.</pre>
+
+      <pre id="agent-prompt-ru" data-lang="ru" style="display:none">1. Выполни: npm install -g memex-mvp@latest
+   (Если EACCES, настрой ~/.npm-global как prefix вместо sudo —
+    см. https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally)
+
+2. Выполни: memex-sync install
+   (регистрирует auto-capture daemon: LaunchAgent на macOS, systemd-user на Linux)
+
+3. Выполни: memex-sync scan
+   (бэкфилит прошлые OpenClaw сессии из ~/.openclaw/agents/main/sessions/
+    в memex.db. Идемпотентно — повторный запуск O(0).)
+
+4. Выполни: memex-sync wire-openclaw --json --auto-restart
+   (вписывает memex в ~/.openclaw/openclaw.json под cfg.mcp.servers.memex И
+    запускает отложенный рестарт gateway через 3 секунды)
+
+5. Распарси JSON. Ключевые поля:
+     status                  "ready" | "already_in_sync" | "partial" | "failed"
+     next_action             "wait_for_restart" | "none" | и т.д.
+     mcp.action              "wired" | "already_correct" | "conflict" | "memex_missing"
+     restart.auto_restart    "scheduled" | "opt_out" | "unavailable" | "failed"
+     restart.delay_seconds   3 по умолчанию
+     agent_instructions      готовый английский текст — используй как основу
+                             для ответа юзеру
+
+6. Ответь юзеру на основе agent_instructions (переведи на его язык).
+   Скажи: рестарт через 3 секунды, ответь любым сообщением через минуту,
+   memex активен в новой сессии.
+
+7. Если restart.auto_restart = "scheduled", тебя SIGTERM'нут через 3 секунды
+   после отправки ответа. Это ожидаемо — следующее сообщение юзера разбудит
+   перезагруженный OpenClaw gateway с memex_search в toolset.
+
+8. Если restart.auto_restart НЕ "scheduled":
+   - "unavailable" → скажи юзеру что mechanism не обнаружен. Предложи
+     попробовать `pkill -HUP -f openclaw` сам если юзер скажет «перезагрузись».
+   - "failed" → передай ошибку из JSON. Предложи ручной рестарт через
+     админа. В /tmp/memex-openclaw-restart.log будет лог проваленного рестарта.
+   - "opt_out" → бывает только если был --no-auto-restart. Скажи юзеру
+     запустить `openclaw gateway restart` самому когда удобно.
+
+9. После рестарта в СВЕЖЕЙ сессии OpenClaw в toolset LLM появятся memex_search,
+   memex_recent, memex_overview и т.д. — 11 инструментов от MCP-сервера memex.</pre>
+
+      <p style="text-align: center; margin-bottom: 0;">
+        <button class="btn-copy" onclick="copyAgentPrompt()" style="background: var(--accent-2); border-radius: 999px; padding: 8px 18px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px;"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+          <span id="agent-copy-label" data-en="Copy detailed prompt" data-ru="Скопировать развёрнутый промпт">Скопировать развёрнутый промпт</span>
+        </button>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FAQ — handle anticipated concerns
+     ============================================================ -->
+<section class="section">
+  <div class="section-inner">
+    <h2 class="section-title" data-en="FAQ" data-ru="FAQ">FAQ</h2>
+
+    <div class="faq">
+      <details>
+        <summary data-en="I only have Telegram access to my OpenClaw. No terminal, no VPS shell. Will this work?"
+                 data-ru="У меня только Telegram-доступ к OpenClaw. Терминала, VPS-шелла нет. Это сработает?">
+          У меня только Telegram-доступ к OpenClaw. Терминала, VPS-шелла нет. Это сработает?
+        </summary>
+        <p data-en="Yes — that's the case this flow was designed for. The OpenClaw agent runs <code>npm install</code>, <code>memex-sync install</code>, and <code>memex-sync wire-openclaw --auto-restart</code> itself, then schedules a self-restart of the gateway. You never touch a terminal. If auto-restart can't be detected for your deployment, tell the agent <em>«restart yourself»</em> and it'll try <code>pkill -HUP -f openclaw</code> instead."
+           data-ru="Да — именно для этого случая мы делали такой flow. OpenClaw-агент сам запускает <code>npm install</code>, <code>memex-sync install</code> и <code>memex-sync wire-openclaw --auto-restart</code>, потом инициирует self-restart gateway. Терминал не нужен. Если auto-restart не определит твой deployment — скажи агенту «перезагрузись сам», он попробует <code>pkill -HUP -f openclaw</code>.">
+          Да — именно для этого случая мы делали такой flow. OpenClaw-агент сам запускает <code>npm install</code>, <code>memex-sync install</code> и <code>memex-sync wire-openclaw --auto-restart</code>, потом инициирует self-restart gateway. Терминал не нужен. Если auto-restart не определит твой deployment — скажи агенту «перезагрузись сам», он попробует <code>pkill -HUP -f openclaw</code>.
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="What if I already have other MCP servers in openclaw.json?"
+                 data-ru="А если у меня уже есть другие MCP-серверы в openclaw.json?">
+          А если у меня уже есть другие MCP-серверы в openclaw.json?
+        </summary>
+        <p data-en="They're preserved. <code>memex-sync wire-openclaw</code> does a deep merge into <code>cfg.mcp.servers</code> — only adds the <code>memex</code> entry, never touches existing ones. If a previous attempt left a stale top-level <code>cfg.mcpServers.memex</code> (a pre-v3 skill bug), it's cleaned up automatically. If <code>cfg.mcp.servers.memex</code> already points to a different binary you customised, the command refuses to overwrite without <code>--force</code>."
+           data-ru="Сохраняются. <code>memex-sync wire-openclaw</code> делает deep-merge в <code>cfg.mcp.servers</code> — добавляет только запись <code>memex</code>, существующие не трогает. Если предыдущая попытка оставила в корне <code>cfg.mcpServers.memex</code> (баг pre-v3 скилла) — автоматически вычищается. Если <code>cfg.mcp.servers.memex</code> уже указывает на твой кастомный путь — команда откажется перезаписать без <code>--force</code>.">
+          Сохраняются. <code>memex-sync wire-openclaw</code> делает deep-merge в <code>cfg.mcp.servers</code> — добавляет только запись <code>memex</code>, существующие не трогает. Если предыдущая попытка оставила в корне <code>cfg.mcpServers.memex</code> (баг pre-v3 скилла) — автоматически вычищается. Если <code>cfg.mcp.servers.memex</code> уже указывает на твой кастомный путь — команда откажется перезаписать без <code>--force</code>.
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="Does this work on Moonshot Kimi-Claw?"
+                 data-ru="Это работает на Moonshot Kimi-Claw?">
+          Это работает на Moonshot Kimi-Claw?
+        </summary>
+        <p data-en="Yes — memex-mvp ≥ 0.11.5 auto-detects the Kimi-Claw merged-file session layout vs the self-hosted OpenClaw separate-file layout. Same install command, no flags needed. Channel routing (Telegram chats vs Kimi-web sessions vs system messages) is handled separately for each layout."
+           data-ru="Да — memex-mvp ≥ 0.11.5 автоматически отличает merged-file layout Kimi-Claw от separate-file layout self-hosted OpenClaw. Та же команда установки, без флагов. Channel routing (Telegram-чаты vs Kimi-web сессии vs system messages) обрабатывается отдельно для каждого варианта.">
+          Да — memex-mvp ≥ 0.11.5 автоматически отличает merged-file layout Kimi-Claw от separate-file layout self-hosted OpenClaw. Та же команда установки, без флагов. Channel routing (Telegram-чаты vs Kimi-web сессии vs system messages) обрабатывается отдельно для каждого варианта.
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="What if I also have Claude Code / Cursor / other AI clients on this same machine?"
+                 data-ru="А если на этой же машине у меня ещё Claude Code / Cursor / другие AI-клиенты?">
+          А если на этой же машине у меня ещё Claude Code / Cursor / другие AI-клиенты?
+        </summary>
+        <p data-en="Even better. memex-sync daemon already watches Claude Code / Cowork / Cursor / Obsidian directories — if you (or another install) had it running, OpenClaw just gets added to the existing capture. Everything ends up in one <code>~/.memex/data/memex.db</code>, one search across all of them. The generic <a href='https://memex.parallelclaw.ai/'>memex.parallelclaw.ai</a> install covers the rest."
+           data-ru="Только лучше. Daemon memex-sync уже следит за директориями Claude Code / Cowork / Cursor / Obsidian — если daemon уже работал, OpenClaw просто добавляется в существующий capture. Всё уходит в один <code>~/.memex/data/memex.db</code>, один поиск по всему сразу. Остальное покрывает основная установка с <a href='https://memex.parallelclaw.ai/'>memex.parallelclaw.ai</a>.">
+          Только лучше. Daemon memex-sync уже следит за директориями Claude Code / Cowork / Cursor / Obsidian — если daemon уже работал, OpenClaw просто добавляется в существующий capture. Всё уходит в один <code>~/.memex/data/memex.db</code>, один поиск по всему сразу. Остальное покрывает основная установка с <a href='https://memex.parallelclaw.ai/'>memex.parallelclaw.ai</a>.
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="Privacy? Where does my data go?"
+                 data-ru="Приватность? Куда уходят данные?">
+          Приватность? Куда уходят данные?
+        </summary>
+        <p data-en="Nowhere. memex is local-first — your conversations live in <code>~/.memex/data/memex.db</code> on the same machine as OpenClaw. No cloud, no API keys, no telemetry. Open source (MIT), readable JavaScript."
+           data-ru="Никуда. memex — local-first. Твои разговоры лежат в <code>~/.memex/data/memex.db</code> на той же машине, что OpenClaw. Без облака, без API-ключей, без телеметрии. Open source (MIT), читаемый JavaScript.">
+          Никуда. memex — local-first. Твои разговоры лежат в <code>~/.memex/data/memex.db</code> на той же машине, что OpenClaw. Без облака, без API-ключей, без телеметрии. Open source (MIT), читаемый JavaScript.
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="What if the agent fails halfway through install?"
+                 data-ru="Что если установка сломается посередине?">
+          Что если установка сломается посередине?
+        </summary>
+        <p data-en="Each step degrades gracefully. If <code>npm install</code> fails with EACCES, the fix is well-known (set <code>npm config set prefix ~/.npm-global</code>, never sudo). If <code>memex-sync install</code> can't find systemd-user/launchd, daemon falls back to a foreground process. If <code>wire-openclaw</code> can't detect a restart mechanism, the agent tells you to run <code>openclaw gateway restart</code> manually or asks if you want it to try <code>pkill -HUP -f openclaw</code>. Worst case: the daemon still captures (that's independent of the gateway), and you can wire the MCP server by hand."
+           data-ru="Каждый шаг деградирует мягко. Если <code>npm install</code> упадёт с EACCES — фикс известный (<code>npm config set prefix ~/.npm-global</code>, sudo не нужен). Если <code>memex-sync install</code> не найдёт systemd-user/launchd — daemon упадёт в foreground режим. Если <code>wire-openclaw</code> не определит restart mechanism — агент скажет запустить <code>openclaw gateway restart</code> руками или спросит можно ли попробовать <code>pkill -HUP -f openclaw</code>. Худший случай: daemon всё равно захватывает (он независим от gateway), MCP-сервер пропишешь руками.">
+          Каждый шаг деградирует мягко. Если <code>npm install</code> упадёт с EACCES — фикс известный (<code>npm config set prefix ~/.npm-global</code>, sudo не нужен). Если <code>memex-sync install</code> не найдёт systemd-user/launchd — daemon упадёт в foreground режим. Если <code>wire-openclaw</code> не определит restart mechanism — агент скажет запустить <code>openclaw gateway restart</code> руками или спросит можно ли попробовать <code>pkill -HUP -f openclaw</code>. Худший случай: daemon всё равно захватывает (он независим от gateway), MCP-сервер пропишешь руками.
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="Manual install (no agent)?"
+                 data-ru="Установить вручную (без агента)?">
+          Установить вручную (без агента)?
+        </summary>
+        <p data-en="Sure:"
+           data-ru="Конечно:">Конечно:</p>
+        <pre style="background: var(--bg-soft); padding: 12px 14px; border-radius: 8px; font-size: 12.5px; overflow-x: auto;">npm install -g memex-mvp@latest
+memex-sync install
+memex-sync scan
+memex-sync wire-openclaw --auto-restart
+# (gateway restarts itself in 3 seconds; or pass --no-auto-restart
+#  to get the restart command printed without triggering it)</pre>
+        <p data-en="See the <a href='https://clawhub.ai/sedelev/install-memex-claw'>install-memex-claw skill on ClawHub</a> for the discovery-driven version with platform checks (Linux/macOS, systemd/launchd, EACCES recovery, etc)."
+           data-ru="См. <a href='https://clawhub.ai/sedelev/install-memex-claw'>скилл install-memex-claw на ClawHub</a> для discovery-варианта с проверками платформы (Linux/macOS, systemd/launchd, EACCES recovery и т.д.).">
+          См. <a href='https://clawhub.ai/sedelev/install-memex-claw'>скилл install-memex-claw на ClawHub</a> для discovery-варианта с проверками платформы (Linux/macOS, systemd/launchd, EACCES recovery и т.д.).
+        </p>
+      </details>
+
+      <details>
+        <summary data-en="What's the relationship with the main memex?"
+                 data-ru="Как соотносится с основным memex?">
+          Как соотносится с основным memex?
+        </summary>
+        <p data-en="This is the same memex. The npm package <a href='https://www.npmjs.com/package/memex-mvp'>memex-mvp</a> ships both the daemon (memex-sync) that captures conversations and the MCP server (memex) that exposes them to LLMs. The OpenClaw-specific entry point is just one of many — Claude Code, Cursor, Cline, Continue, Zed, Telegram exports all go through the same daemon into the same SQLite file. See <a href='https://memex.parallelclaw.ai/'>memex.parallelclaw.ai</a> for the broader picture."
+           data-ru="Это тот же самый memex. npm-пакет <a href='https://www.npmjs.com/package/memex-mvp'>memex-mvp</a> поставляет одновременно daemon (memex-sync) для capture и MCP-сервер (memex) для отдачи LLM-ам. Эта страница — про OpenClaw entry point. Claude Code, Cursor, Cline, Continue, Zed, Telegram exports — все идут через один daemon в один SQLite. Картинка целиком на <a href='https://memex.parallelclaw.ai/'>memex.parallelclaw.ai</a>.">
+          Это тот же самый memex. npm-пакет <a href='https://www.npmjs.com/package/memex-mvp'>memex-mvp</a> поставляет одновременно daemon (memex-sync) для capture и MCP-сервер (memex) для отдачи LLM-ам. Эта страница — про OpenClaw entry point. Claude Code, Cursor, Cline, Continue, Zed, Telegram exports — все идут через один daemon в один SQLite. Картинка целиком на <a href='https://memex.parallelclaw.ai/'>memex.parallelclaw.ai</a>.
+        </p>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <h2 data-en="One message. <span class='accent'>OpenClaw does the rest.</span>"
+      data-ru="Одно сообщение. <span class='accent'>Дальше OpenClaw сам.</span>">
+    Одно сообщение. <span class="accent">Дальше OpenClaw сам.</span>
+  </h2>
+  <div class="final-cta-actions">
+    <a class="btn btn-primary" href="#top"
+       data-en="↑ Copy the prompt"
+       data-ru="↑ Скопировать промпт">↑ Скопировать промпт</a>
+    <a class="btn btn-secondary" href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener"
+       data-en="GitHub ★"
+       data-ru="GitHub ★">GitHub ★</a>
+    <a class="btn btn-secondary" href="https://www.npmjs.com/package/memex-mvp" target="_blank" rel="noopener"
+       data-en="npm"
+       data-ru="npm">npm</a>
+  </div>
+</section>
+
+<footer>
+  <p>
+    <a href="https://memex.parallelclaw.ai/">memex (main)</a>
+    <a href="https://github.com/parallelclaw/memex-mvp" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.npmjs.com/package/memex-mvp" target="_blank" rel="noopener">npm</a>
+    <a href="https://github.com/parallelclaw/memex-mvp/issues" target="_blank" rel="noopener" data-en="Issues" data-ru="Issues">Issues</a>
+  </p>
+  <p class="footer-tagline">
+    <span data-en="MIT · Not VC-funded · Not cloud · Not a subscription"
+          data-ru="MIT · Не VC-funded · Не cloud · Не подписка">
+      MIT · Not VC-funded · Not cloud · Not a subscription
+    </span>
+  </p>
+  <p style="margin-top: 8px; font-size: 12px;">
+    <span data-en="Built by" data-ru="Сделал">Сделал</span>
+    <a href="https://github.com/parallelclaw" target="_blank" rel="noopener">parallelclaw</a>
+    · 2026
+  </p>
+</footer>
+
+<script>
+  let currentLang = 'ru';
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.querySelectorAll('.lang-toggle button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+    document.querySelectorAll('[data-en], [data-ru]').forEach(el => {
+      const text = el.dataset[lang];
+      if (text === undefined) return;
+      el.innerHTML = text;
+    });
+    // The agent-prompt blocks live in separate <pre> elements per language —
+    // toggle visibility instead of trying to swap their plaintext content.
+    const enPre = document.getElementById('agent-prompt-en');
+    const ruPre = document.getElementById('agent-prompt-ru');
+    if (enPre && ruPre) {
+      enPre.style.display = (lang === 'en') ? '' : 'none';
+      ruPre.style.display = (lang === 'ru') ? '' : 'none';
+    }
+    try { localStorage.setItem('memex-openclaw-lang', lang); } catch(e) {}
+  }
+  try {
+    const saved = localStorage.getItem('memex-openclaw-lang');
+    if (saved === 'en') setLang('en');
+    else setLang('ru');
+  } catch(e) { setLang('ru'); }
+
+  function fallbackCopy(text, ok) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); }
+    catch (e) { alert('Copy failed — please select and copy manually.'); }
+    document.body.removeChild(ta);
+  }
+
+  function copyShortPrompt() {
+    const code = document.getElementById('short-prompt');
+    const text = code.textContent;
+    const btn = document.getElementById('short-copy-btn');
+    const label = document.getElementById('short-copy-label');
+    const original = label.textContent;
+    const ok = () => {
+      btn.classList.add('copied');
+      label.textContent = currentLang === 'ru' ? '✓ Скопировано!' : '✓ Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        label.textContent = original;
+      }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(() => fallbackCopy(text, ok));
+    } else {
+      fallbackCopy(text, ok);
+    }
+  }
+
+  function copyAgentPrompt() {
+    const pre = document.getElementById('agent-prompt-' + currentLang);
+    const text = pre.textContent;
+    const btn = event.currentTarget;
+    const label = document.getElementById('agent-copy-label');
+    const original = label.textContent;
+    const ok = () => {
+      btn.classList.add('copied');
+      label.textContent = currentLang === 'ru' ? '✓ Скопировано!' : '✓ Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        label.textContent = original;
+      }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(() => fallbackCopy(text, ok));
+    } else {
+      fallbackCopy(text, ok);
+    }
+  }
+</script>
+
+</body>
+</html>

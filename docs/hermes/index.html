@@ -681,6 +681,25 @@
       </details>
 
       <details>
+        <summary data-en="Can I save Perplexity threads, articles, or other AI chat shares to memex?"
+                 data-ru="Можно сохранять в memex Perplexity-треды, статьи, шары других AI-чатов?">
+          Можно сохранять в memex Perplexity-треды, статьи, шары других AI-чатов?
+        </summary>
+        <p data-en="Yes — just paste the URL in your Hermes chat and say <em>«save this to memex»</em>. Hermes fetches the content via <a href='https://jina.ai/reader/' target='_blank' rel='noopener'>Jina AI Reader</a> (a free Cloudflare-bypass proxy: prepend <code>https://r.jina.ai/</code> to any URL), then stores the clean markdown verbatim into <code>memex.db</code> via the <code>memex_store_document</code> tool — searchable forever via <code>memex_search</code>."
+           data-ru="Да — просто скинь URL в чат Hermes и скажи <em>«сохрани в memex»</em>. Hermes скачает содержимое через <a href='https://jina.ai/reader/' target='_blank' rel='noopener'>Jina AI Reader</a> (бесплатный обход Cloudflare: префикс <code>https://r.jina.ai/</code> к любому URL), и положит чистый markdown verbatim в <code>memex.db</code> через инструмент <code>memex_store_document</code> — навсегда ищется через <code>memex_search</code>.">
+          Да — просто скинь URL в чат Hermes и скажи <em>«сохрани в memex»</em>. Hermes скачает содержимое через <a href='https://jina.ai/reader/' target='_blank' rel='noopener'>Jina AI Reader</a> (бесплатный обход Cloudflare: префикс <code>https://r.jina.ai/</code> к любому URL), и положит чистый markdown verbatim в <code>memex.db</code> через инструмент <code>memex_store_document</code> — навсегда ищется через <code>memex_search</code>.
+        </p>
+        <p data-en="<strong>For Perplexity specifically</strong>: the URL in your address bar (<code>perplexity.ai/search/&lt;id&gt;</code>) is the owner's private URL. To save someone else's thread (or share your own), the owner has to click Share → toggle Public, then copy the new URL — that one Jina can read. memex auto-detects the private case and surfaces the exact recovery hint."
+           data-ru="<strong>Для Perplexity</strong>: ссылка в адресной строке (<code>perplexity.ai/search/&lt;id&gt;</code>) — это приватный URL автора. Чтобы сохранить чужой тред (или поделиться своим), автор должен нажать Share → переключить Public, потом скопировать новую ссылку — её Jina уже прочитает. memex автоматически детектит приватный кейс и выдаёт точную инструкцию.">
+          <strong>Для Perplexity</strong>: ссылка в адресной строке (<code>perplexity.ai/search/&lt;id&gt;</code>) — это приватный URL автора. Чтобы сохранить чужой тред (или поделиться своим), автор должен нажать Share → переключить Public, потом скопировать новую ссылку — её Jina уже прочитает. memex автоматически детектит приватный кейс и выдаёт точную инструкцию.
+        </p>
+        <p data-en="Same workflow works for: ChatGPT/Claude.ai/Gemini share links (when public), npm package pages, X/Twitter threads, Medium articles, Substack posts, most modern SaaS docs. Login-walled content can't be saved this way — that needs the human to copy-paste."
+           data-ru="Тот же flow работает для: share-линков ChatGPT/Claude.ai/Gemini (если публичные), npm-страниц, тредов X/Twitter, статей Medium, Substack-постов, большинства SaaS-доков. Контент за логином так не сохранить — нужен copy-paste от человека.">
+          Тот же flow работает для: share-линков ChatGPT/Claude.ai/Gemini (если публичные), npm-страниц, тредов X/Twitter, статей Medium, Substack-постов, большинства SaaS-доков. Контент за логином так не сохранить — нужен copy-paste от человека.
+        </p>
+      </details>
+
+      <details>
         <summary data-en="Privacy? Where does my data go?"
                  data-ru="Приватность? Куда уходят данные?">
           Приватность? Куда уходят данные?

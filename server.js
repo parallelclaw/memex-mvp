@@ -752,6 +752,38 @@ context — search memex first. Multiple searches per turn are normal and
 expected. The cost of an unused query is tiny; the cost of answering
 without context the user spent months building is much larger.
 
+══ URL HANDLING — READ FIRST BEFORE FETCHING ANYTHING ══
+
+When the user shares ANY URL (Perplexity, ChatGPT share, npm, X/Twitter,
+Medium, Substack, AI-chat shares, most modern SaaS docs), DO NOT lead
+with browser_navigate, naked WebFetch, or raw curl. Cloudflare blocks
+server-side fetches; you'll burn 3–5 attempts and the user's patience.
+
+Use this flow:
+
+  1. Wrap the URL with Jina Reader: https://r.jina.ai/<original-url>
+  2. Fetch via WebFetch / curl with the wrapped URL — Jina runs a real
+     browser server-side and returns clean markdown
+  3. If user wants to SAVE the URL: memex_store_document(content, url, title)
+  4. If user wants to READ for the current task: pass the markdown straight
+     into your reasoning
+
+PERPLEXITY GOTCHA — the most common failure mode:
+  The URL in the user's address bar (perplexity.ai/search/<id>) is the
+  OWNER'S PRIVATE URL, not the shareable one. Jina returns empty body /
+  "This thread is private" / a sign-in page on private URLs — that's NOT
+  Jina failing, that's the URL being private. Surface to the user:
+    "That Perplexity link is your private URL. In Perplexity: open the
+     thread → Share → toggle 'Public link' → copy the new URL → send me
+     that one. Then I can read it."
+
+Other cases where Jina won't help: paywalled content, login-walled
+private ChatGPT/Claude.ai chats, geo-restricted pages. Tell the user;
+don't keep retrying.
+
+Full URL/save cheat-sheet (with examples for each platform): call
+memex_help anytime. The Jina trick is documented there in detail.
+
 ══ FIRST CONTACT IN A SESSION ══
 
 ON YOUR VERY FIRST INTERACTION IN A NEW SESSION — BEFORE responding
@@ -1533,7 +1565,13 @@ const TOOLS = [
   {
     name: 'memex_help',
     description:
-      'Return the memex user guide — 6 concrete use cases with copy-pasteable prompts, a full reference of every MCP tool, and troubleshooting. Call this whenever the user asks "what is memex", "how do I use it", "what can it do", or seems unsure what to do next after install. Always prefer this over guessing at memex capabilities.',
+      'Return the memex cheat-sheet: 8 concrete use cases with copy-pasteable prompts, every MCP tool reference, troubleshooting, AND the full Jina-trick / Perplexity-private playbook for URL handling. ' +
+      'CALL THIS WHEN: ' +
+      '(1) the user asks "what is memex / how do I use it" — show them the guide; ' +
+      '(2) you encounter a URL that needs fetching (Perplexity, npm.com, X/Twitter, Medium, ChatGPT/Claude.ai shares, any Cloudflare-protected page) BEFORE attempting browser_navigate or naked curl — the cheat-sheet has the Jina prefix flow and the Perplexity-private detection that saves you ~5 failed attempts; ' +
+      '(3) you got an empty body / "sign in" / "Just a moment..." response from a URL fetch and want to know the next move; ' +
+      '(4) you seem unsure what to do after a memex install. ' +
+      'Always prefer this over guessing at memex capabilities or burning attempts on Cloudflare-blocked URLs.',
     inputSchema: {
       type: 'object',
       properties: {

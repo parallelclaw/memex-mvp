@@ -967,6 +967,20 @@ function _formatAgentInstructions(report) {
       'I wired memex as an MCP server in ~/.openclaw/openclaw.json so the '
       + 'LLM can search your memory from inside conversations.',
     );
+    // Pin a URL-handling tip into the install reply. The install agent is
+    // about to die from the restart anyway, but if it relays this to the
+    // user, the user sees what to expect from future sessions. (The same
+    // knowledge lives in SERVER_INSTRUCTIONS top-of-file + memex_help, so
+    // post-restart agents pick it up natively.)
+    lines.push(
+      'Tip for future sessions: when you (or any next OpenClaw agent) sees a '
+      + 'URL the user wants to read or save — Perplexity, npm.com, X/Twitter, '
+      + 'Medium, AI-chat shares — DO NOT lead with browser_navigate or naked '
+      + 'curl. Most modern pages are Cloudflare-protected. Prefix the URL with '
+      + '`https://r.jina.ai/` and fetch THAT. For Perplexity, the URL in the '
+      + 'address bar is private — only the Share→Public link is fetchable. '
+      + 'Call memex_help anytime for the full cheat-sheet.',
+    );
   } else if (mcp.action === 'already_correct') {
     lines.push('Your OpenClaw config already had memex wired correctly — nothing to do.');
   } else if (mcp.action === 'conflict') {

@@ -36,7 +36,7 @@ All work the same way. Platform (Linux/macOS) determines daemon type. Deployment
 
 ## ⚠ For ClawHub reviewers, security scanners, and curious users
 
-This skill installs `memex-mvp` from npm (if not already present) and wires it as an MCP server inside the OpenClaw gateway config. memex-mvp is the canonical install path for OpenClaw — the older "memex-openclaw OpenClaw-native plugin" approach (npm package `@parallelclaw/memex-openclaw`) is **deprecated** as of 2026-05-27; see deprecation notes in that package's README. The daemon path works on every OpenClaw deployment without security-scanner friction.
+This skill installs `memex-mvp` from npm (if not already present) and wires it as an MCP server inside the OpenClaw gateway config. memex-mvp's `memex-sync` daemon auto-captures every OpenClaw session at the file-watcher layer — works on every OpenClaw deployment (self-hosted + Moonshot Kimi-Claw + workstations), no plugin-SDK involvement.
 
 | Action | Why | Source |
 |---|---|---|
@@ -52,26 +52,6 @@ This skill installs `memex-mvp` from npm (if not already present) and wires it a
 - OpenClaw config is **merged**, never overwritten — other plugins / MCP servers preserved
 - memex at runtime emits **zero outbound network traffic** — local-first by design
 - If memex-mvp is already installed (e.g. via the generic install-memex skill), this skill skips re-install and only wires OpenClaw — no surprise reinstalls
-
----
-
-## Migration note for users who tried the deprecated `memex-openclaw` plugin
-
-If the user previously installed `@parallelclaw/memex-openclaw` via `openclaw plugins install`, that plugin is now **deprecated**. The daemon-based approach below handles the same use case more reliably (no OpenClaw plugin security-scanner friction, no per-version manifest changes, no `allowConversationAccess` opt-in). To clean up before installing daemon-based:
-
-```sh
-# 1. Uninstall the old plugin (no-op if not installed)
-openclaw plugins uninstall memex-openclaw 2>&1 || true
-
-# 2. Restore openclaw.json from the .bak the plugin left (if you want to undo the plugin's edits)
-[ -f ~/.openclaw/openclaw.json.bak ] && echo "found backup, you can restore via:" \
-  && echo "  cp ~/.openclaw/openclaw.json.bak ~/.openclaw/openclaw.json"
-
-# 3. Restart gateway so the old plugin stops loading
-openclaw gateway restart
-```
-
-The data the old plugin wrote (`raw_type='openclaw-agent-end'` rows) stays in memex.db and remains searchable — the daemon's writes will appear alongside under the same source. UNIQUE(source, conversation_id, msg_id) prevents duplicates.
 
 ---
 
@@ -117,10 +97,6 @@ ls -1 ~/.openclaw/agents/main/sessions/ 2>/dev/null \
 
 # 8. OpenClaw gateway config
 ls -la ~/.openclaw/openclaw.json 2>&1
-
-# 9. Was the deprecated memex-openclaw plugin previously installed?
-ls -la ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw 2>/dev/null \
-  || echo "no old plugin"
 ```
 
 **Branch on results:**
@@ -129,7 +105,6 @@ ls -la ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw 2>/dev/null \
 |---|---|
 | **OpenClaw not found** | Stop. Tell user: "This skill is for OpenClaw agents. For Claude Code / Cursor / etc., use `install-memex` instead." |
 | **Node < 22.12** | Stop. Print upgrade instructions (nvm, distro pkg manager). Don't auto-install Node. |
-| **Deprecated plugin found at ~/.openclaw/npm/node_modules/@parallelclaw/memex-openclaw** | Run the migration block from the section above BEFORE proceeding to Step 2. |
 | **memex ≥ 0.11.6 + daemon running** | Skip Steps 2–4. Go directly to Step 5 (MCP wiring). Tell user: "memex already installed and running — just need to wire it into OpenClaw." |
 | **memex installed but < 0.11.6** | Upgrade in-place: `npm install -g memex-mvp@latest`. Continue (daemon auto-restarts if running). |
 | **memex installed, daemon not running** | Run `memex-sync install` (Step 3). Skip the npm install. |
@@ -143,8 +118,7 @@ Report each result back as **facts, not questions**:
 > "✓ Linux + systemd 255 — will use user-systemd for daemon"  
 > "✓ Node 22.22.2 — ok"  
 > "→ memex not installed — installing 0.11.6+"  
-> "✓ Found 60 OpenClaw sessions ready to back-fill"  
-> "⚠ Deprecated memex-openclaw plugin detected — will uninstall first"
+> "✓ Found 60 OpenClaw sessions ready to back-fill"
 
 ---
 
@@ -417,7 +391,6 @@ Pair with:
 
 - ❌ Install Node.js (manual step if needed — print instructions, don't auto-install)
 - ❌ Use sudo. Ever. If permissions block something, surface the manual fix and stop.
-- ❌ Install the deprecated `@parallelclaw/memex-openclaw` plugin. The daemon path supersedes it.
 - ❌ Overwrite existing `mcp.servers` entries. Merge.
 - ❌ Configure outbound network access. memex is local-first.
 
@@ -431,8 +404,6 @@ Pair with:
 | memex.db locked (WAL contention) | Wait 1 second, retry. SQLite WAL handles concurrent readers/writers. |
 | Plugin install permission denied | Bootstrap section at the top of this skill — user needs to allow third-party skills once. |
 | Linger fails with sudo prompt | Print the exact `sudo loginctl enable-linger $USER` line, ask the user to run it once, and continue without sudo. |
-| User has the deprecated memex-openclaw plugin AND already-captured data from it | The plugin's data (raw_type='openclaw-agent-end') stays in memex.db. Daemon's new writes will appear alongside under the same source. UNIQUE constraint prevents duplicates. |
-| User wants to delete legacy plugin data | `sqlite3 ~/.memex/data/memex.db "DELETE FROM messages WHERE source='openclaw' AND json_extract(metadata,'$.raw_type')='openclaw-agent-end'"` — careful, irreversible |
 | openclaw.json doesn't exist | Ask the user ONE question for the path. Don't auto-create. |
 
 ---

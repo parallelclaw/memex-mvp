@@ -1,11 +1,43 @@
-# memex-openclaw
+# memex-openclaw — DEPRECATED
 
-**OpenClaw plugin that captures every turn verbatim into the [memex](https://memex.parallelclaw.ai) unified SQLite corpus.**
+> [!CAUTION]
+> **This package is deprecated as of 2026-05-27.** Use the **memex-mvp daemon** path instead — it's the canonical install path for OpenClaw, simpler, scanner-friendly, and production-proven on every OpenClaw deployment (self-hosted + Moonshot Kimi-Claw + macOS workstations).
+>
+> **Migrate via the [install-memex-claw v3.0.0 skill](https://clawhub.ai/sedelev/install-memex-claw)** on ClawHub — it includes a "Migration from deprecated plugin" section that cleanly uninstalls this plugin and switches to the daemon. Or manually:
+>
+> ```sh
+> # 1. Remove the plugin
+> openclaw plugins uninstall memex-openclaw
+> # 2. Install the daemon path
+> npm install -g memex-mvp@latest
+> memex-sync install        # registers LaunchAgent / systemd-user
+> memex-sync scan           # back-fills past sessions
+> # 3. Wire memex MCP into ~/.openclaw/openclaw.json (cfg.mcp.servers.memex)
+> #    — see the install-memex-claw skill for the exact one-liner
+> openclaw gateway restart
+> ```
+>
+> Data captured by this plugin (rows with `metadata.raw_type = 'openclaw-agent-end'`) stays in `~/.memex/data/memex.db` and remains searchable after migration — the daemon writes alongside, UNIQUE constraint prevents duplicates.
 
-Replaces the v0.11.x `memex-sync` file-watcher daemon. Captures via OpenClaw's native plugin lifecycle hooks — no file watching, no JSON parsing, no daemon to manage.
+## Why deprecated
 
-> [!IMPORTANT]
-> **memex-openclaw is a bridge plugin, not a memory replacement.** It's most useful when you ALSO run other clients (Claude Code / Hermes / Cursor / Telegram exports) captured into the same [memex-mvp](https://www.npmjs.com/package/memex-mvp) corpus. If you only use OpenClaw with built-in memory-core / Memoria / Mem0 — that's already a complete memory stack; memex-openclaw mostly earns its place when you want **unified search across multiple AI clients**.
+Four versions in, the OpenClaw-native plugin path accumulated frictions that the daemon-based approach simply doesn't have:
+
+| Issue | Plugin (npm package) | Daemon (memex-mvp built-in) |
+|---|---|---|
+| OpenClaw security scanner | Blocks any `child_process` in the tarball — even in `bin/` (v0.2.0/v0.2.1 needed `--dangerously-force-unsafe-install`) | No scanner involvement — daemon is an external process |
+| Self-restart of gateway | Requires shell access from inside the plugin sandbox (blocked by above) | Daemon doesn't care about gateway lifecycle |
+| `api.registerCli` / `api.registerTool` | Not exposed to LLM toolset — needed MCP wiring anyway | Same MCP wiring, fewer layers |
+| `allowConversationAccess` | Required user-side opt-in per OpenClaw security default | Daemon reads JSONL files; no permission gate |
+| `better-sqlite3` native binary | Rebuild per OpenClaw npm install context | One npm-global install handles it |
+| Channel routing for OpenClaw | Required parsing `chat_id` from `custom_message` events; conv_id formula different from daemon, causing namespace duplication for users migrating | Daemon's existing parser produces a single coherent conv_id namespace |
+| Maintenance | 4 versions × 10+ documented bugs in 2 weeks | memex-mvp daemon has been stable since v0.11.x |
+
+The daemon path was always available and always worked. We over-invested in the plugin because it looked architecturally cleaner; in practice every step revealed new friction from OpenClaw's plugin SDK. v3.0.0 of the install-memex-claw skill restores the daemon flow as canonical.
+
+## Historical reference (for anyone who still needs the plugin)
+
+The plugin still functions if installed with `--dangerously-force-unsafe-install` and a manual `npm rebuild better-sqlite3`. v0.2.1's lib/ is scanner-clean (only bin/ uses child_process), and v0.2.1 correctly parses real OpenClaw 2026.5+ JSONL events. But no further releases are planned. Issues will be redirected to the daemon path.
 
 ## What it does
 

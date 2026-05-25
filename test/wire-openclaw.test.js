@@ -197,6 +197,35 @@ try {
     } finally { t.cleanup(); }
   });
 
+  test('already_in_sync does NOT suggest a manual restart (v0.11.8 fix)', () => {
+    // Regression: prior to v0.11.8, even when config was already correct
+    // (no change), the output included "Restart skipped (--no-auto-restart).
+    // You'll need to restart the OpenClaw gateway manually." That misled
+    // users into thinking they needed to restart for no reason. Now the
+    // restart section is only emitted when status === 'ready'.
+    const t = setupTmp();
+    try {
+      // Seed already-correct config so re-run sees nothing to change
+      writeFileSync(t.configPath, JSON.stringify({
+        mcp: { servers: { memex: { command: '/fake/memex', args: [], env: {} } } },
+      }));
+      const r = runCli([
+        'wire-openclaw', '--json', '--no-auto-restart',
+        '--config', t.configPath, '--memex-bin', '/fake/memex',
+      ]);
+      const report = JSON.parse(r.stdout);
+      assertEq(report.status, 'already_in_sync');
+      assertEq(report.mcp.action, 'already_correct');
+      // agent_instructions should NOT contain restart-related phrases
+      const text = report.agent_instructions || '';
+      assert(!/restart\s+(yourself|skipped|the\s+OpenClaw|manually)/i.test(text),
+        `agent_instructions should not mention restart when already_in_sync: "${text}"`);
+      // It SHOULD say something about config being already correct
+      assert(/already|nothing to do/i.test(text),
+        `agent_instructions should affirm no-op: "${text}"`);
+    } finally { t.cleanup(); }
+  });
+
   test('agent_instructions never tells terminal-less users to "open a terminal"', () => {
     // Critical for Telegram-only users — agent_instructions is what the
     // LLM relays to the human. It must propose chat-driven recovery,

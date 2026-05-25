@@ -968,7 +968,7 @@ function _formatAgentInstructions(report) {
       + 'LLM can search your memory from inside conversations.',
     );
   } else if (mcp.action === 'already_correct') {
-    lines.push('Your OpenClaw config already had memex wired correctly.');
+    lines.push('Your OpenClaw config already had memex wired correctly — nothing to do.');
   } else if (mcp.action === 'conflict') {
     lines.push(`⚠️ ${mcp.warning}`);
   } else if (mcp.action === 'memex_missing') {
@@ -977,26 +977,34 @@ function _formatAgentInstructions(report) {
     lines.push(`⚠️ ${mcp.warning}`);
   }
 
+  // v0.11.8: only mention restart if there's ACTUALLY a reason to restart.
+  // When status='already_in_sync' the config wasn't touched — restarting is
+  // a no-op and would mislead the user that something needs activating.
+  // Same for failed/partial: don't suggest restart, the user has bigger
+  // problems to deal with first.
   const r = report.restart || {};
-  if (r.auto_restart === 'scheduled') {
-    lines.push(
-      `I'm restarting the OpenClaw gateway in ${r.delay_seconds} seconds — `
-      + `send me any message after that and memex search will be active in the new session.`,
-    );
-  } else if (r.auto_restart === 'opt_out') {
-    if (r.command) {
-      lines.push(`Restart skipped (--no-auto-restart). Run \`${r.command}\` when ready.`);
-    } else {
-      lines.push(`Restart skipped (--no-auto-restart). You'll need to restart the OpenClaw gateway manually.`);
+  const restartActionable = report.status === 'ready';
+  if (restartActionable) {
+    if (r.auto_restart === 'scheduled') {
+      lines.push(
+        `I'm restarting the OpenClaw gateway in ${r.delay_seconds} seconds — `
+        + `send me any message after that and memex search will be active in the new session.`,
+      );
+    } else if (r.auto_restart === 'opt_out') {
+      if (r.command) {
+        lines.push(`Restart skipped (--no-auto-restart). Run \`${r.command}\` when ready.`);
+      } else {
+        lines.push(`Restart skipped (--no-auto-restart). You'll need to restart the OpenClaw gateway manually.`);
+      }
+    } else if (r.method === 'manual') {
+      lines.push(
+        `I couldn't auto-detect how OpenClaw is running on this host. `
+        + `Tell me "restart yourself" if you want me to try \`pkill -HUP -f openclaw\`, `
+        + `or ask your server admin to restart the gateway.`,
+      );
+    } else if (r.auto_restart === 'failed') {
+      lines.push(`⚠️ Auto-restart failed: ${r.error || 'unknown'}. Run \`${r.command || 'openclaw gateway restart'}\` manually.`);
     }
-  } else if (r.method === 'manual') {
-    lines.push(
-      `I couldn't auto-detect how OpenClaw is running on this host. `
-      + `Tell me "restart yourself" if you want me to try \`pkill -HUP -f openclaw\`, `
-      + `or ask your server admin to restart the gateway.`,
-    );
-  } else if (r.auto_restart === 'failed') {
-    lines.push(`⚠️ Auto-restart failed: ${r.error || 'unknown'}. Run \`${r.command || 'openclaw gateway restart'}\` manually.`);
   }
   return lines.join(' ');
 }
@@ -1016,19 +1024,27 @@ function _printHumanWireSummary(report) {
     console.log(`🔌 MCP server:         ⚠️ ${mcp.warning || mcp.action}`);
   }
 
+  // v0.11.8: only print restart info when there's actually a reason to
+  // restart. status='already_in_sync' → config didn't change → restarting
+  // would be a no-op; misleading to ask the user to run it.
   const r = report.restart || {};
-  if (r.auto_restart === 'scheduled') {
-    console.log(`🔄 Auto-restart:       scheduled in ${r.delay_seconds}s (${r.method} — ${r.command})`);
-    console.log(`                       log: ${r.log_path}`);
-    console.log('');
-    console.log('💬 After restart, send OpenClaw any message — memex search will be active.');
-  } else if (r.method === 'manual') {
-    console.log('🔄 Restart needed:     could not auto-detect mechanism');
-    console.log('                       Ask the OpenClaw agent to "restart yourself", or restart manually.');
-  } else if (r.auto_restart === 'opt_out') {
-    console.log(`🔄 Restart needed:     ${r.command} (auto-restart skipped per flag)`);
-  } else if (r.command) {
-    console.log(`🔄 Restart needed:     ${r.command}`);
+  const restartActionable = report.status === 'ready';
+  if (restartActionable) {
+    if (r.auto_restart === 'scheduled') {
+      console.log(`🔄 Auto-restart:       scheduled in ${r.delay_seconds}s (${r.method} — ${r.command})`);
+      console.log(`                       log: ${r.log_path}`);
+      console.log('');
+      console.log('💬 After restart, send OpenClaw any message — memex search will be active.');
+    } else if (r.method === 'manual') {
+      console.log('🔄 Restart needed:     could not auto-detect mechanism');
+      console.log('                       Ask the OpenClaw agent to "restart yourself", or restart manually.');
+    } else if (r.auto_restart === 'opt_out') {
+      console.log(`🔄 Restart needed:     ${r.command} (auto-restart skipped per flag)`);
+    } else if (r.command) {
+      console.log(`🔄 Restart needed:     ${r.command}`);
+    }
+  } else if (report.status === 'already_in_sync') {
+    console.log('✓ No restart needed — config was already correct.');
   }
   console.log('');
 }

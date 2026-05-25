@@ -106,59 +106,119 @@ export function listAgentSessions(agentsDir, agentName) {
 }
 
 /**
- * Pull (role, text, ts, messageProvider, channelId) out of one JSONL
- * event line. OpenClaw event schemas vary slightly across versions and
- * gateways, so this parser is intentionally tolerant:
+ * Pull (role, text, ts) out of one JSONL event line. Routing (provider
+ * + channelId) comes from a SEPARATE sticky-context channel — see
+ * extractRouting() — because OpenClaw stores chat_id in standalone
+ * `custom_message` events with customType=openclaw.runtime-context,
+ * not on the message events themselves.
  *
- *   - Recognises events where role ∈ {user, assistant}
- *   - Accepts content as string OR structured content-parts array
- *   - Accepts ts at top level OR nested under metadata/timing
- *   - Accepts channel routing at top level OR under metadata.context
+ * OpenClaw 2026.5+ message event shape (confirmed against agent dump):
  *
- * Returns null if the event isn't a user/assistant message worth
- * importing (e.g. tool calls, system messages, internal events).
+ *   {
+ *     "type": "message",
+ *     "timestamp": "2026-05-25T17:12:28.864Z",        // ISO at top
+ *     "message": {                                      // nested!
+ *       "role": "user|assistant",
+ *       "content": [{ "type": "text", "text": "…" }],
+ *       "timestamp": 1779729148843                      // unix ms inside
+ *     }
+ *   }
+ *
+ * extractText() (in conv_id.js) already handles the content array of
+ * { type, text } parts — same helper the live plugin uses.
+ *
+ * Returns null if this event isn't a user/assistant message worth
+ * importing (session/model_change/tool_call/system/etc).
  */
 function parseEvent(event) {
   if (!event || typeof event !== 'object') return null;
 
-  // Locate role — primary or fallback locations.
-  const role =
-    event.role ||
-    event.message?.role ||
-    event.type === 'message' ? event.role : null;
+  // Only `type:'message'` events are real user/assistant turns.
+  // OpenClaw also emits session, model_change, thinking_level_change,
+  // custom, custom_message — those don't carry user text.
+  if (event.type && event.type !== 'message') return null;
+
+  // Role lives inside the nested `message` object for OpenClaw 2026.5.
+  // Fall back to top-level `role` for older / synthetic event shapes
+  // (used by tests).
+  const msg = event.message || event;
+  const role = msg.role;
   if (role !== 'user' && role !== 'assistant') return null;
 
-  // Locate text content. extractText() handles string, array of parts,
-  // and {text: "..."} shapes — same helper the live plugin uses.
-  const text = extractText(event.message || event);
+  const text = extractText(msg);
   if (!text || !text.trim()) return null;
 
-  // Locate timestamp — prefer explicit unix seconds, else parse ISO,
-  // else fall back to now-ish (the file's mtime will be a better
-  // signal but parseEvent doesn't see that).
-  let ts = event.ts || event.timestamp || event.created_at;
+  // Timestamp candidates in priority order — OpenClaw puts unix-ms
+  // inside message.timestamp AND ISO string at event.timestamp; either
+  // works once normalised.
+  let ts = msg.timestamp ?? event.timestamp ?? event.ts ?? event.created_at;
   if (typeof ts === 'string') {
     const parsed = Date.parse(ts);
     ts = isNaN(parsed) ? null : Math.floor(parsed / 1000);
   } else if (typeof ts === 'number' && ts > 1e12) {
-    // Likely milliseconds.
     ts = Math.floor(ts / 1000);
   }
-
-  // Locate channel routing — these may live at top level, under
-  // metadata, or under context. Try each in priority order.
-  const ctx = event.context || event.metadata?.context || event.metadata || {};
-  const messageProvider =
-    event.messageProvider || ctx.messageProvider || ctx.platform || null;
-  const channelId =
-    event.channelId || ctx.channelId || ctx.chat_id || null;
 
   return {
     role,
     text: String(text),
     ts: ts || null,
-    messageProvider,
-    channelId,
+  };
+}
+
+/**
+ * Update sticky routing from an event that carries channel info.
+ *
+ * OpenClaw 2026.5+ carries chat routing in events with shape:
+ *   { type: 'custom_message',
+ *     customType: 'openclaw.runtime-context',
+ *     chat_id: 'telegram:97592799',
+ *     message_id: '5611',
+ *     sender_id: '97592799' }
+ *
+ * The compound chat_id is split on first ':' so platform and channelId
+ * are usable independently by deriveConvId.
+ *
+ * Older / legacy / synthetic events may carry routing at top level
+ * (event.messageProvider / event.channelId) or under .context — we
+ * accept those too for backwards compatibility with the test fixtures
+ * and with any OpenClaw deployments that haven't moved to the
+ * custom_message pattern yet.
+ *
+ * Returns { provider, channelId } — null fields if nothing changed.
+ */
+function extractRouting(event) {
+  if (!event || typeof event !== 'object') return { provider: null, channelId: null };
+
+  // OpenClaw 2026.5 pattern: routing is in a separate custom_message
+  // event with customType=openclaw.runtime-context.
+  if (event.type === 'custom_message'
+      && event.customType === 'openclaw.runtime-context') {
+    if (typeof event.chat_id === 'string' && event.chat_id.includes(':')) {
+      const colon = event.chat_id.indexOf(':');
+      return {
+        provider: event.chat_id.slice(0, colon),
+        channelId: event.chat_id.slice(colon + 1),
+      };
+    }
+    if (event.chat_id != null) {
+      return { provider: null, channelId: String(event.chat_id) };
+    }
+  }
+
+  // session event might carry messageProvider/channelId at the start
+  if (event.type === 'session') {
+    return {
+      provider: event.messageProvider || null,
+      channelId: event.channelId ?? null,
+    };
+  }
+
+  // Legacy / synthetic shapes — kept for test fixtures + older OpenClaw
+  const ctx = event.context || event.metadata?.context || event.metadata || {};
+  return {
+    provider: event.messageProvider || ctx.messageProvider || ctx.platform || null,
+    channelId: event.channelId ?? ctx.channelId ?? ctx.chat_id ?? null,
   };
 }
 
@@ -180,9 +240,12 @@ function backfillOneSession(store, file, opts = {}) {
   const errors = [];
 
   // Many JSONL streams begin with a session-init event that carries
-  // messageProvider/channelId for the whole session. We collect those
-  // hints from any event and apply the last-seen values to subsequent
-  // messages that don't carry their own routing.
+  // messageProvider/channelId. OpenClaw 2026.5+ puts chat_id in a
+  // separate custom_message event with customType=openclaw.runtime-
+  // context. extractRouting() recognises both patterns. We track the
+  // last-seen values and apply them to subsequent message events that
+  // don't carry their own routing — message events almost never do
+  // in OpenClaw 2026.5+.
   let stickyProvider = null;
   let stickyChannelId = null;
 
@@ -197,22 +260,17 @@ function backfillOneSession(store, file, opts = {}) {
       continue;
     }
 
-    // Update sticky routing from ANY event that carries hints, even
-    // non-message events (e.g. session_start).
-    const ctx = event.context || event.metadata?.context || event.metadata || {};
-    if (event.messageProvider || ctx.messageProvider || ctx.platform) {
-      stickyProvider = event.messageProvider || ctx.messageProvider || ctx.platform;
-    }
-    if (event.channelId != null || ctx.channelId != null || ctx.chat_id != null) {
-      stickyChannelId = event.channelId ?? ctx.channelId ?? ctx.chat_id;
-    }
+    // Update sticky routing from THIS event if it carries hints.
+    const routing = extractRouting(event);
+    if (routing.provider) stickyProvider = routing.provider;
+    if (routing.channelId != null) stickyChannelId = routing.channelId;
 
     const parsed = parseEvent(event);
     if (!parsed) continue;
 
-    // Apply sticky routing if the event itself didn't carry it.
-    const messageProvider = parsed.messageProvider || stickyProvider;
-    const channelId = parsed.channelId ?? stickyChannelId;
+    // Apply sticky routing to the message.
+    const messageProvider = stickyProvider;
+    const channelId = stickyChannelId;
     const ts = parsed.ts || file.mtime;
 
     if (sinceTs && ts < sinceTs) {

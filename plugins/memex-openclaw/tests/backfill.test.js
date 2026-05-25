@@ -307,3 +307,152 @@ test('runBackfill: multiple agents — counts and watermarks tracked per agent',
     assert.equal(second.sessions_skipped_watermark, 2);
   } finally { store.close(); s.cleanup(); }
 });
+
+// ============================================================
+// v0.2.1 — real OpenClaw 2026.5+ JSONL event shapes
+// (fixtures based on agent's dump from /home/openclaw/.openclaw/
+// agents/main/sessions/*.jsonl on the VPS)
+// ============================================================
+
+test('runBackfill v0.2.1: parses real OpenClaw 2026.5 message shape (nested message.role/content)', () => {
+  const s = buildScratch();
+  const u = makeUuid(101);
+  writeSessionFile(s.agentsDir, 'main', `${u}.jsonl`, [
+    // OpenClaw runtime-context — sticky routing
+    {
+      type: 'custom_message',
+      customType: 'openclaw.runtime-context',
+      chat_id: 'telegram:97592799',
+      message_id: '5611',
+      sender_id: '97592799',
+    },
+    // Real OpenClaw message — nested shape
+    {
+      type: 'message',
+      id: 'b9727eda',
+      timestamp: '2026-05-25T17:12:28.864Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'найди в апреле' }],
+        timestamp: 1779729148864,
+      },
+    },
+    {
+      type: 'message',
+      id: 'c9a3-de01',
+      timestamp: '2026-05-25T17:12:35.421Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'нашёл следующее...' }],
+        timestamp: 1779729155421,
+      },
+    },
+    // Tool calls / model_change / etc — should be skipped
+    { type: 'model_change', provider: 'anthropic', modelId: 'claude-opus' },
+    { type: 'thinking_level_change', thinkingLevel: 'high' },
+  ]);
+  const store = new MemexStore(s.dbPath);
+  try {
+    const r = runBackfill(store, { agentsDir: s.agentsDir });
+    assert.equal(r.status, 'imported');
+    assert.equal(r.messages_imported, 2, 'both nested-shape messages imported, model_change skipped');
+    // Routing applied from custom_message sticky
+    const rows = store.search('найди');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].conversation_id, 'openclaw-telegram-97592799',
+      'chat_id "telegram:97592799" should split into platform=telegram, channelId=97592799');
+  } finally { store.close(); s.cleanup(); }
+});
+
+test('runBackfill v0.2.1: skips type=session, type=custom (non-message events)', () => {
+  const s = buildScratch();
+  const u = makeUuid(102);
+  writeSessionFile(s.agentsDir, 'main', `${u}.jsonl`, [
+    { type: 'session', id: 'session-uuid', timestamp: '2026-05-25T17:00:00Z', cwd: '/home/openclaw' },
+    { type: 'model_change', provider: 'anthropic' },
+    { type: 'custom', customType: 'model-snapshot', payload: '...' },
+    {
+      type: 'message',
+      timestamp: '2026-05-25T17:12:28.864Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+    },
+  ]);
+  const store = new MemexStore(s.dbPath);
+  try {
+    const r = runBackfill(store, { agentsDir: s.agentsDir });
+    assert.equal(r.messages_imported, 1,
+      'only the one type:message event imports; session/model_change/custom are skipped');
+  } finally { store.close(); s.cleanup(); }
+});
+
+test('runBackfill v0.2.1: webchat session (no telegram chat_id) routes via session8 fallback', () => {
+  const s = buildScratch();
+  const u = '0503a630-1234-1234-1234-123456789abc';
+  writeSessionFile(s.agentsDir, 'main', `${u}.jsonl`, [
+    {
+      type: 'message',
+      timestamp: '2026-05-25T17:12:28.864Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'web prompt' }] },
+    },
+  ]);
+  const store = new MemexStore(s.dbPath);
+  try {
+    runBackfill(store, { agentsDir: s.agentsDir });
+    const rows = store.search('web prompt');
+    assert.equal(rows.length, 1);
+    // No platform routing → falls back to openclaw-<session8>
+    assert.equal(rows[0].conversation_id, 'openclaw-0503a630',
+      `expected session-short fallback, got ${rows[0].conversation_id}`);
+  } finally { store.close(); s.cleanup(); }
+});
+
+test('runBackfill v0.2.1: chat_id without colon is treated as channelId only (no platform split)', () => {
+  const s = buildScratch();
+  const u = makeUuid(103);
+  writeSessionFile(s.agentsDir, 'main', `${u}.jsonl`, [
+    {
+      type: 'custom_message',
+      customType: 'openclaw.runtime-context',
+      chat_id: 'just-channel-no-prefix',
+    },
+    {
+      type: 'message',
+      timestamp: '2026-05-25T17:12:28.864Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'msg' }] },
+    },
+  ]);
+  const store = new MemexStore(s.dbPath);
+  try {
+    runBackfill(store, { agentsDir: s.agentsDir });
+    const rows = store.search('msg');
+    assert.equal(rows.length, 1);
+    // No provider prefix → falls back to openclaw-<session8> with no platform
+    // (deriveConvId with platform=null returns openclaw-<session8>)
+    assert.ok(rows[0].conversation_id.startsWith('openclaw-'),
+      `got: ${rows[0].conversation_id}`);
+  } finally { store.close(); s.cleanup(); }
+});
+
+test('runBackfill v0.2.1: ts parses ISO string from top-level event.timestamp', () => {
+  const s = buildScratch();
+  const u = makeUuid(104);
+  writeSessionFile(s.agentsDir, 'main', `${u}.jsonl`, [
+    {
+      type: 'message',
+      timestamp: '2026-04-19T18:57:28.000Z',  // ISO string, NO unix-ms inside
+      message: { role: 'user', content: [{ type: 'text', text: 'april message' }] },
+    },
+  ]);
+  const store = new MemexStore(s.dbPath);
+  try {
+    runBackfill(store, { agentsDir: s.agentsDir });
+    const rows = store.search('april message');
+    assert.equal(rows.length, 1);
+    // Verify ts parsed from the ISO string, not the file mtime fallback.
+    // 2026-04-19T18:57:28Z = floor(Date.parse('2026-04-19T18:57:28Z') / 1000)
+    const fullRow = store.getById(rows[0].id);
+    const expectedTs = Math.floor(Date.parse('2026-04-19T18:57:28.000Z') / 1000);
+    assert.equal(fullRow.ts, expectedTs,
+      `expected ts=${expectedTs} from ISO, got ${fullRow.ts}`);
+  } finally { store.close(); s.cleanup(); }
+});

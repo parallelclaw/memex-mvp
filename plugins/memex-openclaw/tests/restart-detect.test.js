@@ -24,10 +24,12 @@ import { existsSync, readFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+// v0.2.1: restart-detect moved from lib/ to bin/setup-impl.js to keep
+// child_process out of the plugin sandbox.
 import {
   detectRestartMechanism,
   scheduleSelfRestart,
-} from '../lib/restart-detect.js';
+} from '../bin/setup-impl.js';
 
 // ---------- detector shape tests ----------
 

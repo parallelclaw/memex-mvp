@@ -1,71 +1,46 @@
 /**
- * One-shot setup orchestrator for memex-openclaw v0.2.0.
+ * Setup orchestrator — lives in bin/ (NOT lib/) so OpenClaw's plugin
+ * security scanner doesn't flag the package on `openclaw plugins
+ * install`. The scanner forbids `child_process` in lib/ — that's the
+ * sandboxed plugin code surface. bin/ scripts are external CLI tools
+ * the user / agent runs in their own shell after install, so shell
+ * primitives are fine here.
  *
- * Composes the manual install steps (which install-memex-claw v2.0.2
- * spelled out across seven sections) into one function callable
- * either via the OpenClaw plugin CLI (`openclaw memex-openclaw setup`)
- * or via the standalone npm bin fallback (`memex-openclaw-setup`).
+ * Same module shape as memex-hermes setup (runSetup + helpers); the
+ * v0.2.1 hotfix moved this whole file out of lib/setup.js + merged in
+ * lib/restart-detect.js so the lib/ surface stays pure.
  *
- * Pipeline (each step idempotent, each surfaces its own diff in the
- * structured return value):
- *
- *   1. Wire plugin config in ~/.openclaw/openclaw.json
- *      - plugins.entries.memex-openclaw.enabled = true
- *      - plugins.entries.memex-openclaw.hooks.allowConversationAccess
- *        = true   (Bug 6 fix — without this, agent_end hook is BLOCKED
- *        by the gateway and capture silently doesn't write)
- *   2. Wire MCP server at the correct nested key
- *      - mcp.servers.memex = { command: which memex, args: [], env: {} }
- *      - cleans up stale cfg.mcpServers.memex from pre-v2.0.2 skill versions
- *   3. Backfill OpenClaw session history into memex.db
- *      - skipped if --no-backfill
- *      - watermarked per-agent so re-runs are O(0)
- *   4. Detect restart mechanism (systemd / launchd / pkill / manual)
- *   5. Schedule a delayed self-restart unless --no-auto-restart
- *
- * Output is structured JSON when `json: true`, designed for an LLM
- * agent that drove the install (e.g. user pasted the lazy-install
- * prompt into OpenClaw and OpenClaw is now running this on the user's
- * behalf). Fields like `next_action`, `restart.auto_restart`,
- * `agent_instructions` let the agent reason about a re-run and
- * formulate the right user-facing reply.
+ * Re-exports keep tests stable: tests/setup.test.js imports from here
+ * via relative path.
  */
 
-import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  copyFileSync,
+  mkdirSync,
+  statSync,
+  readdirSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { homedir, platform as osPlatform } from 'node:os';
+import { execFileSync, spawn } from 'node:child_process';
 
-import { runBackfill } from './backfill.js';
-import { detectRestartMechanism, scheduleSelfRestart } from './restart-detect.js';
+import { runBackfill } from '../lib/backfill.js';
 
-/**
- * Default path to OpenClaw's gateway config.
- */
+export const PLUGIN_ID = 'memex-openclaw';
+
+// ────────────────────────────────────────────────────────────────────
+// Pure config wiring (no child_process — could live in lib/ but kept
+// here for one-file readability; security-scanner blocking only cares
+// about lib/, not bin/)
+// ────────────────────────────────────────────────────────────────────
+
 export function defaultOpenclawConfigPath() {
   return join(homedir(), '.openclaw', 'openclaw.json');
 }
 
-/**
- * Locate `memex` binary on PATH for the MCP server registration.
- * Returns absolute path or null.
- */
-function findMemexBinary() {
-  try {
-    const out = execFileSync('/bin/sh', ['-c', 'command -v memex'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    const p = out.trim();
-    return p || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Read + parse openclaw.json safely. Returns {ok, cfg, error}.
- */
 function readConfig(configPath) {
   if (!existsSync(configPath)) {
     return { ok: false, error: `not found: ${configPath}` };
@@ -77,14 +52,7 @@ function readConfig(configPath) {
   catch (err) { return { ok: false, error: `parse failed: ${err.message}` }; }
 }
 
-/**
- * Write config back with a one-time .before-<ts> backup. Idempotent
- * in the sense that re-writes overwrite the same destination; the
- * backup file uses a timestamp so multiple setup runs each leave a
- * trace.
- */
 function writeConfig(configPath, cfg) {
-  // Defensive backup (cheap, helps users undo a wrong --force)
   if (existsSync(configPath)) {
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     const backup = `${configPath}.before-setup-${ts}`;
@@ -95,44 +63,31 @@ function writeConfig(configPath, cfg) {
 }
 
 /**
- * Step 1 — ensure plugins.entries.memex-openclaw is wired with BOTH
- * enabled=true AND hooks.allowConversationAccess=true.
- *
- * Returns one of:
- *   action='already_correct'  — no change needed
- *   action='wired'            — set one or both fields
- *   action='write_failed'     — IO error
+ * Set plugins.entries.memex-openclaw.{enabled, hooks.allowConversationAccess}
+ * Returns { action: 'wired'|'already_correct', enabled, allowConversationAccess }.
  */
-function wirePluginEntry(cfg) {
+export function wirePluginEntry(cfg) {
   cfg.plugins = cfg.plugins || {};
   cfg.plugins.entries = cfg.plugins.entries || {};
   const entry = cfg.plugins.entries['memex-openclaw'] || {};
-
   const before = JSON.stringify(entry);
   entry.enabled = true;
   entry.hooks = entry.hooks || {};
   entry.hooks.allowConversationAccess = true;
   cfg.plugins.entries['memex-openclaw'] = entry;
-  const after = JSON.stringify(entry);
-
   return {
-    action: before === after ? 'already_correct' : 'wired',
+    action: before === JSON.stringify(entry) ? 'already_correct' : 'wired',
     enabled: entry.enabled,
     allowConversationAccess: entry.hooks.allowConversationAccess,
   };
 }
 
 /**
- * Step 2 — wire mcp.servers.memex (correct nested key) and clean up
- * any stale cfg.mcpServers.memex left by pre-v2.0.2 skill versions.
- *
- * Returns:
- *   action='already_correct' | 'wired' | 'conflict' | 'memex_missing'
- *   memex_bin: absolute path of memex binary (or null)
- *   cleaned_stale: bool — true if stale flat-key entry was deleted
+ * Set mcp.servers.memex (correct nested key) + clean up any stale
+ * top-level mcpServers.memex from earlier skill versions. Refuses to
+ * overwrite a customised memex command unless force=true.
  */
-function wireMcpServer(cfg, { force = false, explicitMemexBin = null } = {}) {
-  const memexBin = explicitMemexBin || findMemexBinary();
+export function wireMcpServer(cfg, { force = false, memexBin = null } = {}) {
   if (!memexBin) {
     return {
       action: 'memex_missing',
@@ -141,7 +96,6 @@ function wireMcpServer(cfg, { force = false, explicitMemexBin = null } = {}) {
     };
   }
 
-  // Clean up legacy top-level mcpServers.memex (from skill v2.0.0/2.0.1)
   let cleanedStale = false;
   if (cfg.mcpServers && typeof cfg.mcpServers === 'object' && cfg.mcpServers.memex) {
     delete cfg.mcpServers.memex;
@@ -152,7 +106,6 @@ function wireMcpServer(cfg, { force = false, explicitMemexBin = null } = {}) {
   cfg.mcp = cfg.mcp || {};
   cfg.mcp.servers = cfg.mcp.servers || {};
   const existing = cfg.mcp.servers.memex;
-
   const desired = { command: memexBin, args: [], env: {} };
   const changed = !existing
     || existing.command !== desired.command
@@ -160,7 +113,6 @@ function wireMcpServer(cfg, { force = false, explicitMemexBin = null } = {}) {
     || JSON.stringify(existing.env || {}) !== JSON.stringify(desired.env);
 
   if (existing && existing.command && existing.command !== memexBin && !force) {
-    // Don't silently overwrite a user's custom memex path.
     return {
       action: 'conflict',
       memex_bin: memexBin,
@@ -179,21 +131,158 @@ function wireMcpServer(cfg, { force = false, explicitMemexBin = null } = {}) {
   };
 }
 
-/**
- * Format the agent_instructions string — the pre-cooked English the
- * LLM should relay to the user. Adapts to which steps actually
- * produced changes vs were no-ops, and to whether the restart was
- * scheduled or punted to manual.
- */
-function formatAgentInstructions(report) {
-  const lines = [];
+// ────────────────────────────────────────────────────────────────────
+// Side-effecting helpers (child_process — bin-only surface)
+// ────────────────────────────────────────────────────────────────────
 
-  // History
+/**
+ * Find absolute path to `memex` binary via PATH. Returns null if not found.
+ * Uses execFileSync of `command -v` for portability across shells.
+ */
+export function findMemexBinary() {
+  try {
+    const out = execFileSync('/bin/sh', ['-c', 'command -v memex'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function tryCmd(file, args, timeoutMs = 3000) {
+  try {
+    const stdout = execFileSync(file, args, {
+      timeout: timeoutMs,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return { ok: true, stdout: String(stdout || '') };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function which(name) {
+  try {
+    const out = execFileSync('/bin/sh', ['-c', `command -v ${JSON.stringify(name)}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Probe the host for a usable OpenClaw restart mechanism.
+ * Order: systemctl --user → systemctl → launchctl → pgrep → manual.
+ * Returns { method, command, detail }.
+ */
+export function detectRestartMechanism() {
+  const result = { method: 'manual', command: '', detail: '' };
+
+  if (which('systemctl')) {
+    for (const probe of [
+      { scope: '--user', method: 'systemd-user' },
+      { scope: null,     method: 'systemd-system' },
+    ]) {
+      for (const unit of ['openclaw', 'openclaw-gateway']) {
+        const args = ['is-active'];
+        if (probe.scope) args.unshift(probe.scope);
+        args.push(unit);
+        const r = tryCmd('systemctl', args);
+        if (r.ok && r.stdout.trim() === 'active') {
+          return {
+            method: probe.method,
+            command: probe.scope
+              ? `systemctl --user restart ${unit}`
+              : `sudo systemctl restart ${unit}`,
+            detail: `systemd unit '${unit}' active`,
+          };
+        }
+      }
+    }
+  }
+
+  if (osPlatform() === 'darwin' && which('launchctl')) {
+    const r = tryCmd('launchctl', ['list']);
+    if (r.ok) {
+      for (const line of r.stdout.split('\n')) {
+        if (/openclaw/i.test(line)) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            const label = parts[parts.length - 1];
+            return {
+              method: 'launchd',
+              command: `launchctl kickstart -k gui/$(id -u)/${label}`,
+              detail: `launchd label '${label}'`,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  if (which('pgrep')) {
+    const r = tryCmd('pgrep', ['-f', 'openclaw']);
+    if (r.ok && r.stdout.trim()) {
+      const pids = r.stdout.trim().split(/\s+/).filter(Boolean);
+      return {
+        method: 'pkill',
+        command: 'pkill -HUP -f openclaw',
+        detail: `openclaw process(es): ${pids.slice(0, 4).join(',')}`,
+      };
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Fork a detached background shell that sleeps then runs the restart.
+ * Survives SIGTERM to the gateway because start_new_session puts the
+ * runner in its own process group. Logs to logPath.
+ */
+export function scheduleSelfRestart(
+  restartCommand,
+  { delaySeconds = 3, logPath = '/tmp/memex-openclaw-restart.log' } = {},
+) {
+  if (!restartCommand || !String(restartCommand).trim()) {
+    return { scheduled: false, error: 'empty restart_command' };
+  }
+  const delay = Math.max(1, Number.parseInt(delaySeconds, 10) || 3);
+  const shellScript =
+    `(echo '--- memex-openclaw auto-restart '"$(date -Iseconds)"' ---' >> ${logPath}; ` +
+    `sleep ${delay}; ` +
+    `echo 'restart_command: ${restartCommand}' >> ${logPath}; ` +
+    `${restartCommand} >> ${logPath} 2>&1; ` +
+    `echo "rc=$?" >> ${logPath})`;
+  try {
+    const child = spawn('/bin/sh', ['-c', shellScript], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    return { scheduled: true, delaySeconds: delay, logPath };
+  } catch (err) {
+    return { scheduled: false, error: err.message };
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Agent-instructions + human-summary formatting
+// ────────────────────────────────────────────────────────────────────
+
+export function formatAgentInstructions(report) {
+  const lines = [];
   const bf = report.backfill;
   if (bf?.status === 'imported' && bf.messages_imported > 0) {
     lines.push(
-      `I made ${bf.messages_imported} of your past OpenClaw messages `
-      + `searchable in memex (across ${bf.per_agent?.length || 1} agent(s)).`,
+      `I made ${bf.messages_imported} of your past OpenClaw messages searchable in memex `
+      + `(across ${bf.per_agent?.length || 1} agent(s)).`,
     );
   } else if (bf?.status === 'already_in_sync') {
     lines.push(
@@ -201,14 +290,11 @@ function formatAgentInstructions(report) {
       + `${bf.messages_skipped_dup || 0} messages, deduplicated.`,
     );
   } else if (bf?.status === 'no_new_data' || bf?.status === 'no_history') {
-    lines.push(
-      `No prior OpenClaw history found — live capture will start from the next conversation.`,
-    );
+    lines.push('No prior OpenClaw history found — live capture will start from the next conversation.');
   } else if (bf?.status === 'skipped') {
     lines.push('History import was skipped (--no-backfill).');
   }
 
-  // Config
   if (report.plugin_config?.action === 'wired') {
     lines.push('I added the plugin to ~/.openclaw/openclaw.json with conversation access.');
   }
@@ -220,7 +306,6 @@ function formatAgentInstructions(report) {
     lines.push(`⚠️ ${report.mcp.warning}`);
   }
 
-  // Restart
   const r = report.restart;
   if (r?.auto_restart === 'scheduled') {
     lines.push(
@@ -240,29 +325,22 @@ function formatAgentInstructions(report) {
   return lines.join(' ');
 }
 
-/**
- * Build the human-readable summary printed when --json is NOT set.
- * Compact, terminal-friendly, uses simple Unicode markers (no boxes
- * because OpenClaw's CLI may wrap lines).
- */
-function formatHumanSummary(report) {
+export function formatHumanSummary(report) {
   const lines = [];
   lines.push('');
   lines.push('────────────────────────────────────────────────────────────');
   lines.push('  memex-openclaw setup');
   lines.push('────────────────────────────────────────────────────────────');
 
-  // Plugin config
   const pc = report.plugin_config;
   if (pc?.action === 'wired') {
     lines.push('🔧 Plugin config:      wired (enabled + allowConversationAccess)');
   } else if (pc?.action === 'already_correct') {
     lines.push('🔧 Plugin config:      already correct (no change)');
-  } else if (pc?.action === 'write_failed') {
+  } else if (pc?.error) {
     lines.push(`🔧 Plugin config:      ⚠️ ${pc.error}`);
   }
 
-  // MCP
   const mcp = report.mcp;
   if (mcp?.action === 'wired') {
     lines.push(`🔌 MCP server:         wired memex → ${mcp.memex_bin}`);
@@ -277,7 +355,6 @@ function formatHumanSummary(report) {
     lines.push(`🔌 MCP server:         ⚠️ memex binary missing — install memex-mvp first`);
   }
 
-  // Backfill
   const bf = report.backfill;
   if (bf?.status === 'imported') {
     lines.push(`📥 History:            ${bf.messages_imported} new messages from ${bf.sessions_processed} session(s) made searchable`);
@@ -292,7 +369,6 @@ function formatHumanSummary(report) {
     lines.push('📥 History:            skipped (--no-backfill)');
   }
 
-  // Restart
   const r = report.restart;
   if (r?.auto_restart === 'scheduled') {
     lines.push(`🔄 Auto-restart:       scheduled in ${r.delay_seconds}s (${r.method} — ${r.command})`);
@@ -311,24 +387,10 @@ function formatHumanSummary(report) {
   return lines.join('\n');
 }
 
-/**
- * Top-level orchestrator. Takes a MemexStore (already opened by the
- * plugin runtime or by the standalone bin) and a flat opts object.
- *
- * opts:
- *   configPath:       override ~/.openclaw/openclaw.json
- *   noBackfill:       skip history import (default false)
- *   noAutoRestart:    don't trigger self-restart (default false)
- *   force:            overwrite conflicting mcp.servers.memex
- *   restartDelay:     seconds to wait before restart (default 3)
- *   memexBin:         override `which memex` lookup
- *   agentsDir:        override default ~/.openclaw/agents/
- *   since:            YYYY-MM-DD cutoff for backfill
- *   json:             return result instead of printing humans summary
- *
- * Returns a structured object (see README) regardless of json flag —
- * the CLI layer decides whether to print human or JSON.
- */
+// ────────────────────────────────────────────────────────────────────
+// runSetup — the orchestrator
+// ────────────────────────────────────────────────────────────────────
+
 export function runSetup(store, opts = {}) {
   const configPath = opts.configPath || defaultOpenclawConfigPath();
   const report = {
@@ -340,24 +402,25 @@ export function runSetup(store, opts = {}) {
     restart: {},
   };
 
-  // ----- Step 1 + 2: edit config -----
   const read = readConfig(configPath);
   if (!read.ok) {
     report.plugin_config = { action: 'read_failed', error: read.error };
     report.mcp = { action: 'read_failed', error: read.error };
     report.status = 'failed';
     report.next_action = 'manual_intervention';
-    report.agent_instructions = `Couldn't read ${configPath}: ${read.error}. `
+    report.agent_instructions =
+      `Couldn't read ${configPath}: ${read.error}. `
       + `Open the file and verify it exists + is valid JSON.`;
     return report;
   }
   const cfg = read.cfg;
 
+  // Step 1: wire plugin entry
   report.plugin_config = wirePluginEntry(cfg);
-  report.mcp = wireMcpServer(cfg, {
-    force: !!opts.force,
-    explicitMemexBin: opts.memexBin,
-  });
+
+  // Step 2: wire MCP server (find memex bin unless caller passed one explicitly)
+  const memexBin = 'memexBin' in opts ? opts.memexBin : findMemexBinary();
+  report.mcp = wireMcpServer(cfg, { force: !!opts.force, memexBin });
 
   const configChanged =
     report.plugin_config.action === 'wired' ||
@@ -375,7 +438,7 @@ export function runSetup(store, opts = {}) {
     }
   }
 
-  // ----- Step 3: backfill -----
+  // Step 3: backfill
   if (opts.noBackfill) {
     report.backfill = { status: 'skipped' };
   } else {
@@ -389,7 +452,7 @@ export function runSetup(store, opts = {}) {
     }
   }
 
-  // ----- Step 4: detect restart -----
+  // Step 4: detect restart
   const detected = detectRestartMechanism();
   report.restart = {
     method: detected.method,
@@ -397,7 +460,7 @@ export function runSetup(store, opts = {}) {
     detail: detected.detail,
   };
 
-  // ----- Step 5: schedule auto-restart -----
+  // Step 5: schedule auto-restart
   if (opts.noAutoRestart) {
     report.restart.auto_restart = 'opt_out';
   } else if (detected.method === 'manual' || !detected.command) {
@@ -416,7 +479,7 @@ export function runSetup(store, opts = {}) {
     }
   }
 
-  // ----- Wrap up: overall status + next_action -----
+  // Wrap up
   if (report.plugin_config.action === 'write_failed' || report.mcp.action === 'write_failed') {
     report.status = 'failed';
     report.next_action = 'manual_intervention';
@@ -426,7 +489,7 @@ export function runSetup(store, opts = {}) {
   } else if (report.mcp.action === 'conflict') {
     report.status = 'partial';
     report.next_action = 'use_force_or_resolve_conflict';
-  } else if (configChanged || report.backfill.messages_imported > 0) {
+  } else if (configChanged || (report.backfill.messages_imported || 0) > 0) {
     report.status = 'ready';
     report.next_action = report.restart.auto_restart === 'scheduled'
       ? 'wait_for_restart'
@@ -440,10 +503,6 @@ export function runSetup(store, opts = {}) {
   return report;
 }
 
-/**
- * Convenience for the CLI layer: print either JSON or human summary
- * based on opts.json. Returns nothing.
- */
 export function printSetupReport(report, { json = false } = {}) {
   if (json) {
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');

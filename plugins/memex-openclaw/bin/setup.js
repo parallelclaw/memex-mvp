@@ -14,7 +14,7 @@
 
 import { argv, exit } from 'node:process';
 import { MemexStore } from '../lib/store.js';
-import { runSetup, printSetupReport } from '../lib/setup.js';
+import { runSetup, printSetupReport } from './setup-impl.js';
 
 function parseArgs(argv) {
   const opts = {};

@@ -17,7 +17,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { MemexStore } from '../lib/store.js';
-import { runSetup } from '../lib/setup.js';
+// v0.2.1: setup orchestrator moved from lib/ to bin/ so it's outside
+// the OpenClaw plugin sandbox (allowed to use child_process).
+import { runSetup } from '../bin/setup-impl.js';
 
 function buildEnv() {
   const dir = mkdtempSync(join(tmpdir(), 'memex-oc-setup-'));

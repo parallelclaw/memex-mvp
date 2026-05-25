@@ -278,128 +278,58 @@ export default definePluginEntry({
     }
 
     // ------------------------------------------------------------
-    // 5. Register CLI subcommands so users (or LLM agents driving the
-    //    install) can run `openclaw memex-openclaw setup` and
-    //    `openclaw memex-openclaw backfill` as one-shot orchestrators.
-    //
-    //    OpenClaw's plugin SDK exposes api.registerCli; the callback
-    //    receives a ctx with a commander-compatible `program` we can
-    //    add subcommands to. We ALSO ship a standalone npm bin
-    //    (memex-openclaw-setup / memex-openclaw-backfill) as a
-    //    fallback path — see package.json `bin` — for CI scripts or
-    //    sanity testing without OpenClaw's CLI plumbing.
-    // ------------------------------------------------------------
-    if (typeof api.registerCli === 'function') {
-      try {
-        api.registerCli(async (ctx) => {
-          // Lazy import — keeps the plugin's hot path slim. setup.js
-          // pulls in subprocess + fs helpers we don't need until the
-          // user actually runs setup.
-          const { runSetup, printSetupReport } = await import('./lib/setup.js');
-          const { runBackfill } = await import('./lib/backfill.js');
-
-          ctx.program
-            .command('setup')
-            .description(
-              'One-shot: wire openclaw.json (plugin + MCP), backfill ' +
-              'OpenClaw session history into memex.db, and (optionally) ' +
-              'schedule a self-restart of the gateway.',
-            )
-            .option('--json', 'emit machine-parseable JSON instead of human summary')
-            .option('--no-backfill', 'skip importing past OpenClaw sessions')
-            .option('--no-auto-restart', 'detect restart mechanism but do not trigger it')
-            .option('--force', 'overwrite a conflicting mcp.servers.memex entry')
-            .option('--restart-delay <seconds>', 'seconds before triggering self-restart', '3')
-            .option('--since <date>', 'YYYY-MM-DD or unix epoch — limit backfill to recent sessions')
-            .option('--memex-db <path>', 'override memex.db location')
-            .option('--config <path>', 'override ~/.openclaw/openclaw.json location')
-            .option('--agents-dir <path>', 'override ~/.openclaw/agents/ location')
-            .action(async (opts) => {
-              // Use the SAME store instance the plugin opened, so
-              // backfill writes are visible to subsequent live capture
-              // without reopen.
-              const report = runSetup(store, {
-                configPath: opts.config,
-                noBackfill: opts.backfill === false,
-                noAutoRestart: opts.autoRestart === false,
-                force: !!opts.force,
-                restartDelay: parseInt(opts.restartDelay, 10) || 3,
-                since: opts.since,
-                agentsDir: opts.agentsDir,
-              });
-              printSetupReport(report, { json: !!opts.json });
-            });
-
-          ctx.program
-            .command('backfill')
-            .description(
-              'Import OpenClaw session history (~/.openclaw/agents/<name>/sessions/*.jsonl) ' +
-              'into memex.db. Idempotent — re-runs skip already-processed sessions.',
-            )
-            .option('--json', 'emit JSON instead of human summary')
-            .option('--dry-run', 'predict counts without writing')
-            .option('--since <date>', 'YYYY-MM-DD or unix epoch')
-            .option('--agents-dir <path>', 'override ~/.openclaw/agents/')
-            .option('--ignore-watermark', 'process all sessions regardless of last-import time')
-            .action(async (opts) => {
-              const result = runBackfill(store, {
-                dryRun: !!opts.dryRun,
-                since: opts.since,
-                agentsDir: opts.agentsDir,
-                ignoreWatermark: !!opts.ignoreWatermark,
-              });
-              if (opts.json) {
-                process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-              } else {
-                process.stdout.write(
-                  `backfill: ${result.status}\n` +
-                  `  agents scanned:           ${result.agents_scanned}\n` +
-                  `  sessions seen:            ${result.sessions_seen}\n` +
-                  `  sessions processed:       ${result.sessions_processed}\n` +
-                  `  sessions skipped (mark):  ${result.sessions_skipped_watermark}\n` +
-                  `  messages imported:        ${result.messages_imported}\n` +
-                  `  messages skipped (dup):   ${result.messages_skipped_dup}\n` +
-                  (result.errors.length ? `  errors:                  ${result.errors.length}\n` : '') +
-                  `  next_action:              ${result.next_action}\n`,
-                );
-              }
-            });
-        });
-        traceRegister('CLI subcommands registered: setup, backfill');
-      } catch (err) {
-        // CLI registration is non-critical — capture still works.
-        logger.warn(`memex-openclaw: CLI registration failed: ${err.message}`);
-        traceRegister(`CLI registration FAILED: ${err.message}`);
-      }
-    } else {
-      // Older OpenClaw without registerCli — fall back to the npm bin
-      // (memex-openclaw-setup) which calls the same library code.
-      traceRegister('api.registerCli unavailable — use the standalone bin instead');
-    }
-
-    // ------------------------------------------------------------
-    // 6. v0.2.0: Auto-backfill on startup — silent, idempotent.
-    //
-    //    Why: zero-click UX. Even if the user installs the plugin
-    //    without running `setup` (e.g. they used a custom install
-    //    flow), the next gateway start will pull pre-install history
-    //    into memex.db. Watermark in plugin_state ensures it's a
-    //    millisecond-level no-op on subsequent restarts.
+    // 5. v0.2.1: Auto-backfill on startup — silent, idempotent, AND
+    //    SAFE against legacy memex-mvp file-watcher data.
     //
     //    Why setImmediate, not synchronous: the gateway is still
     //    bringing other plugins up. Don't make memex-openclaw the
     //    plugin that delays everyone else's load by reading hundreds
-    //    of JSONL files on startup. setImmediate yields to the
-    //    event loop; backfill happens in the background.
+    //    of JSONL files on startup. setImmediate yields to the event
+    //    loop; backfill happens in the background.
     //
-    //    Why we still keep `setup --force` + `backfill --ignore-watermark`
-    //    (via api.registerCli + bin/*) — for power users who want to
-    //    re-import, or for the install-memex-claw skill which can't
-    //    rely on startup auto-backfill having run yet.
+    //    Why the "legacy data" guard: if the user's memex.db already
+    //    has openclaw rows AND no plugin-state watermark exists, that
+    //    almost certainly means they were on memex-mvp v0.11.x which
+    //    ingested OpenClaw JSONLs via its own file-watcher path with
+    //    a DIFFERENT conv_id formula (e.g. openclaw-tg-X vs the
+    //    plugin's openclaw-telegram-X). Running our backfill blindly
+    //    would write ~thousands of rows under the new namespace —
+    //    same content, two conv_id buckets — which is technically
+    //    safe (search finds both) but noisy and confusing. We refuse,
+    //    log a hint, and let the user explicitly request the import
+    //    via `memex-openclaw-backfill --ignore-watermark`.
+    //
+    //    Power users / fresh installs: skip flag intentionally NOT
+    //    surfaced as opt-in here — explicit backfill is the right
+    //    affordance once they understand the situation.
+    //
+    //    NO child_process here — only pure lib/backfill.js, which
+    //    the OpenClaw security scanner is fine with.
     // ------------------------------------------------------------
     if (store) {
       setImmediate(async () => {
         try {
+          // Legacy-data guard: if the DB has OpenClaw rows but no
+          // backfill watermark, this is almost certainly a memex-mvp
+          // v0.11.x file-watcher install — different conv_id formula.
+          // Auto-import would double-bucket the data. Refuse with a hint.
+          const existingRows = store.count();
+          const hasWatermark =
+            store.listState('memex-openclaw', 'agent:').length > 0;
+          if (existingRows > 0 && !hasWatermark) {
+            logger.info(
+              `memex-openclaw: startup auto-backfill skipped — `
+              + `${existingRows} pre-existing OpenClaw rows detected without `
+              + `a plugin watermark (looks like a memex-mvp file-watcher era `
+              + `install). To explicitly import session history with the new `
+              + `conv_id formula, run: memex-openclaw-backfill --ignore-watermark`,
+            );
+            traceRegister(
+              `startup auto-backfill skipped: ${existingRows} legacy rows present`,
+            );
+            return;
+          }
+
           const { runBackfill } = await import('./lib/backfill.js');
           const result = runBackfill(store, {});
           if (result.messages_imported > 0) {
@@ -414,12 +344,9 @@ export default definePluginEntry({
           } else if (result.status === 'no_history') {
             traceRegister('startup auto-backfill: no_history');
           } else {
-            // Already in sync — skip log noise, only trace.
             traceRegister('startup auto-backfill: already in sync');
           }
         } catch (err) {
-          // Backfill is non-essential at startup — live capture works
-          // regardless. Surface the failure but don't propagate.
           logger.warn(
             `memex-openclaw: startup auto-backfill failed: ${err.message}`,
           );

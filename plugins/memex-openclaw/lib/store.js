@@ -102,6 +102,23 @@ export function initialiseSchema(db) {
       last_ts                INTEGER,
       message_count          INTEGER DEFAULT 0
     );
+
+    -- v0.2.0: plugin_state — key/value bag for plugin bookkeeping.
+    -- Primary use case: backfill watermark per OpenClaw agent so a
+    -- partial-failure backfill resumes from the right place and
+    -- repeated re-runs are O(0) work. Schema is plugin-agnostic so
+    -- memex-hermes and others can share it.
+    --   plugin_id   — namespace (e.g. 'memex-openclaw')
+    --   key         — opaque per-plugin key (e.g. 'agent:main:last_session_id')
+    --   value       — opaque string (caller serializes/deserializes)
+    --   updated_ts  — unix seconds of last write, for diagnostics
+    CREATE TABLE IF NOT EXISTS plugin_state (
+      plugin_id   TEXT NOT NULL,
+      key         TEXT NOT NULL,
+      value       TEXT,
+      updated_ts  INTEGER,
+      PRIMARY KEY (plugin_id, key)
+    );
   `);
 
   safeAlter(db, 'ALTER TABLE messages ADD COLUMN edited_at INTEGER');
@@ -259,5 +276,71 @@ export class MemexStore {
 
   count() {
     return this._countStmt.get().n;
+  }
+
+  // -------- v0.2.0: plugin_state (watermarks, flags, misc bookkeeping) --------
+
+  /**
+   * Read a single plugin_state value.
+   * Returns the raw stored string, or null if the key isn't present.
+   * Caller deserializes (JSON.parse, parseInt, etc.) as needed.
+   */
+  getState(pluginId, key) {
+    if (!pluginId || !key) return null;
+    const row = this.db.prepare(
+      'SELECT value FROM plugin_state WHERE plugin_id = ? AND key = ?',
+    ).get(String(pluginId), String(key));
+    return row ? row.value : null;
+  }
+
+  /**
+   * Upsert a plugin_state value with current timestamp. Pass value=null
+   * to clear (idempotent: clearing a non-existent key is a no-op).
+   * value is stringified — for objects, callers should JSON.stringify first.
+   */
+  setState(pluginId, key, value) {
+    if (!pluginId || !key) return;
+    const now = Math.floor(Date.now() / 1000);
+    if (value === null || value === undefined) {
+      this.db.prepare(
+        'DELETE FROM plugin_state WHERE plugin_id = ? AND key = ?',
+      ).run(String(pluginId), String(key));
+      return;
+    }
+    this.db.prepare(`
+      INSERT INTO plugin_state (plugin_id, key, value, updated_ts)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(plugin_id, key) DO UPDATE SET
+        value      = excluded.value,
+        updated_ts = excluded.updated_ts
+    `).run(String(pluginId), String(key), String(value), now);
+  }
+
+  /**
+   * List all plugin_state entries for a plugin, optionally prefix-filtered.
+   * Returns [{ key, value, updated_ts }, ...]. Used for diagnostics
+   * (e.g. `memex-openclaw status` showing all watermarks) and for batch
+   * operations like clearing all watermarks via clearStateForPlugin().
+   */
+  listState(pluginId, keyPrefix = null) {
+    if (!pluginId) return [];
+    let sql = `SELECT key, value, updated_ts FROM plugin_state
+               WHERE plugin_id = ?`;
+    const params = [String(pluginId)];
+    if (keyPrefix) {
+      sql += ' AND key LIKE ?';
+      params.push(String(keyPrefix) + '%');
+    }
+    sql += ' ORDER BY key';
+    return this.db.prepare(sql).all(...params);
+  }
+
+  /** Clear ALL state for a plugin. Diagnostic / reset operation. */
+  clearStateForPlugin(pluginId) {
+    if (!pluginId) return 0;
+    const r = this.db.prepare(
+      'DELETE FROM plugin_state WHERE plugin_id = ?',
+    ).run(String(pluginId));
+    return r.changes;
   }
 }

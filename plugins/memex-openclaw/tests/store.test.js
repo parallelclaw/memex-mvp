@@ -209,3 +209,169 @@ test('resolveDbPath: absolute path passes through', () => {
   const p = resolveDbPath('/tmp/explicit-memex.db');
   assert.equal(p, '/tmp/explicit-memex.db');
 });
+
+// ============================================================
+// v0.2.0 — plugin_state (watermark storage for backfill etc.)
+// ============================================================
+
+test('plugin_state: setState + getState round-trips a string value', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'agent:main:last_session_id', 'abc-123');
+    assert.equal(
+      store.getState('memex-openclaw', 'agent:main:last_session_id'),
+      'abc-123',
+    );
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: getState returns null for missing key', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    assert.equal(store.getState('memex-openclaw', 'never-set'), null);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: setState overwrites existing value', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'k', 'v1');
+    store.setState('memex-openclaw', 'k', 'v2');
+    assert.equal(store.getState('memex-openclaw', 'k'), 'v2');
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: setState(null) deletes the entry (clear)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'k', 'v');
+    store.setState('memex-openclaw', 'k', null);
+    assert.equal(store.getState('memex-openclaw', 'k'), null);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: namespaced by plugin_id — same key in different plugins', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'k', 'openclaw-val');
+    store.setState('memex-hermes', 'k', 'hermes-val');
+    assert.equal(store.getState('memex-openclaw', 'k'), 'openclaw-val');
+    assert.equal(store.getState('memex-hermes', 'k'), 'hermes-val');
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: listState returns all entries for a plugin', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'agent:main:last_id', 'a');
+    store.setState('memex-openclaw', 'agent:main:last_mtime', '1700');
+    store.setState('memex-openclaw', 'other:flag', 'on');
+    const rows = store.listState('memex-openclaw');
+    assert.equal(rows.length, 3);
+    // Each row has key + value + updated_ts
+    rows.forEach((r) => {
+      assert.ok(r.key);
+      assert.ok(r.value);
+      assert.ok(r.updated_ts);
+    });
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: listState prefix-filter narrows results', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'agent:main:last_id', 'a');
+    store.setState('memex-openclaw', 'agent:other:last_id', 'b');
+    store.setState('memex-openclaw', 'config:debug', 'on');
+    const agents = store.listState('memex-openclaw', 'agent:');
+    assert.equal(agents.length, 2);
+    assert.ok(agents.every((r) => r.key.startsWith('agent:')));
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: clearStateForPlugin wipes a plugin namespace', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    store.setState('memex-openclaw', 'k1', 'v');
+    store.setState('memex-openclaw', 'k2', 'v');
+    store.setState('memex-hermes', 'k1', 'v');
+    const cleared = store.clearStateForPlugin('memex-openclaw');
+    assert.equal(cleared, 2);
+    assert.equal(store.listState('memex-openclaw').length, 0);
+    // memex-hermes namespace unaffected
+    assert.equal(store.listState('memex-hermes').length, 1);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: survives store reopen (persisted)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const s1 = new MemexStore(path);
+  s1.setState('memex-openclaw', 'persist-me', 'xyz');
+  s1.close();
+  const s2 = new MemexStore(path);
+  try {
+    assert.equal(s2.getState('memex-openclaw', 'persist-me'), 'xyz');
+  } finally {
+    s2.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin_state: defensive against empty inputs', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'memex-state-'));
+  const path = join(dir, 'memex.db');
+  const store = new MemexStore(path);
+  try {
+    // Empty plugin_id or key → no-op / null, not crash
+    assert.equal(store.getState('', 'k'), null);
+    assert.equal(store.getState('p', ''), null);
+    store.setState('', 'k', 'v'); // silently no-op
+    store.setState('p', '', 'v'); // silently no-op
+    assert.deepEqual(store.listState(''), []);
+    assert.equal(store.clearStateForPlugin(''), 0);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

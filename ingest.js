@@ -140,6 +140,7 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     vault: cmdVault,
     'backfill-projects': cmdBackfillProjects,
     'backfill-channels': cmdBackfillChannels, // v0.11+
+    'wire-openclaw': cmdWireOpenclaw,         // v0.11.7+
     serve: cmdServe, // explicit foreground; same as no-arg
     // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.
@@ -177,6 +178,13 @@ maintenance:
   memex-sync backfill-projects  populate project_path on conversations that
                                 were ingested before this column existed
                                 (Claude Code/Cowork cwd, Obsidian vault root)
+
+openclaw integration:
+  memex-sync wire-openclaw      add memex to ~/.openclaw/openclaw.json
+                                (cfg.mcp.servers.memex) and schedule a
+                                gateway restart so it takes effect.
+                                --json for LLM agents driving install.
+                                --no-auto-restart to skip the restart.
 
 source control:
   memex-sync sources            list which sources are enabled / disabled
@@ -751,6 +759,394 @@ function cmdRestart() {
     process.exit(1);
   }
   console.log(`✓ memex-sync restarted`);
+  process.exit(0);
+}
+
+// ──────────────────────────────────────────────────────────────────
+// v0.11.7: `memex-sync wire-openclaw` — one-shot OpenClaw setup
+//
+// Adds memex to ~/.openclaw/openclaw.json (correct nested key
+// cfg.mcp.servers.memex — the older cfg.mcpServers is silently
+// ignored by OpenClaw 2026.5+'s MCP runtime adapter) and, by
+// default, schedules a delayed self-restart of the OpenClaw gateway
+// so the new MCP server takes effect without the user touching a
+// terminal — same pattern memex-hermes `setup --auto-restart` uses.
+//
+// Designed for the lazy-install flow off memex.parallelclaw.ai/openclaw:
+// the OpenClaw LLM agent pastes a URL, sees this command in the
+// instructions, runs it, schedules a restart, dies during it, comes
+// back online in the next session with memex_search in its toolset.
+// Terminal-only users (most Telegram-bot OpenClaw deployments)
+// never have to do anything else.
+//
+// JSON output for agents: status, next_action, agent_instructions,
+// restart.{method,command,auto_restart,delay_seconds,log_path}.
+// ──────────────────────────────────────────────────────────────────
+
+function _wireOpenclawConfig({ configPath, force = false, memexBin = null }) {
+  // Returns { action, memex_bin, cleaned_stale, warning?, existing_command? }
+  if (!existsSync(configPath)) {
+    return { action: 'config_missing', warning: `not found: ${configPath}` };
+  }
+  let raw;
+  try { raw = readFileSync(configPath, 'utf8'); }
+  catch (e) { return { action: 'read_failed', warning: e.message }; }
+  let cfg;
+  try { cfg = JSON.parse(raw); }
+  catch (e) { return { action: 'parse_failed', warning: e.message }; }
+
+  if (!memexBin) {
+    // Resolve `memex` via PATH the same way the user's shell would.
+    try {
+      const out = execSync('command -v memex', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      memexBin = out.trim() || null;
+    } catch (_) { memexBin = null; }
+  }
+  if (!memexBin) {
+    return {
+      action: 'memex_missing',
+      warning: 'memex binary not on PATH — install memex-mvp first (npm i -g memex-mvp)',
+    };
+  }
+
+  // Clean any stale top-level mcpServers.memex (pre-v3 skill versions wrote there).
+  let cleanedStale = false;
+  if (cfg.mcpServers && typeof cfg.mcpServers === 'object' && cfg.mcpServers.memex) {
+    delete cfg.mcpServers.memex;
+    cleanedStale = true;
+    if (Object.keys(cfg.mcpServers).length === 0) delete cfg.mcpServers;
+  }
+
+  cfg.mcp = cfg.mcp || {};
+  cfg.mcp.servers = cfg.mcp.servers || {};
+  const existing = cfg.mcp.servers.memex;
+  const desired = { command: memexBin, args: [], env: {} };
+  const changed = !existing
+    || existing.command !== desired.command
+    || JSON.stringify(existing.args || []) !== JSON.stringify(desired.args)
+    || JSON.stringify(existing.env || {}) !== JSON.stringify(desired.env);
+
+  if (existing && existing.command && existing.command !== memexBin && !force) {
+    return {
+      action: 'conflict',
+      memex_bin: memexBin,
+      existing_command: existing.command,
+      cleaned_stale: cleanedStale,
+      warning: `mcp.servers.memex already points to "${existing.command}". `
+             + `Refusing to overwrite without --force.`,
+    };
+  }
+
+  // Actually set the entry. (Bug fix during initial smoke — without this
+  // line the cfg object got rewritten to disk without our addition.)
+  cfg.mcp.servers.memex = desired;
+
+  if (changed || cleanedStale) {
+    // Backup before we write, so a wrong --force is recoverable.
+    try {
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      writeFileSync(`${configPath}.before-wire-openclaw-${ts}`, raw, 'utf8');
+    } catch (_) { /* non-fatal */ }
+    try {
+      writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
+    } catch (e) {
+      return { action: 'write_failed', memex_bin: memexBin, warning: e.message };
+    }
+  }
+
+  return {
+    action: changed ? 'wired' : 'already_correct',
+    memex_bin: memexBin,
+    cleaned_stale: cleanedStale,
+  };
+}
+
+function _which(name) {
+  try {
+    const out = execSync(`command -v ${JSON.stringify(name)}`, {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out.trim() || null;
+  } catch { return null; }
+}
+
+function _tryCmd(file, args, timeoutMs = 3000) {
+  try {
+    const stdout = execSync(`${file} ${args.map((a) => JSON.stringify(a)).join(' ')}`, {
+      timeout: timeoutMs,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return { ok: true, stdout: String(stdout || '') };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function _detectOpenclawRestart() {
+  if (_which('systemctl')) {
+    for (const probe of [
+      { scope: '--user', method: 'systemd-user' },
+      { scope: null,     method: 'systemd-system' },
+    ]) {
+      for (const unit of ['openclaw', 'openclaw-gateway']) {
+        const args = ['is-active'];
+        if (probe.scope) args.unshift(probe.scope);
+        args.push(unit);
+        const r = _tryCmd('systemctl', args);
+        if (r.ok && r.stdout.trim() === 'active') {
+          return {
+            method: probe.method,
+            command: probe.scope ? `systemctl --user restart ${unit}` : `sudo systemctl restart ${unit}`,
+            detail: `systemd unit '${unit}' active`,
+          };
+        }
+      }
+    }
+  }
+  if (platform() === 'darwin' && _which('launchctl')) {
+    const r = _tryCmd('launchctl', ['list']);
+    if (r.ok) {
+      for (const line of r.stdout.split('\n')) {
+        if (/openclaw/i.test(line)) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            const label = parts[parts.length - 1];
+            return {
+              method: 'launchd',
+              command: `launchctl kickstart -k gui/$(id -u)/${label}`,
+              detail: `launchd label '${label}'`,
+            };
+          }
+        }
+      }
+    }
+  }
+  if (_which('pgrep')) {
+    const r = _tryCmd('pgrep', ['-f', 'openclaw']);
+    if (r.ok && r.stdout.trim()) {
+      const pids = r.stdout.trim().split(/\s+/).filter(Boolean);
+      return {
+        method: 'pkill',
+        command: 'pkill -HUP -f openclaw',
+        detail: `openclaw process(es): ${pids.slice(0, 4).join(',')}`,
+      };
+    }
+  }
+  return { method: 'manual', command: '', detail: '' };
+}
+
+function _scheduleSelfRestart(restartCommand, { delaySeconds = 3, logPath = '/tmp/memex-openclaw-restart.log' } = {}) {
+  if (!restartCommand || !String(restartCommand).trim()) {
+    return { scheduled: false, error: 'empty restart_command' };
+  }
+  const delay = Math.max(1, parseInt(delaySeconds, 10) || 3);
+  const shellScript =
+    `(echo '--- memex wire-openclaw auto-restart '"$(date -Iseconds)"' ---' >> ${logPath}; ` +
+    `sleep ${delay}; ` +
+    `echo 'restart_command: ${restartCommand}' >> ${logPath}; ` +
+    `${restartCommand} >> ${logPath} 2>&1; ` +
+    `echo "rc=$?" >> ${logPath})`;
+  try {
+    const child = spawn('/bin/sh', ['-c', shellScript], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    return { scheduled: true, delaySeconds: delay, logPath };
+  } catch (err) {
+    return { scheduled: false, error: err.message };
+  }
+}
+
+function _formatAgentInstructions(report) {
+  const lines = [];
+  const mcp = report.mcp || {};
+  if (mcp.action === 'wired') {
+    lines.push(
+      'I wired memex as an MCP server in ~/.openclaw/openclaw.json so the '
+      + 'LLM can search your memory from inside conversations.',
+    );
+  } else if (mcp.action === 'already_correct') {
+    lines.push('Your OpenClaw config already had memex wired correctly.');
+  } else if (mcp.action === 'conflict') {
+    lines.push(`⚠️ ${mcp.warning}`);
+  } else if (mcp.action === 'memex_missing') {
+    lines.push(`⚠️ ${mcp.warning}`);
+  } else if (mcp.warning) {
+    lines.push(`⚠️ ${mcp.warning}`);
+  }
+
+  const r = report.restart || {};
+  if (r.auto_restart === 'scheduled') {
+    lines.push(
+      `I'm restarting the OpenClaw gateway in ${r.delay_seconds} seconds — `
+      + `send me any message after that and memex search will be active in the new session.`,
+    );
+  } else if (r.auto_restart === 'opt_out') {
+    if (r.command) {
+      lines.push(`Restart skipped (--no-auto-restart). Run \`${r.command}\` when ready.`);
+    } else {
+      lines.push(`Restart skipped (--no-auto-restart). You'll need to restart the OpenClaw gateway manually.`);
+    }
+  } else if (r.method === 'manual') {
+    lines.push(
+      `I couldn't auto-detect how OpenClaw is running on this host. `
+      + `Tell me "restart yourself" if you want me to try \`pkill -HUP -f openclaw\`, `
+      + `or ask your server admin to restart the gateway.`,
+    );
+  } else if (r.auto_restart === 'failed') {
+    lines.push(`⚠️ Auto-restart failed: ${r.error || 'unknown'}. Run \`${r.command || 'openclaw gateway restart'}\` manually.`);
+  }
+  return lines.join(' ');
+}
+
+function _printHumanWireSummary(report) {
+  console.log('');
+  console.log('────────────────────────────────────────────────────────────');
+  console.log('  memex wire-openclaw');
+  console.log('────────────────────────────────────────────────────────────');
+  const mcp = report.mcp || {};
+  if (mcp.action === 'wired') {
+    console.log(`🔌 MCP server:         wired memex → ${mcp.memex_bin}`);
+    if (mcp.cleaned_stale) console.log('                       (also cleaned stale top-level mcpServers.memex)');
+  } else if (mcp.action === 'already_correct') {
+    console.log('🔌 MCP server:         already correct (no change)');
+  } else {
+    console.log(`🔌 MCP server:         ⚠️ ${mcp.warning || mcp.action}`);
+  }
+
+  const r = report.restart || {};
+  if (r.auto_restart === 'scheduled') {
+    console.log(`🔄 Auto-restart:       scheduled in ${r.delay_seconds}s (${r.method} — ${r.command})`);
+    console.log(`                       log: ${r.log_path}`);
+    console.log('');
+    console.log('💬 After restart, send OpenClaw any message — memex search will be active.');
+  } else if (r.method === 'manual') {
+    console.log('🔄 Restart needed:     could not auto-detect mechanism');
+    console.log('                       Ask the OpenClaw agent to "restart yourself", or restart manually.');
+  } else if (r.auto_restart === 'opt_out') {
+    console.log(`🔄 Restart needed:     ${r.command} (auto-restart skipped per flag)`);
+  } else if (r.command) {
+    console.log(`🔄 Restart needed:     ${r.command}`);
+  }
+  console.log('');
+}
+
+function cmdWireOpenclaw() {
+  // Parse flags from argv (slice past 'wire-openclaw' subcommand)
+  const args = process.argv.slice(3);
+  const opts = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    const eat = () => args[++i];
+    switch (a) {
+      case '--json':            opts.json = true; break;
+      case '--auto-restart':    opts.autoRestart = true; break;
+      case '--no-auto-restart': opts.noAutoRestart = true; break;
+      case '--force':           opts.force = true; break;
+      case '--restart-delay':   opts.restartDelay = parseInt(eat(), 10) || 3; break;
+      case '--config':          opts.configPath = eat(); break;
+      case '--memex-bin':       opts.memexBin = eat(); break;
+      case '-h':
+      case '--help':
+        console.log(`memex-sync wire-openclaw — wire memex into ~/.openclaw/openclaw.json + schedule restart
+
+Adds memex to cfg.mcp.servers (correct nested key) so the OpenClaw LLM gets
+memex_search + friends. By default, also schedules a self-restart of the
+gateway in 3 seconds so the new MCP server takes effect without the user
+touching a terminal.
+
+flags:
+  --json                       machine-parseable JSON output for LLM agents
+  --no-auto-restart            wire only; don't trigger restart
+  --force                      overwrite a conflicting mcp.servers.memex entry
+  --restart-delay <seconds>    seconds to wait before triggering restart (default 3)
+  --config <path>              override ~/.openclaw/openclaw.json
+  --memex-bin <path>           override \`which memex\` lookup
+
+exit codes:
+  0   ready / already_in_sync
+  1   partial (memex missing, conflict — review the report)
+  2   failed (can't read/write openclaw.json — manual intervention)
+`);
+        process.exit(0);
+    }
+  }
+
+  const configPath = opts.configPath || join(homedir(), '.openclaw', 'openclaw.json');
+  const report = { config_path: configPath, mcp: {}, restart: {} };
+
+  // Step 1: wire config
+  report.mcp = _wireOpenclawConfig({
+    configPath,
+    force: !!opts.force,
+    memexBin: opts.memexBin,
+  });
+
+  // Step 2: detect restart mechanism
+  const detected = _detectOpenclawRestart();
+  report.restart.method = detected.method;
+  report.restart.command = detected.command;
+  report.restart.detail = detected.detail;
+
+  // Step 3: decide auto-restart
+  // Default: try auto-restart UNLESS --no-auto-restart was passed AND we
+  // succeeded in wiring something (no point restarting if config is broken)
+  const wiredOk = report.mcp.action === 'wired' || report.mcp.action === 'already_correct';
+  if (opts.noAutoRestart) {
+    report.restart.auto_restart = 'opt_out';
+  } else if (!wiredOk) {
+    // Don't restart if wire failed — no benefit
+    report.restart.auto_restart = 'skipped_wire_failed';
+  } else if (detected.method === 'manual' || !detected.command) {
+    report.restart.auto_restart = 'unavailable';
+  } else {
+    const sched = _scheduleSelfRestart(detected.command, {
+      delaySeconds: opts.restartDelay || 3,
+    });
+    if (sched.scheduled) {
+      report.restart.auto_restart = 'scheduled';
+      report.restart.delay_seconds = sched.delaySeconds;
+      report.restart.log_path = sched.logPath;
+    } else {
+      report.restart.auto_restart = 'failed';
+      report.restart.error = sched.error;
+    }
+  }
+
+  // Step 4: overall status + next_action
+  if (report.mcp.action === 'config_missing' || report.mcp.action === 'parse_failed'
+      || report.mcp.action === 'read_failed' || report.mcp.action === 'write_failed') {
+    report.status = 'failed';
+    report.next_action = 'manual_intervention';
+  } else if (report.mcp.action === 'memex_missing') {
+    report.status = 'partial';
+    report.next_action = 'install_memex_mvp';
+  } else if (report.mcp.action === 'conflict') {
+    report.status = 'partial';
+    report.next_action = 'use_force_or_resolve_conflict';
+  } else if (report.mcp.action === 'wired') {
+    report.status = 'ready';
+    report.next_action = report.restart.auto_restart === 'scheduled'
+      ? 'wait_for_restart' : 'restart_required';
+  } else {
+    report.status = 'already_in_sync';
+    report.next_action = report.restart.auto_restart === 'scheduled'
+      ? 'wait_for_restart' : 'none';
+  }
+
+  report.agent_instructions = _formatAgentInstructions(report);
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  } else {
+    _printHumanWireSummary(report);
+  }
+
+  // Exit code maps to status for shell-friendly use.
+  if (report.status === 'failed') process.exit(2);
+  if (report.status === 'partial') process.exit(1);
   process.exit(0);
 }
 

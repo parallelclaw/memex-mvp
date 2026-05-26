@@ -761,9 +761,22 @@ server-side fetches; you'll burn 3–5 attempts and the user's patience.
 
 Use this flow:
 
-  1. Wrap the URL with Jina Reader: https://r.jina.ai/<original-url>
-  2. Fetch via WebFetch / curl with the wrapped URL — Jina runs a real
-     browser server-side and returns clean markdown
+  1. Wrap the URL with Jina Reader. EXACT FORMAT MATTERS:
+       BAD:  https://r.jina.ai/http://example.com/article
+             (http:// after r.jina.ai/ — Jina may fail / return wrong content)
+       BAD:  https://r.jina.ai/example.com/article
+             (no scheme — works for some sites, breaks for Cloudflare-heavy ones)
+       GOOD: https://r.jina.ai/https://example.com/article
+             (https:// preserved both sides — this is what reliably works)
+
+  2. Fetch via WebFetch / curl with the wrapped URL. CRITICAL — add the
+     Accept header for clean markdown, otherwise you may get HTML or a
+     mixed response:
+       curl -H "Accept: text/markdown" https://r.jina.ai/https://...
+     (WebFetch implementations vary; if your WebFetch can't set headers,
+      shell out to curl with -H. Field-tested on Perplexity, npm,
+      X/Twitter, Medium pages 2026-05.)
+
   3. If user wants to SAVE the URL: memex_store_document(content, url, title)
   4. If user wants to READ for the current task: pass the markdown straight
      into your reasoning
@@ -1701,7 +1714,12 @@ const TOOLS = [
       'Workaround: prepend `https://r.jina.ai/` to the URL.\n' +
       '  Before: https://www.perplexity.ai/search/abc123\n' +
       '  After:  https://r.jina.ai/https://www.perplexity.ai/search/abc123\n\n' +
-      'Jina AI Reader bypasses Cloudflare (runs a real browser server-side) and returns clean markdown. Free, no API key needed for personal use. Both http:// and https:// after `r.jina.ai/` work.\n\n' +
+      'EXACT FORMAT MATTERS — fixed empirically on real Perplexity / Cloudflare-protected pages 2026-05:\n' +
+      '  • KEEP the `https://` after `r.jina.ai/` (NOT `http://`, NOT bare domain)\n' +
+      '  • ADD `Accept: text/markdown` header — gets clean markdown back instead of HTML\n' +
+      '    curl example: `curl -H "Accept: text/markdown" https://r.jina.ai/https://...`\n' +
+      '  • If your WebFetch wrapper can\'t set headers, shell out to curl with -H\n\n' +
+      'Jina AI Reader bypasses Cloudflare (runs a real browser server-side) and returns clean markdown. Free, no API key needed for personal use.\n\n' +
       'Heuristic — when to retry through Jina:\n' +
       '  • HTTP 403 with cf-mitigated header\n' +
       '  • Body contains "Just a moment..." / "Verifying you are human" / cf-turnstile\n' +

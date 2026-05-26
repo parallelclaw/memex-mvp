@@ -976,9 +976,11 @@ function _formatAgentInstructions(report) {
       'Tip for future sessions: when you (or any next OpenClaw agent) sees a '
       + 'URL the user wants to read or save — Perplexity, npm.com, X/Twitter, '
       + 'Medium, AI-chat shares — DO NOT lead with browser_navigate or naked '
-      + 'curl. Most modern pages are Cloudflare-protected. Prefix the URL with '
-      + '`https://r.jina.ai/` and fetch THAT. For Perplexity, the URL in the '
-      + 'address bar is private — only the Share→Public link is fetchable. '
+      + 'curl. Most modern pages are Cloudflare-protected. The reliable recipe: '
+      + '`curl -H "Accept: text/markdown" https://r.jina.ai/https://<original-url>` '
+      + '(keep the `https://` after r.jina.ai/, NOT http://; add the Accept '
+      + 'header for clean markdown). For Perplexity, the URL in the address bar '
+      + 'is the owner\'s private one — only the Share→Public link is fetchable. '
       + 'Call memex_help anytime for the full cheat-sheet.',
     );
   } else if (mcp.action === 'already_correct') {

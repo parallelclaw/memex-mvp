@@ -242,7 +242,11 @@ Memex по дефолту сортирует по **релевантности**
 **Что происходит за кулисами:**
 
 1. Агент сам делает fetch URL'a (через свой WebFetch)
-2. Если страница защищена Cloudflare (Perplexity, npm.com, Twitter, Medium…) — агент авто-retry через `r.jina.ai` proxy (бесплатный JS-runtime, обходит Cloudflare)
+2. Если страница защищена Cloudflare (Perplexity, npm.com, Twitter, Medium…) — агент авто-retry через `r.jina.ai` proxy (бесплатный JS-runtime, обходит Cloudflare). **Точный recipe** (зафиксирован эмпирически на реальных Cloudflare-страницах в 2026-05):
+   ```bash
+   curl -H "Accept: text/markdown" https://r.jina.ai/https://<original-url>
+   ```
+   Критично: **`https://` после `r.jina.ai/`** (НЕ `http://`, НЕ голый домен), **`Accept: text/markdown`** header (иначе возвращается HTML или mixed-формат). Если WebFetch агента не умеет задавать headers — shell out на curl с `-H`.
 3. Агент вызывает `memex_store_document(content, url, title)`
 4. Memex сохраняет содержимое как conversation с `source: "web"` — ищется через `memex_search` рядом с AI-чатами
 

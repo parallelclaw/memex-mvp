@@ -188,7 +188,11 @@ class TestProviderSchemas(unittest.TestCase):
         schemas = self.p.get_tool_schemas()
         self.assertIsInstance(schemas, list)
         names = {s["name"] for s in schemas}
-        self.assertEqual(names, {"memex_search", "memex_get", "memex_recent"})
+        # v0.2.2: memex_store_document added so Hermes can save URLs.
+        self.assertEqual(
+            names,
+            {"memex_search", "memex_get", "memex_recent", "memex_store_document"},
+        )
 
     def test_system_prompt_block_mentions_tools(self):
         block = self.p.system_prompt_block()

@@ -235,6 +235,105 @@ class MemexStore:
                 (conversation_id, title, first_ts, last_ts),
             )
 
+    # ----- Web document writes (v0.2.2: memex_store_document tool) -----
+
+    def insert_web_document(
+        self,
+        *,
+        conversation_id: str,
+        msg_id: str,
+        text: str,
+        ts: int,
+        title: Optional[str] = None,
+        url: Optional[str] = None,
+        domain: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Insert one web document (fetched URL, paste) into memex.db with
+        source='web'. Returns True if a new row was inserted, False if
+        UNIQUE(source, conversation_id, msg_id) prevented dedup.
+
+        Mirrors memex-mvp's server.js store_document behavior so a URL
+        stored from Hermes ends up with the same conv_id/source as if
+        stored from Claude Code, and the two paths dedup transparently
+        in the shared memex.db.
+
+        Role='user' (the human "pasted" / asked to save this content) —
+        matches memex-mvp convention so memex_search returns web docs
+        alongside conversation turns.
+        """
+        if not text or not text.strip():
+            return False
+        meta = dict(metadata or {})
+        if url:
+            meta.setdefault("url", url)
+        if domain:
+            meta.setdefault("domain", domain)
+        if title:
+            meta.setdefault("title", title)
+        meta_json = json.dumps(meta, ensure_ascii=False)
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                INSERT OR IGNORE INTO messages
+                  (source, conversation_id, msg_id, role, sender, text, ts, metadata, channel)
+                VALUES ('web', ?, ?, 'user', ?, ?, ?, ?, ?)
+                """,
+                (
+                    conversation_id,
+                    msg_id,
+                    domain or "web",
+                    text,
+                    ts,
+                    meta_json,
+                    "web",  # channel
+                ),
+            )
+            return cur.rowcount > 0
+
+    def upsert_web_conversation(
+        self,
+        *,
+        conversation_id: str,
+        title: Optional[str] = None,
+        url: Optional[str] = None,
+        ts: Optional[int] = None,
+    ) -> None:
+        """Companion to insert_web_document — create/update the conversations
+        row with source='web' so memex CLI / web UI listings show the doc
+        as a first-class conversation alongside Hermes / Claude Code threads.
+        """
+        if not title:
+            title = url or conversation_id
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO conversations
+                  (conversation_id, source, title, first_ts, last_ts, message_count)
+                VALUES (?, 'web', ?, ?, ?, 0)
+                ON CONFLICT(conversation_id) DO UPDATE SET
+                  title    = COALESCE(conversations.title, excluded.title),
+                  first_ts = MIN(COALESCE(conversations.first_ts, excluded.first_ts), excluded.first_ts),
+                  last_ts  = MAX(COALESCE(conversations.last_ts,  excluded.last_ts),  excluded.last_ts),
+                  message_count = (
+                    SELECT COUNT(*) FROM messages
+                     WHERE messages.conversation_id = conversations.conversation_id
+                  )
+                """,
+                (conversation_id, title, ts, ts),
+            )
+
+    def web_document_exists(self, conversation_id: str) -> bool:
+        """Check whether a web document with this conversation_id is
+        already stored. Used by memex_store_document's `refresh=False`
+        default to short-circuit re-stores."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM messages WHERE source='web' AND conversation_id=? LIMIT 1",
+                (conversation_id,),
+            ).fetchone()
+        return row is not None
+
     # ----- Reads -----
 
     def search(

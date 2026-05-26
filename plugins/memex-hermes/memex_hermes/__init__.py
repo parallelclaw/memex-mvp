@@ -23,7 +23,7 @@ from typing import Any
 
 from memex_hermes.provider import MemexMemoryProvider
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __all__ = ["MemexMemoryProvider", "register", "__version__"]
 
 log = logging.getLogger(__name__)

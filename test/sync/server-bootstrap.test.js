@@ -19,27 +19,25 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
-import Database from 'better-sqlite3';
 
 // Per-test isolated MEMEX_DIR. Must be set BEFORE importing modules that
 // resolve paths from it (lib/sync/config.js reads process.env.MEMEX_DIR).
 const TMP = mkdtempSync(join(tmpdir(), 'memex-sync-test-'));
 process.env.MEMEX_DIR = TMP;
 
-// Create the DB the server expects.
+// Create the DB the server expects, using the real schema (the server's
+// push handler prepares statements at start-up that require the full
+// columns from db-init, not just a synthetic two-column messages table).
+const { initializeDb } = await import('../../lib/db-init.js');
 const dbDir = join(TMP, 'data');
 mkdirSync(dbDir, { recursive: true });
 const dbPath = join(dbDir, 'memex.db');
 {
-  const db = new Database(dbPath);
-  // Match the minimal schema the server queries against in /sync/health.
-  db.exec(`
-    CREATE TABLE messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      text TEXT
-    );
-    INSERT INTO messages (text) VALUES ('hello'), ('world');
-  `);
+  const db = initializeDb(dbPath);
+  db.prepare(`INSERT INTO messages (source, conversation_id, msg_id, role, text, ts)
+              VALUES ('test', 'c', 'm1', 'user', 'hello', 1700000000)`).run();
+  db.prepare(`INSERT INTO messages (source, conversation_id, msg_id, role, text, ts)
+              VALUES ('test', 'c', 'm2', 'assistant', 'world', 1700000001)`).run();
   db.close();
 }
 

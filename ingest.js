@@ -163,13 +163,38 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     console.error(`usage: memex-sync [install|uninstall|status|logs|serve]`);
     process.exit(2);
   }
-  // Handlers may be sync (most) or async (cmdInstall after v0.8 — needs readline
-  // for the auto-context prompt). Promise.resolve() normalises both.
-  Promise.resolve(handler()).catch((e) => {
-    console.error(`error in ${subcommand}: ${e.stack || e.message}`);
-    process.exit(1);
-  });
-  // CLI handlers either exit themselves or fall through to daemon mode (cmdServe)
+
+  // Commands that intentionally fall through to the daemon-mode code at EOF.
+  // For these, the handler is a no-op marker (cmdServe) and the real work is
+  // the module-level scan/watch logic below. Everything NOT in this set is a
+  // pure CLI command that must run to completion and exit BEFORE the daemon
+  // code starts — otherwise the daemon (chokidar watchers + drainDb) races
+  // the command on the shared MEMEX_DIR. That race corrupted sync-* cursor
+  // state on Linux (faster inotify than macOS FSEvents) during testing.
+  const DAEMON_FALLTHROUGH = new Set([
+    'serve', 'scan', 'scan-claude', 'scan-cursor', 'scan-obsidian', 'export-markdown',
+  ]);
+
+  if (DAEMON_FALLTHROUGH.has(subcommand)) {
+    // Kick off the marker handler, then let the module continue into the
+    // daemon-mode code below.
+    Promise.resolve(handler()).catch((e) => {
+      console.error(`error in ${subcommand}: ${e.stack || e.message}`);
+      process.exit(1);
+    });
+  } else {
+    // Pure CLI command — await to completion then exit deterministically,
+    // so the daemon-mode code at EOF never starts for this invocation.
+    // (Handlers may also process.exit() on their own; the await simply
+    // never resolves in that case, which is fine.)
+    try {
+      await handler();
+      process.exit(0);
+    } catch (e) {
+      console.error(`error in ${subcommand}: ${e.stack || e.message}`);
+      process.exit(1);
+    }
+  }
 } else if (subcommand === '--help' || subcommand === '-h') {
   console.log(`memex-sync — auto-capture daemon for memex memory
 

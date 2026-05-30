@@ -91,32 +91,26 @@ banner "STEP 3 · SHA-256 of canonical files"
 shasum -a 256 SYNC.md package.json lib/sync/server.js lib/sync/cli.js lib/sync/push.js lib/sync/pull.js 2>/dev/null \
   || sha256sum SYNC.md package.json lib/sync/server.js lib/sync/cli.js lib/sync/push.js lib/sync/pull.js
 
-banner "STEP 4 · run sync tests"
-# Two categories:
-#   MUST_PASS — proves the wire protocol works end-to-end. Failure here
-#     means the install is genuinely broken; we exit non-zero.
-#   INFORMATIONAL — subprocess shell hygiene tests with known macOS/Linux
-#     timing differences in daemon-mode-side-effects. We report results
-#     but don't gate the install on them.
+banner "STEP 4 · run sync tests (all MUST_PASS — Phase 1 fixed the Linux daemon-race)"
+# Phase 1 short-circuited daemon-mode for sync-* commands, so cli-end-to-end
+# no longer races on Linux. All four suites now gate the install.
 test_failed_required=0
-echo "──── MUST_PASS: test/sync/server-bootstrap.test.js (expected 12/12 ✓) ────"
-if ! node test/sync/server-bootstrap.test.js 2>&1 | tail -20; then
-  echo "FAIL: server-bootstrap.test.js"
-  test_failed_required=1
-fi
-echo "──── MUST_PASS: test/sync/push-pull-roundtrip.test.js (expected 12/12 ✓) ────"
-if ! node test/sync/push-pull-roundtrip.test.js 2>&1 | tail -20; then
-  echo "FAIL: push-pull-roundtrip.test.js"
-  test_failed_required=1
-fi
+for suite in \
+  "test/sync/server-bootstrap.test.js|12/12" \
+  "test/sync/push-pull-roundtrip.test.js|12/12" \
+  "test/sync/cli-end-to-end.test.js|12/12 (Linux-safe since Phase 1)" \
+  "test/sync/adaptive-batch.test.js|4/4 (413 auto-halve)"; do
+  f="${suite%%|}"; f="${suite%%|*}"; expect="${suite##*|}"
+  echo "──── MUST_PASS: $f  (expected $expect) ────"
+  if ! node "$f" 2>&1 | tail -16; then
+    echo "FAIL: $f"
+    test_failed_required=1
+  fi
+done
 if [ "$test_failed_required" != "0" ]; then
-  echo "FATAL: wire-protocol tests failed — install is broken, refusing to start server."
+  echo "FATAL: a sync test failed — install is broken, refusing to start server."
   exit 2
 fi
-
-echo "──── INFORMATIONAL: test/sync/cli-end-to-end.test.js (subprocess UX; passes on macOS, may fail on Linux due to daemon-mode race) ────"
-node test/sync/cli-end-to-end.test.js 2>&1 | tail -20 || \
-  echo "NOTE: cli-end-to-end had failures — this exercises subprocess shell hygiene, not the wire protocol. Continuing to server start regardless."
 
 banner "STEP 5 · start sync-server (background, $BIND:$PORT)"
 # Kill any prior leftover from a previous attempt.

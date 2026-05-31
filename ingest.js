@@ -146,8 +146,9 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     'sync-add':     async () => (await import('./lib/sync/cli.js')).cmdSyncAdd(),
     'sync-list':    async () => (await import('./lib/sync/cli.js')).cmdSyncList(),
     'sync-remove':  async () => (await import('./lib/sync/cli.js')).cmdSyncRemove(),
-    'sync-run':     async () => (await import('./lib/sync/cli.js')).cmdSyncRun(),
-    'sync-status':  async () => (await import('./lib/sync/cli.js')).cmdSyncStatus(),
+    'sync-run':      async () => (await import('./lib/sync/cli.js')).cmdSyncRun(),
+    'sync-status':   async () => (await import('./lib/sync/cli.js')).cmdSyncStatus(),
+    'sync-schedule': async () => (await import('./lib/sync/cli.js')).cmdSyncSchedule(),
     serve: cmdServe, // explicit foreground; same as no-arg
     // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.

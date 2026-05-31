@@ -24,6 +24,10 @@ const {
   buildSystemdUnit,
   syncServerServiceStatus,
   SERVICE_PATHS,
+  buildScheduleSystemdTimer,
+  buildScheduleSystemdService,
+  buildScheduleLaunchAgentPlist,
+  syncScheduleStatus,
 } = await import('../../lib/sync/service.js');
 
 let failed = 0;
@@ -92,6 +96,42 @@ t('omits port/bind flags when not provided', () => {
   const u = buildSystemdUnit({ script: '/x/ingest.js', nodePath: 'node' });
   assert.match(u, /ExecStart=node \/x\/ingest\.js sync-server start$/m);
   assert.doesNotMatch(u, /--port/);
+});
+
+console.log('schedule (Phase 3) builders:');
+
+t('systemd timer fires every N minutes + persists missed runs', () => {
+  const timer = buildScheduleSystemdTimer({ mins: 15 });
+  assert.match(timer, /OnUnitActiveSec=15min/);
+  assert.match(timer, /Persistent=true/);          // catch up after sleep/off
+  assert.match(timer, /WantedBy=timers\.target/);
+});
+
+t('systemd schedule service is oneshot running sync-run --all', () => {
+  const svc = buildScheduleSystemdService({ script: '/h/ingest.js', nodePath: '/usr/bin/node' });
+  assert.match(svc, /Type=oneshot/);
+  assert.match(svc, /ExecStart=\/usr\/bin\/node \/h\/ingest\.js sync-run --all/);
+  assert.match(svc, /Environment=MEMEX_SYNC_EXPERIMENTAL=1/);
+});
+
+t('launchd schedule uses StartInterval (not KeepAlive) + sync-run --all', () => {
+  const plist = buildScheduleLaunchAgentPlist({ script: '/h/ingest.js', mins: 15, nodePath: '/usr/bin/node' });
+  assert.match(plist, /<key>StartInterval<\/key><integer>900<\/integer>/); // 15*60
+  assert.doesNotMatch(plist, /KeepAlive/);  // one-shot re-run, not long-lived
+  assert.match(plist, /<string>sync-run<\/string>/);
+  assert.match(plist, /<string>--all<\/string>/);
+  assert.match(plist, /<key>MEMEX_SYNC_EXPERIMENTAL<\/key><string>1<\/string>/);
+  assert.match(plist, /com\.parallelclaw\.memex\.syncschedule/);
+});
+
+t('schedule status reports installed:false in clean env', () => {
+  const st = syncScheduleStatus();
+  assert.equal(st.installed, false);
+});
+
+t('schedule label is distinct from server + capture daemon', () => {
+  assert.equal(SERVICE_PATHS.SCHED_MAC_LABEL, 'com.parallelclaw.memex.syncschedule');
+  assert.notEqual(SERVICE_PATHS.SCHED_MAC_LABEL, SERVICE_PATHS.MAC_LABEL);
 });
 
 rmSync(TMP, { recursive: true, force: true });

@@ -84,12 +84,16 @@ t('uses the distinct syncserver label (not the capture daemon)', () => {
   assert.equal(SERVICE_PATHS.MAC_LABEL, 'com.parallelclaw.memex.syncserver');
 });
 
-console.log('status (clean env):');
-t('reports installed:false when no unit exists', () => {
+console.log('status (shape — not hermetic vs host OS service paths):');
+t('syncServerServiceStatus returns a well-formed object', () => {
+  // NOTE: status reads real OS paths (~/Library/LaunchAgents, systemd user
+  // dir), NOT MEMEX_DIR — so we can't assume a clean env on a dev machine
+  // that may have a server/schedule installed. Assert the SHAPE instead.
   const st = syncServerServiceStatus();
-  assert.equal(st.installed, false);
-  assert.equal(st.running, false);
+  assert.equal(typeof st.installed, 'boolean');
+  assert.equal(typeof st.running, 'boolean');
   assert.ok(['launchd', 'systemd-user', 'none'].includes(st.manager));
+  assert.ok('unitPath' in st);
 });
 
 t('omits port/bind flags when not provided', () => {
@@ -124,9 +128,12 @@ t('launchd schedule uses StartInterval (not KeepAlive) + sync-run --all', () => 
   assert.match(plist, /com\.parallelclaw\.memex\.syncschedule/);
 });
 
-t('schedule status reports installed:false in clean env', () => {
+t('schedule status returns a well-formed object', () => {
+  // Same caveat: reads real OS paths, not MEMEX_DIR. Assert shape only.
   const st = syncScheduleStatus();
-  assert.equal(st.installed, false);
+  assert.equal(typeof st.installed, 'boolean');
+  assert.equal(typeof st.running, 'boolean');
+  assert.ok(['launchd', 'systemd-user', 'none'].includes(st.manager));
 });
 
 t('schedule label is distinct from server + capture daemon', () => {

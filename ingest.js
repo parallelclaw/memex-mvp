@@ -144,6 +144,7 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     // v0.11.11 experimental sync — all gated behind MEMEX_SYNC_EXPERIMENTAL=1
     'sync-server':  async () => (await import('./lib/sync/cli.js')).cmdSyncServer(),
     'sync-add':     async () => (await import('./lib/sync/cli.js')).cmdSyncAdd(),
+    'sync-pair':    async () => (await import('./lib/sync/cli.js')).cmdSyncPair(),
     'sync-list':    async () => (await import('./lib/sync/cli.js')).cmdSyncList(),
     'sync-remove':  async () => (await import('./lib/sync/cli.js')).cmdSyncRemove(),
     'sync-run':      async () => (await import('./lib/sync/cli.js')).cmdSyncRun(),

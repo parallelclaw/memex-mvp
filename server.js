@@ -1924,6 +1924,40 @@ const TOOLS = [
   },
 ];
 
+// v0.11.11 experimental sync — expose the one-paste pairing tool ONLY when
+// MEMEX_SYNC_EXPERIMENTAL is set in this MCP server's environment, so the
+// stable tool surface stays clean for everyone else.
+const SYNC_EXPERIMENTAL = ['1', 'true', 'yes'].includes(
+  String(process.env.MEMEX_SYNC_EXPERIMENTAL || '').toLowerCase()
+);
+if (SYNC_EXPERIMENTAL) {
+  TOOLS.push({
+    name: 'memex_sync_invite',
+    description:
+      'Experimental multi-device sync — generate a one-paste pairing token so ANOTHER machine can ' +
+      'sync its memory with THIS one over the network. CALL THIS WHEN the user asks to "set up sync", ' +
+      '"pair my laptop/Mac/phone with this VPS", "connect another device", "sync this machine with my other one", ' +
+      'or similar. Returns a memex-pair:... blob; the user copies it to their other device and runs ' +
+      '`memex-sync sync-pair <blob>` there, then `memex-sync sync-run vps`. ' +
+      'PRECONDITION: the sync-server must be running on this host (memex-sync sync-server install). ' +
+      'host defaults to this machine\'s auto-detected public IP — pass host="localhost" for an SSH-tunnel ' +
+      'setup, or the Tailscale MagicDNS name for Tailscale.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        host: {
+          type: 'string',
+          description:
+            'Host the OTHER device will dial. Default: auto-detected public IP. ' +
+            'Use "localhost" for SSH tunnel, or a Tailscale MagicDNS name.',
+        },
+        port: { type: 'integer', description: 'Sync server port (default 8766).' },
+        ttl_minutes: { type: 'integer', description: 'Minutes the token stays valid (default 30).' },
+      },
+    },
+  });
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -3319,12 +3353,91 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return jsonResult({ mode: state.mode });
     }
 
+    // ============================================================
+    //  EXPERIMENTAL MULTI-DEVICE SYNC — one-paste pairing (v0.11.11)
+    // ============================================================
+    if (name === 'memex_sync_invite') {
+      const { ensureCert } = await import('./lib/sync/cert.js');
+      const { generateBearerToken } = await import('./lib/sync/auth.js');
+      const { loadSyncConfig, updateSyncServer } = await import('./lib/sync/config.js');
+      const { encodePairBlob } = await import('./lib/sync/pair.js');
+      const { homedir } = await import('node:os');
+      const { join } = await import('node:path');
+      const { syncServerServiceStatus } = await import('./lib/sync/service.js');
+
+      const cfg = loadSyncConfig();
+      const MEMEX_DIR = process.env.MEMEX_DIR || join(homedir(), '.memex');
+      const certPath = cfg.server.cert_path || join(MEMEX_DIR, 'sync-cert.pem');
+      const keyPath = cfg.server.key_path || join(MEMEX_DIR, 'sync-key.pem');
+
+      const certInfo = await ensureCert({ certPath, keyPath });
+      const bearer = cfg.server.bearer || generateBearerToken();
+      const port = parseInt(args.port, 10) || cfg.server.port || 8766;
+      // Persist so a later `sync-server start/install` reuses the same creds.
+      updateSyncServer({ bearer, cert_path: certPath, key_path: keyPath, cert_fp: certInfo.fingerprint, port });
+
+      let host = typeof args.host === 'string' && args.host.trim() ? args.host.trim() : null;
+      let hostNote = '';
+      if (!host) {
+        host = await detectPublicIp();
+        hostNote = host ? 'auto-detected public IP — pass host="localhost" for SSH tunnel or a Tailscale name if that\'s how the other device reaches this one' : '';
+      }
+      if (!host) {
+        return jsonResult({
+          error: 'could not auto-detect host; call again with host set to this machine\'s public IP, "localhost" (SSH tunnel), or its Tailscale MagicDNS name',
+        });
+      }
+
+      const ttlMin = parseInt(args.ttl_minutes, 10) || 30;
+      const blob = encodePairBlob({ host, port, cert_fp: certInfo.fingerprint, token: bearer, ttlSec: ttlMin * 60 });
+
+      const svc = syncServerServiceStatus();
+      const serverWarning = svc.running
+        ? null
+        : 'The sync-server does not appear to be running on this host. Start it with `memex-sync sync-server install` (durable) or `memex-sync sync-server start`, otherwise the other device will get connection-refused.';
+
+      return jsonResult({
+        pair_blob: blob,
+        instructions:
+          `Give the user this blob to paste on their OTHER device, then run sync:\n` +
+          `  memex-sync sync-pair ${blob}\n` +
+          `  memex-sync sync-run vps\n` +
+          `For hands-off auto-sync afterwards: memex-sync sync-schedule install --every 15m`,
+        host,
+        port,
+        fingerprint: certInfo.fingerprint,
+        expires_in_minutes: ttlMin,
+        host_note: hostNote,
+        server_warning: serverWarning,
+      });
+    }
+
     return textResult(`Unknown tool: ${name}`);
   } catch (err) {
     log('tool error:', name, err.message);
     return textResult(`Error in ${name}: ${err.message}`);
   }
 });
+
+/**
+ * Best-effort public-IP detection for memex_sync_invite. 4s timeout per
+ * endpoint, returns the IP string or null. Node 20+ has global fetch.
+ */
+async function detectPublicIp() {
+  const endpoints = ['https://api.ipify.org', 'https://ifconfig.me/ip', 'https://icanhazip.com'];
+  for (const url of endpoints) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const ip = (await res.text()).trim();
+      if (/^[0-9.]+$/.test(ip) || /^[0-9a-f:]+$/i.test(ip)) return ip;
+    } catch (_) { /* try next */ }
+  }
+  return null;
+}
 
 function textResult(text) {
   return { content: [{ type: 'text', text }] };

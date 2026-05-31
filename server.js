@@ -3363,7 +3363,6 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { encodePairBlob } = await import('./lib/sync/pair.js');
       const { homedir } = await import('node:os');
       const { join } = await import('node:path');
-      const { syncServerServiceStatus } = await import('./lib/sync/service.js');
 
       const cfg = loadSyncConfig();
       const MEMEX_DIR = process.env.MEMEX_DIR || join(homedir(), '.memex');
@@ -3391,10 +3390,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const ttlMin = parseInt(args.ttl_minutes, 10) || 30;
       const blob = encodePairBlob({ host, port, cert_fp: certInfo.fingerprint, token: bearer, ttlSec: ttlMin * 60 });
 
-      const svc = syncServerServiceStatus();
-      const serverWarning = svc.running
+      // Liveness: probe the actual TCP port. We deliberately DON'T use
+      // `systemctl --user is-active` here — the MCP server is a subprocess
+      // spawned by the agent gateway and usually lacks the user systemd
+      // session bus, so that check yields false negatives. A raw connect to
+      // the port is the truth: if something accepts the connection, the
+      // server is up.
+      const portOpen = await probePortOpen(port);
+      const serverWarning = portOpen
         ? null
-        : 'The sync-server does not appear to be running on this host. Start it with `memex-sync sync-server install` (durable) or `memex-sync sync-server start`, otherwise the other device will get connection-refused.';
+        : `Nothing is accepting connections on port ${port} of this host. Start the sync-server with \`memex-sync sync-server install\` (durable) or \`memex-sync sync-server start\`, otherwise the other device will get connection-refused.`;
 
       return jsonResult({
         pair_blob: blob,
@@ -3437,6 +3442,24 @@ async function detectPublicIp() {
     } catch (_) { /* try next */ }
   }
   return null;
+}
+
+/**
+ * Liveness probe — true if something is accepting TCP connections on the
+ * given port at 127.0.0.1. Reliable from a subprocess (unlike systemctl
+ * --user, which needs a session bus). 2s timeout.
+ */
+async function probePortOpen(port, host = '127.0.0.1', timeoutMs = 2000) {
+  const net = await import('node:net');
+  return new Promise((resolve) => {
+    const sock = net.connect({ host, port });
+    let done = false;
+    const finish = (ok) => { if (done) return; done = true; try { sock.destroy(); } catch (_) {} resolve(ok); };
+    sock.setTimeout(timeoutMs);
+    sock.once('connect', () => finish(true));
+    sock.once('timeout', () => finish(false));
+    sock.once('error', () => finish(false));
+  });
 }
 
 function textResult(text) {

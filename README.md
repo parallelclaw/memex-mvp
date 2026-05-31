@@ -326,7 +326,33 @@ See [PRIVACY section in the Russian README](README.ru.md#приватность-
 
 ## Cross-device
 
-memex is single-machine by design — but you can sync the DB between your own devices via iCloud Drive symlink, syncthing, or one-time `scp`. The corpus is one SQLite file plus a small inbox directory, so any file-sync tool handles it. See [README.ru.md](README.ru.md#между-устройствами--across-devices) for tested recipes.
+**Experimental real-time sync (v0.11.11+).** memex can now converge two machines'
+databases over the network — e.g. a laptop running Claude Code and a VPS running
+OpenClaw/Hermes — with no cloud relay. HTTP push/pull + cursors, conflict-free via
+the existing `UNIQUE(source, conversation_id, msg_id)` constraint (append-only
+verbatim memory never edits, so there's nothing to merge), TLS cert-pinning + a
+256-bit bearer, durable as a systemd/LaunchAgent service, and hands-off on a timer.
+Pair with one paste:
+
+```sh
+export MEMEX_SYNC_EXPERIMENTAL=1
+# hub (always-on machine):
+memex-sync sync-server install --bind 0.0.0.0
+memex-sync sync-server invite --host <public-ip>     # prints memex-pair:...
+# spoke (laptop):
+memex-sync sync-pair memex-pair:...                  # one paste — host+cert+token
+memex-sync sync-run vps
+memex-sync sync-schedule install --every 15m         # auto-sync from here
+```
+
+Agents can emit the pairing token from a chat phrase via the `memex_sync_invite`
+MCP tool. Full guide + wire-protocol spec: **[SYNC.md](SYNC.md)**. Gated behind
+`MEMEX_SYNC_EXPERIMENTAL=1`; the protocol may change before it graduates to stable.
+
+**Simple alternative (no sync engine).** The corpus is one SQLite file plus a small
+inbox directory, so any file-sync tool (iCloud Drive symlink, Syncthing, one-time
+`scp`) handles it for single-writer setups. See [README.ru.md](README.ru.md#между-устройствами--across-devices)
+and [MULTI_MACHINE.md](MULTI_MACHINE.md) for tested recipes.
 
 ---
 

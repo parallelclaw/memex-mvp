@@ -107,11 +107,12 @@ the request. No DNS, no Let's Encrypt, no SSH key — one paste from agent chat.
 Pro: zero user terminal access to VPS required.
 Con: VPS must have a reachable public IP/hostname.
 
-### mDNS LAN (no-VPS scenario)
+### mDNS LAN (no-VPS scenario) — planned
 
-Two devices on same Wi-Fi announce themselves as `_memex._tcp.local`.
-`memex sync pair --lan` discovers peers and trust-on-first-use exchanges a
-bearer token.
+Two devices on the same Wi-Fi would announce themselves as `_memex._tcp.local`
+and pair via trust-on-first-use, no VPS required. **Not built yet** — until then,
+two LAN machines can still pair by running the server on one and `sync-add`-ing
+its LAN IP from the other.
 
 Pro: no VPS, no cloud, no account.
 Con: only when both devices on same network.
@@ -120,55 +121,92 @@ Con: only when both devices on same network.
 
 ## Setup walkthrough
 
-### Scenario 1: Mac + VPS (you talk to VPS via agent only)
+> All commands are gated behind `MEMEX_SYNC_EXPERIMENTAL=1` in v0.11.x.
+> The CLI lives under the existing `memex-sync` binary (`memex-sync sync-*`).
 
-On VPS, tell your agent (Telegram bot, Hermes, OpenClaw, whatever):
+### Scenario 1 — lazy path: VPS you only reach through an agent
 
-> "Включи memex sync server, дай мне код для парения с Mac."
+The hub (VPS) runs the server durably; the spoke (laptop) pairs with one paste.
 
-The agent runs `memex sync server enable` internally and replies with:
-
-```
-memex-pair:eyJob3N0IjoidnBzLmV4YW1wbGUuY29tIiwicG9ydCI6ODc2NSwiY2VydF9mcCI6...
-```
-
-On Mac, paste it:
+**On the VPS, once** (or have your agent run it):
 
 ```sh
-$ memex sync pair memex-pair:eyJob3N0...
-✓ Parsed: vps.example.com:8765, fp=7a:9b:3c:...
-✓ TLS verified against pinned fingerprint
-✓ Bearer token stored in ~/.memex/config.json
-✓ Scheduled sync every 15 min via LaunchAgent
-$ memex sync run    # first manual sync
+export MEMEX_SYNC_EXPERIMENTAL=1
+memex-sync sync-server install --port 8766 --bind 0.0.0.0   # durable systemd/launchd service
 ```
 
-Done.
+**Get a pairing token.** Either ask your agent in chat —
 
-### Scenario 2: Mac + VPS (you have SSH to VPS)
+> "set up memex sync with my Mac" / "сгенерируй паринг-код для синка"
 
-On Mac:
+— and it calls the **`memex_sync_invite`** MCP tool (requires
+`MEMEX_SYNC_EXPERIMENTAL=1` in the memex MCP server's env), or run it by hand:
 
 ```sh
-$ memex sync setup vps user@vps.example.com
-✓ SSH access works
-✓ memex 0.11.11 detected on VPS
-Setting up SSH tunnel as LaunchAgent...
-✓ autossh installed (via brew)
-✓ Tunnel running, bound to localhost:8765
-✓ Pair blob fetched from VPS via SSH
-✓ Scheduled sync every 15 min
+memex-sync sync-server invite --host <public-ip>      # prints memex-pair:...
 ```
 
-Zero clicks on user side.
+**On the laptop, one paste:**
 
-### Scenario 3: Two Macs on the same Wi-Fi
+```sh
+export MEMEX_SYNC_EXPERIMENTAL=1
+memex-sync sync-pair memex-pair:eyJ2IjoxLCJob3N0Ijoi...   # decodes host+port+cert_fp+token
+memex-sync sync-run vps                                   # first sync
+memex-sync sync-schedule install --every 15m             # hands-off from here
+```
 
-On both machines: `memex sync server enable` (no flags).
+Done. New conversations propagate within the interval, both directions.
 
-On one Mac: `memex sync pair --lan` — discovers the other, prompts the user to
-type `memex sync accept <name>` on the other side. Trust-on-first-use exchange.
-Done.
+### Scenario 2 — Mac + VPS over an SSH tunnel
+
+If you have SSH to the VPS, skip the public bind. Run the server on loopback,
+forward the port yourself, and pass `--host localhost` to invite:
+
+```sh
+# VPS
+memex-sync sync-server install --port 8766 --bind 127.0.0.1
+memex-sync sync-server invite --host localhost            # blob targets localhost
+
+# Mac — keep this tunnel up (autossh/LaunchAgent automation is a follow-up)
+ssh -N -L 8766:localhost:8766 user@vps &
+memex-sync sync-pair memex-pair:...                       # → https://localhost:8766
+memex-sync sync-run vps
+```
+
+### Scenario 3 — Tailscale
+
+Both machines on one tailnet: `invite --host <vps>.tail-xxxx.ts.net`, then
+`sync-pair` on the laptop. WireGuard handles encryption + NAT; the cert pin in
+the blob still applies.
+
+### Manual fallback (no pair blob)
+
+`sync-pair` is just sugar over `sync-add`. The explicit form:
+
+```sh
+memex-sync sync-add vps https://<host>:8766 <bearer-hex> --cert-fp sha256:AA:BB:...
+# or, over a transport you already trust (SSH tunnel / Tailscale):
+memex-sync sync-add vps https://localhost:8766 <bearer-hex> --insecure
+```
+
+### Command reference
+
+| Command | Side | What |
+|---|---|---|
+| `sync-server install / uninstall / status` | hub | durable server service |
+| `sync-server start` | hub | foreground server |
+| `sync-server invite [--host H] [--port N] [--ttl 30]` | hub | print a pair blob |
+| `sync-pair <blob> [--alias vps]` | spoke | register a remote from a blob |
+| `sync-add <alias> <url> <bearer> (--cert-fp F \| --insecure)` | spoke | register a remote explicitly |
+| `sync-run <alias> \| --all` | spoke | one bidirectional sync |
+| `sync-schedule install [--every 15m] / uninstall / status` | spoke | hands-off auto-sync timer |
+| `sync-list / sync-remove <alias> / sync-status` | spoke | inspect / manage remotes |
+| `memex_sync_invite` (MCP tool) | hub | agent emits a pair blob from a chat phrase |
+
+> **Not yet automated (manual today, planned):** autossh tunnel management,
+> Tailscale auto-detection, and mDNS LAN discovery (`_memex._tcp.local` for two
+> machines on the same Wi-Fi with no VPS). The transports themselves work today
+> via the manual steps above.
 
 ---
 

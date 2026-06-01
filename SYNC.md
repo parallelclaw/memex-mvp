@@ -449,3 +449,77 @@ the same mechanism Plex/Tailscale/etc. use for device-to-device trust.
 - **End-to-end encryption** — transport encryption is enough for v1 given the
   threat model.
 - **Cloud relay** — never. Against memex's local-first principle.
+
+---
+
+## Roadmap / backlog
+
+Surfaced while taking sync from tracer-bullet to a live 3-node mesh
+(Mac + two VPSes). Ordered roughly by priority.
+
+### 1. Auto-hub election by reachability ⭐ (next up)
+
+Today the operator picks which node runs the server (hub) and which pair to it
+(spokes). That's fragile: we initially assumed the laptop was the hub and tried
+to reach a VPS *inbound* — which hit a cloud Security Group wall (Alibaba ECS
+drops inbound 8766 above the OS; `ufw inactive` is a false "open"). The node
+that was actually reachable was a different VPS. The fix was manual: point every
+node *outbound* at the reachable VPS.
+
+The system should do this automatically:
+
+- **Empirical, not declared** — actually probe TCP reachability between nodes
+  (declared firewall state lies; the cloud SG sits above the OS).
+- **Outbound-biased** — spokes initiate; the hub only needs to *accept*. This
+  concentrates the one irreducible "a port must be open / an overlay must
+  exist" requirement onto a SINGLE node, not every node.
+- **Election** — hub = the node reachable by the most peers. Ties broken by
+  always-on-ness (VPS > laptop) then latency.
+- **Self-heal** — hub drops → re-probe → promote a reachable spoke.
+- **Honest failure** — if NO node is inbound-reachable (all behind NAT/closed
+  SGs), the engine can't conjure reachability; it should say so and name the
+  best candidate to open (one port) or suggest an overlay (Tailscale).
+
+Product win: a new node joins knowing only a bootstrap token — it probes, finds
+the reachable hub, and spokes to it. The human network action (open one port, or
+one overlay account) is paid **once per mesh**, at the hub, and amortizes across
+all future nodes. This generalizes the manual 3-node setup we did by hand.
+
+Likely lands as `memex sync setup` v2 (adaptive probe + mesh-join), absorbing
+the deferred transport-management work below.
+
+### 2. `sync-server invite` external-reachability check
+
+`memex_sync_invite` currently probes only the *local* port (127.0.0.1). It
+happily emits a blob whose `host` is a public IP that's actually firewalled at
+the cloud layer (the Alibaba case). It should additionally attempt an external
+reachability hint and warn: "listening locally but the public host may be
+blocked by your cloud Security Group — verify, or pair the spoke outbound to an
+already-reachable hub instead."
+
+### 3. Transport auto-management (deferred from Phase 6)
+
+The transports work today via manual steps; automate the setup:
+- **autossh** LaunchAgent/systemd to keep an SSH tunnel up (for SSH-reachable
+  hubs without an open public port).
+- **Tailscale** auto-detect + `tailscale up` from a prompt (needs a one-time
+  auth key — moves the human action to the TS console, doesn't remove it).
+- **mDNS LAN** discovery (`_memex._tcp.local`) for two machines on the same
+  Wi-Fi with no VPS.
+
+### 4. Kimi Code CLI capture bridge
+
+The standalone Kimi Code CLI writes `~/.kimi/sessions/<uuid>/context.jsonl`
+(roles `_system_prompt`/`_checkpoint`/…) which the capture daemon doesn't watch
+or parse. (Kimi accessed *through* OpenClaw — channel `kimi-web` — is already
+captured.) An inbox-bridge (`kimi-to-memex` → `~/.memex/inbox/`) keeps the sync
+engine untouched and isolates us from Moonshot format changes. Low priority —
+the OpenClaw path already covers the common case.
+
+### 5. Push-side skip surfacing
+
+`POST /sync/push` applies rows via the shared row-applier, which counts `skipped`,
+but the HTTP response doesn't return it to the pushing client (only the pull path
+surfaces skips). A server-side FTS corruption could silently drop pushed rows
+without the client knowing. Mirror the pull-side retry/abort on the server, or
+return `skipped` in the push response so the client can react.

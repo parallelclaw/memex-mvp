@@ -326,13 +326,32 @@ See [PRIVACY section in the Russian README](README.ru.md#приватность-
 
 ## Cross-device
 
-**Experimental real-time sync (v0.11.11+).** memex can now converge two machines'
-databases over the network — e.g. a laptop running Claude Code and a VPS running
-OpenClaw/Hermes — with no cloud relay. HTTP push/pull + cursors, conflict-free via
-the existing `UNIQUE(source, conversation_id, msg_id)` constraint (append-only
-verbatim memory never edits, so there's nothing to merge), TLS cert-pinning + a
-256-bit bearer, durable as a systemd/LaunchAgent service, and hands-off on a timer.
-Pair with one paste:
+**Experimental real-time sync (v0.11.11+).** memex can now converge two or
+more machines' databases over the network — laptop + VPS, two VPSes via a
+common transit, any number of nodes — with no cloud relay. HTTP push/pull
++ cursors, conflict-free via the existing `UNIQUE(source, conversation_id,
+msg_id)` constraint (append-only verbatim memory never edits, so there's
+nothing to merge), TLS + 256-bit bearer, durable as a systemd/LaunchAgent
+service, hands-off on a timer.
+
+**The right mental model.** A "hub" is whichever node is reachable by the
+others, NOT necessarily a fancy always-on VPS. SSH access (port 22) counts
+as reachable — meaning every machine you can SSH into is a hub candidate.
+The deployed-patterns table in [SYNC.md](SYNC.md#deployed-patterns-whats-been-proven-live)
+walks through four real topologies, in decreasing order of "easy":
+
+  1. **VPS-as-hub on a public port** — easiest when nothing blocks the port
+  2. **VPS-as-hub via SSH tunnel** — when public port is blocked
+  3. **Mac-as-hub via reverse SSH tunnel** — when the laptop is the only
+     reachable node, via `ssh -fN -R` from the VPS to the Mac. No public port
+     anywhere; sync rides on port 22 only.
+  4. **Transit-hub via chained `ssh -R`** — multi-node mesh where one VPS
+     acts as a meeting point others reverse-tunnel into. Used live for a
+     San Francisco Mac + Italy VPS + Asia VPS that no public-port plan
+     could glue together (Asia/Europe SSH path works; Mac VPN to Asia
+     didn't).
+
+The simplest happy path:
 
 ```sh
 export MEMEX_SYNC_EXPERIMENTAL=1
@@ -345,9 +364,15 @@ memex-sync sync-run vps
 memex-sync sync-schedule install --every 15m         # auto-sync from here
 ```
 
-Agents can emit the pairing token from a chat phrase via the `memex_sync_invite`
-MCP tool. Full guide + wire-protocol spec: **[SYNC.md](SYNC.md)**. Gated behind
-`MEMEX_SYNC_EXPERIMENTAL=1`; the protocol may change before it graduates to stable.
+Agents can emit the pairing token from a chat phrase via the
+`memex_sync_invite` MCP tool. Full guide + wire-protocol spec:
+**[SYNC.md](SYNC.md)**. Gated behind `MEMEX_SYNC_EXPERIMENTAL=1`; the
+protocol may change before it graduates to stable.
+
+A **mesh-bootstrap wizard** that probes reachability and picks the right
+topology automatically (so you don't have to know whether you're in case
+1, 2, 3, or 4) is the next big item — see
+[Roadmap §1 in SYNC.md](SYNC.md#1-mesh-bootstrap-wizard---top-priority-the-consolidating-product-feature).
 
 **Simple alternative (no sync engine).** The corpus is one SQLite file plus a small
 inbox directory, so any file-sync tool (iCloud Drive symlink, Syncthing, one-time

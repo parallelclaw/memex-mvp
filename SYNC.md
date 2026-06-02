@@ -452,41 +452,197 @@ the same mechanism Plex/Tailscale/etc. use for device-to-device trust.
 
 ---
 
+## Deployed patterns (what's been proven live)
+
+The "lazy-user mesh" got real-world stress tests over several days. These are
+patterns we observed working end-to-end, in order of decreasing dependence on
+network privilege.
+
+### A. VPS-as-hub on a public port (the assumed default)
+
+VPS exposes the sync-server on some port (e.g., 8766 or 443 behind nginx).
+Spokes dial it directly. Works when: VPS firewall + spokes' egress both allow
+the port.
+
+**Fragility we hit:** ISP/VPN/cloud-SG can silently start blocking the port
+that "worked yesterday" — without a guest reboot or any user change. We saw
+this on a HOSTKEY VPS where 8766 just stopped passing externally. Public
+ports are subject to anyone's firewall above the OS.
+
+### B. SSH tunnel (spoke initiates `ssh -L`)
+
+Spoke `ssh -L 8766:localhost:8766 user@vps` over the existing port 22; sync
+client talks to `localhost:8766`. Hub doesn't expose 8766 publicly; the
+spoke's Mac VPN/proxy mostly relays SSH (it usually does to standard ports).
+
+### C. Mac-as-hub via reverse SSH tunnel (`ssh -R`) ⭐
+
+The inversion that solved everything when public ports failed across the board:
+
+```
+   Mac runs sync-server on localhost:8766 (non-privileged, no root)
+   Mac runs:  ssh -fN -R 8766:127.0.0.1:8766 user@vps
+
+   On the VPS, sshd creates a LOOPBACK listener on 127.0.0.1:8766
+   that forwards through the existing SSH connection back to Mac.
+
+   The VPS-side memex agent then runs:
+     sync-add mac https://localhost:8766 <mac-bearer> --insecure
+     sync-run mac
+     sync-schedule install --every 5m
+```
+
+The radical property: **the only port traversed is 22, which is already open
+on every VPS by definition (otherwise you couldn't have provisioned it).**
+No firewall change anywhere. The sync-server is bound to loopback on both
+ends — nothing public, anywhere. Cloud SG, ufw, the Mac's full-tunnel VPN
+proxy — all irrelevant.
+
+The trade-off: the Mac is a laptop. When it sleeps or the network changes,
+the SSH tunnel dies. The VPS's scheduler then sees `peer unreachable` for
+each tick until Mac wakes and re-establishes the tunnel. Acceptable for
+"used-daily-driver" workflows; sync pauses, never loses data.
+
+### D. Transit-hub: chained `ssh -R` for a node Mac can't reach directly
+
+Pattern C breaks when the Mac's VPN proxy refuses to relay SSH to a particular
+destination (we saw this on Mac → Alibaba Asia: banner-exchange timeout even
+though SSH worked fine to a European VPS). The fix: that node initiates its
+own `ssh -R` to a third node that Mac CAN reach.
+
+```
+                              Mac (sync-server localhost:8766)
+                              ▲
+                              │  ssh -fN -R 8766:localhost:8766 (Mac → VPS-EU)
+                              │
+                              VPS-EU (transit-hub, openclaw user, no sudo)
+                              ├ localhost:8766 = Mac via Mac's tunnel
+                              └ localhost:8767 = Asia VPS via its own tunnel
+                              ▲
+                              │  ssh -fN -R 8767:localhost:8766 (Asia VPS → VPS-EU)
+                              │
+                              Asia VPS (sync-server localhost:8766)
+```
+
+The transit-hub runs `sync-run --all` periodically and converges everyone.
+No spoke ever exposes a public port; the transit-hub only exposes port 22
+(which was already open); the only required network capability anywhere is
+"outbound SSH to one node the other spokes can also reach outbound."
+
+This generalizes: any number of spokes can join the same transit-hub by
+reverse-tunneling in. The transit-hub's bearer is the only thing that's
+shared. Each spoke needs SSH access to the transit-hub (one pubkey paste
+into `~/.ssh/authorized_keys` per spoke, no sudo).
+
+**Real session evidence:** the 3-node mesh (Mac in San Francisco / VPN + a
+HOSTKEY VPS in Milan + an Alibaba VPS in Asia) is currently running this
+exact topology after every other public-port approach hit a firewall wall.
+33k + 7k rows synced cleanly via SSH tunnels at ~165 s/round.
+
+---
+
 ## Roadmap / backlog
 
 Surfaced while taking sync from tracer-bullet to a live 3-node mesh
 (Mac + two VPSes). Ordered roughly by priority.
 
-### 1. Auto-hub election by reachability ⭐ (next up)
+### 1. Mesh-bootstrap wizard ⭐ (top priority, the consolidating product feature)
 
-Today the operator picks which node runs the server (hub) and which pair to it
-(spokes). That's fragile: we initially assumed the laptop was the hub and tried
-to reach a VPS *inbound* — which hit a cloud Security Group wall (Alibaba ECS
-drops inbound 8766 above the OS; `ufw inactive` is a false "open"). The node
-that was actually reachable was a different VPS. The fix was manual: point every
-node *outbound* at the reachable VPS.
+The end-state of everything else below. A prompt-driven, agent-mediated
+setup that empirically discovers reachability between user's nodes, picks
+the best topology automatically (deployed pattern A → B → C → D from above,
+in decreasing order of "ideal" reachability), and emits ready-to-paste
+prompts for each agent. The user never has to know whether their setup is
+"VPS-as-hub" or "Mac-as-hub" or "transit-hub" — the wizard figures it out
+and explains the choice.
 
-The system should do this automatically:
+**UX sketch** (interactive, via Mac CLI or a memex MCP tool):
 
-- **Empirical, not declared** — actually probe TCP reachability between nodes
-  (declared firewall state lies; the cloud SG sits above the OS).
-- **Outbound-biased** — spokes initiate; the hub only needs to *accept*. This
-  concentrates the one irreducible "a port must be open / an overlay must
-  exist" requirement onto a SINGLE node, not every node.
-- **Election** — hub = the node reachable by the most peers. Ties broken by
-  always-on-ness (VPS > laptop) then latency.
-- **Self-heal** — hub drops → re-probe → promote a reachable spoke.
-- **Honest failure** — if NO node is inbound-reachable (all behind NAT/closed
-  SGs), the engine can't conjure reachability; it should say so and name the
-  best candidate to open (one port) or suggest an overlay (Tailscale).
+```
+$ memex-sync mesh bootstrap
 
-Product win: a new node joins knowing only a bootstrap token — it probes, finds
-the reachable hub, and spokes to it. The human network action (open one port, or
-one overlay account) is paid **once per mesh**, at the hub, and amortizes across
-all future nodes. This generalizes the manual 3-node setup we did by hand.
+Wizard: Which agents do you have? (multi-select)
+        [ ] OpenClaw  [ ] Hermes  [ ] Kimi  [ ] Custom
 
-Likely lands as `memex sync setup` v2 (adaptive probe + mesh-join), absorbing
-the deferred transport-management work below.
+Wizard: For each, paste the probe prompt into the agent's chat and paste the
+        reply back here. (The probe is read-only — `whoami`, `nc -z github.com:443`,
+        `ss -ltn`, `sudo -ln`, etc.)
+
+[Wizard parses all replies]
+
+Wizard: Building reachability matrix…
+        ✓ Mac can reach OpenClaw-VPS on :22 (banner OK, ~120ms)
+        ✗ Mac can reach Kimi-VPS on :22 (banner timeout — your VPN proxy
+          relays SSH to Europe, drops it to Asia)
+        ✓ Kimi-VPS can reach OpenClaw-VPS on :22 (Asia → Europe, ~280ms)
+        ✓ All three reach github.com:443 — internet works everywhere
+
+Wizard: Best plan: **Mac-as-hub with OpenClaw-VPS as transit**.
+        Why: Kimi can't be reached from Mac directly (proxy block); but
+        Kimi CAN reach OpenClaw-VPS, which Mac CAN reach. So OpenClaw-VPS
+        becomes a transit point. (Deployed pattern D from SYNC.md.)
+        No public ports needed anywhere.
+
+        [show topology diagram]
+        [confirm: y/n]
+
+Wizard: Generating setup prompts. Paste each into the indicated chat:
+
+        — Prompt for OpenClaw:  [add Mac pubkey + add Kimi pubkey + sync-add mac + sync-schedule]
+        — Prompt for Kimi:      [ssh -R outbound to OpenClaw]
+        — Mac will:             [ssh -R outbound to OpenClaw + start local sync-server]
+
+Wizard: Paste OpenClaw's reply confirming pubkeys added…
+        Paste Kimi's reply confirming ssh -R up…
+
+Wizard: Establishing Mac's ssh -R… [does it]
+        Verifying via marker propagation… [posts a marker to local sync-server,
+          polls each agent over their tunneled connection until the marker
+          appears in their DB]
+        ✓ marker reached OpenClaw in 8s
+        ✓ marker reached Kimi in 14s (via transit)
+        Mesh up.
+
+Wizard: Installing durability layer…
+        ✓ LaunchAgent on Mac with autossh-style retry for ssh -R to OpenClaw
+        ✓ systemd-user on Kimi for ssh -R to OpenClaw with restart
+        Mesh self-heals on Mac sleep/network change.
+```
+
+**Implementation shape:**
+
+- `lib/sync/bootstrap.js` — a state-machine wizard.
+- `memex_mesh_bootstrap` MCP tool — agent-facing entry; Mac's Claude Code
+  invokes it, the conversation IS the wizard.
+- `scripts/probe-prompt.sh` (or generated) — the standard read-only probe
+  any agent runs once and replies with structured output.
+- Topology decision is the empirical heart: a reachability matrix +
+  preference order (A > B > C > D in the deployed-patterns section).
+- Marker propagation is the end-to-end test: posts a known message via Mac's
+  sync-server, polls each remote until it appears, gives a per-hop latency.
+
+This is the consolidating feature that absorbs items 2, 3, and the older
+auto-hub election idea: every constituent decision (which port to use, when
+to fall back to SSH, when to ssh -R, whether to ssh-R-chain) becomes a
+branch in the wizard's decision tree, made from empirical data rather than
+operator guesswork.
+
+### 1b. Durability automation for SSH-tunnel topologies (paired with #1)
+
+When the mesh runs on patterns C or D (SSH reverse tunnels), the tunnels
+themselves are fragile: Mac sleep, network change, or VPS reboot kills them.
+Today, re-establishing is manual. To make it self-heal:
+
+- **macOS LaunchAgent** for `ssh -fN -R …` with autossh-style restart-on-
+  failure (no install: a small loop wrapping `ssh -o ServerAliveInterval=…`
+  inside a LaunchAgent KeepAlive=true).
+- **systemd-user** equivalent on Linux spokes (e.g., the Kimi side of pattern
+  D), with `Restart=on-failure`. Has the lingering caveat the v0.11.11
+  install already handles for the server.
+- **Both auto-installed by the wizard** when it picks an SSH-tunneling
+  topology, so the user gets self-healing without thinking about it.
+
+### 2. `sync-server invite` external-reachability check
 
 ### 2. `sync-server invite` external-reachability check
 

@@ -627,22 +627,95 @@ to fall back to SSH, when to ssh -R, whether to ssh-R-chain) becomes a
 branch in the wizard's decision tree, made from empirical data rather than
 operator guesswork.
 
-### 1b. Durability automation for SSH-tunnel topologies (paired with #1)
+### 1b. Self-healing tunnels — durability that ships to every user ⭐
 
 When the mesh runs on patterns C or D (SSH reverse tunnels), the tunnels
-themselves are fragile: Mac sleep, network change, or VPS reboot kills them.
-Today, re-establishing is manual. To make it self-heal:
+themselves are fragile: laptop sleep, network change, VPN toggle, or VPS reboot
+kills them. **This is not theoretical — it cost real data.** On 2026-06-07 the
+Mac↔VPS1 tunnel had been dead since a sleep on ~06-02; six days of OpenClaw
+research (incl. the whole ECC investigation, ~125 rows) sat stranded on the VPS
+and never reached the main store. The 5-min schedule kept firing into a dead
+tunnel and **failed silently**. Two lessons drive this design:
 
-- **macOS LaunchAgent** for `ssh -fN -R …` with autossh-style restart-on-
-  failure (no install: a small loop wrapping `ssh -o ServerAliveInterval=…`
-  inside a LaunchAgent KeepAlive=true).
-- **systemd-user** equivalent on Linux spokes (e.g., the Kimi side of pattern
-  D), with `Restart=on-failure`. Has the lingering caveat the v0.11.11
-  install already handles for the server.
-- **Both auto-installed by the wizard** when it picks an SSH-tunneling
-  topology, so the user gets self-healing without thinking about it.
+  1. **Auto-heal** so breaks are rare and short.
+  2. **Never fail silently** — when a break *can't* self-heal (key rotated, VPS
+     gone, account suspended), the user must find out in hours, not days. The
+     second matters more than the first.
 
-### 2. `sync-server invite` external-reachability check
+#### Proven reference implementation (live, 2026-06-07)
+
+Hand-built and verified on the Mac hub — this is the prototype the product
+should generate:
+
+- `~/.memex/sync-tunnel.sh` — `exec ssh -N … -o ServerAliveInterval=30
+  -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 127.0.0.1:8766:127.0.0.1:8766
+  openclaw@VPS` (foreground, no `-f`; explicit IPv4 loopback to avoid the
+  earlier `::1`-only bind bug).
+- `~/Library/LaunchAgents/com.parallelclaw.memex.synctunnel.plist` — `KeepAlive=true`
+  + `RunAtLoad=true` + `ThrottleInterval=15`. launchd respawns ssh whenever it
+  exits (sleep/wake, network change, drop).
+- **Self-test passed**: killed the ssh PID → launchd respawned it in ~15s →
+  loopback listener + sync endpoint (cert D2:96) back automatically.
+
+#### Architectural decision: supervise the tunnel *inside the memex daemon*
+
+The reference is a "dumb" OS supervisor over a raw `ssh`. The product should go
+one level up: **fold tunnel supervision into the long-running memex process**
+(the sync-server / capture daemon the OS already keeps alive). Then the OS keeps
+ONE thing alive (memex); memex keeps the tunnel alive. Benefits:
+
+- **One supervisor tree**, not two (OS→ssh becomes OS→memex→ssh).
+- memex still delegates crypto/transport to `ssh` (no SSH reimpl) but owns
+  **retry/backoff, error classification, and health** — so it can show status
+  and surface failure (impossible when ssh is an opaque sibling of launchd).
+- `ssh` stays a child process; on hub nodes no *new* OS unit is needed (reuse
+  the existing sync-server unit). Spoke-only nodes (no server) get a dedicated
+  keeper unit.
+
+#### Components
+
+1. **In-daemon tunnel keeper.** Tunnel spec in `config.json`
+   (`{peer, direction, local_port, remote_port, ssh_target, identity}`).
+   Supervisor loop: spawn ssh → on exit, **classify** the failure:
+   - *auth failure* → STOP + surface (don't loop forever on a dead key);
+   - *network unreachable* → exponential backoff (cap ~2 min);
+   - *bind conflict* (stale remote listener after a drop) → fast retry, the
+     listener clears within seconds;
+   - *clean drop* → immediate re-establish.
+2. **Zombie-tunnel detection.** TCP-up ≠ data-flowing (the `nc -z` lies through
+   the Xray proxy bit us already). Keeper periodically curls `/sync/health` with
+   the bearer *through* the tunnel; if TCP is up but data is dead, recycle it.
+3. **OS-unit generation** (extend `lib/sync/service.js`, which already builds
+   server + schedule units). Add tunnel-keeper variants only where a spoke runs
+   no server: `buildTunnelLaunchAgentPlist` (KeepAlive) / `buildTunnelSystemdUnit`
+   (`Restart=always` + `RestartSec` + linger). Reuse the existing
+   `MEMEX_SYNC_EXPERIMENTAL` injection + log-path conventions.
+4. **Observability — `memex sync status`.** Per peer: tunnel state
+   (up/healing/down), last successful sync, last heal time, consecutive
+   failures, last error class. Turns "it silently broke" into a glance.
+5. **Failure surfacing (the core lesson).** When a peer's sync has been failing
+   past a threshold (e.g. tunnel down > 1 h), surface it loudly:
+   - a line in the SessionStart auto-context: *"⚠️ sync to peer X down 6 days —
+     N conversations not backed up"*;
+   - optionally an OS notification.
+   This is what would have caught the 2026-06-07 incident on day one.
+6. **Install UX + proof.** `memex sync durability install` (or the wizard's final
+   step): detect OS → generate + load unit(s) → **run the kill→respawn self-test**
+   → report "self-healing active (verified)". Shipping the self-test means the
+   user gets *proof*, not a promise.
+
+#### Edge cases the productized version must handle
+
+- **Idempotency** — re-install must not stack duplicate tunnels/units.
+- **Passphrase keys** — reference key had none; a protected key needs
+  agent/keychain integration (`UseKeychain`/`AddKeysToAgent` on macOS, ssh-agent
+  on Linux). Detect and guide.
+- **Multiple peers** — a hub may dial out to N spokes; the keeper manages N specs.
+- **No-VPS users** — patterns C/D need one publicly-reachable sshd (the VPS as
+  rendezvous). Users with two laptops and no VPS have nowhere to dial; that
+  segment needs a relay (bring-your-own $5 VPS, or a future managed
+  memex-relay — see the OSS-free / managed-tunnels-paid split noted in backlog
+  discussion). Don't pretend SSH-R covers them.
 
 ### 2. `sync-server invite` external-reachability check
 

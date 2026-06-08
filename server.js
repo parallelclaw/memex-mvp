@@ -1339,7 +1339,11 @@ const TOOLS = [
     description:
       'Search across all your imported AI / chat history. Uses full-text search with stemming. ' +
       'Returns the most relevant message snippets with source, sender, timestamp, and conversation id. ' +
-      'Use this when the user asks about past conversations, decisions, or things they discussed before.',
+      'Use this when the user asks about past conversations, decisions, or things they discussed before. ' +
+      'RECIPES: topic in a date range → set since_ts/until_ts (a real filter, unlike `sort`/`half_life_days` which only reorder/boost); ' +
+      'keyword inside ONE big session → set conversation_id, then open the hit with memex_get_conversation (offset/order); ' +
+      'freshest turns of a long session → memex_get_conversation order:"desc"; ' +
+      'navigate a huge session → search with conversation_id to locate, then page get_conversation around it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1381,6 +1385,29 @@ const TOOLS = [
             'Telegram conversation, "ai-memory-may" for a particular Claude Code session, etc. ' +
             'Use memex_list_conversations to discover available titles. Combine with `source` for ' +
             'tighter filtering.',
+        },
+        conversation_id: {
+          type: 'string',
+          description:
+            'Optional EXACT conversation id to search WITHIN a single session (unlike `chat`, which is a ' +
+            'fuzzy title substring). Use this to find a keyword inside one specific — often very large — ' +
+            'conversation: pair it with the id from memex_search / memex_list_conversations, then drill ' +
+            'into the hit with memex_get_conversation (offset/order). E.g. "where in this 3000-message ' +
+            'session did we decide X".',
+        },
+        since_ts: {
+          type: 'integer',
+          description:
+            'Optional Unix-seconds lower bound (inclusive) — only messages at or after this time. ' +
+            'Combine with until_ts for a date window: "search X between June 1 and June 7". Rows with no ' +
+            'timestamp are excluded. This FILTERS by date, whereas `sort` only orders and `half_life_days` ' +
+            'only boosts — use since_ts/until_ts when the user names a period.',
+        },
+        until_ts: {
+          type: 'integer',
+          description:
+            'Optional Unix-seconds upper bound (inclusive) — only messages at or before this time. ' +
+            'Pair with since_ts to bound a date window.',
         },
         group_by_conversation: {
           type: 'boolean',
@@ -1454,12 +1481,30 @@ const TOOLS = [
   {
     name: 'memex_get_conversation',
     description:
-      'Return the full transcript of one conversation by its conversation_id (which other tools include in their output). Pass include_subagents: true to also fold in all Cowork subagent transcripts that were spawned from this main session.',
+      'Return the transcript of one conversation by its conversation_id (which other tools include in their output). ' +
+      'For long sessions that exceed `limit`, page with `offset`, or set order:"desc" to get the FRESHEST messages first ' +
+      '(the default order:"asc" returns the oldest, so a 3000-message session would otherwise never show its tail). ' +
+      'The output reports the total message count so you know how far to page. ' +
+      'Pass include_subagents: true to also fold in all Cowork subagent transcripts spawned from this main session.',
     inputSchema: {
       type: 'object',
       properties: {
         conversation_id: { type: 'string' },
         limit: { type: 'integer', default: 200, minimum: 1, maximum: 2000 },
+        offset: {
+          type: 'integer',
+          default: 0,
+          minimum: 0,
+          description:
+            'Skip this many messages before returning `limit`. Page through long conversations: offset 0, 200, 400… Combine with order to page from either end.',
+        },
+        order: {
+          type: 'string',
+          enum: ['asc', 'desc'],
+          default: 'asc',
+          description:
+            'Chronological order. "asc" (default) = oldest first. "desc" = newest first — use this to see the freshest messages of a long session in a single call.',
+        },
         include_subagents: {
           type: 'boolean',
           default: false,
@@ -2012,6 +2057,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         filters.push('LOWER(c.title) LIKE LOWER(?)');
         matchParams.push(`%${chatFilter}%`);
       }
+      const convIdFilter = typeof args.conversation_id === 'string' ? args.conversation_id.trim() : '';
+      if (convIdFilter) {
+        // Exact scope to ONE conversation — keyword search inside a single
+        // (possibly huge) session, complementing get_conversation's paging.
+        // Unlike `chat` (fuzzy title substring) this is an exact id match.
+        filters.push('m.conversation_id = ?');
+        matchParams.push(convIdFilter);
+      }
+      // Date-range window (Unix seconds, inclusive). A numeric bound naturally
+      // excludes ts 0/NULL rows — they carry no date and shouldn't match a range.
+      if (Number.isFinite(args.since_ts)) {
+        filters.push('m.ts >= ?');
+        matchParams.push(Math.floor(args.since_ts));
+      }
+      if (Number.isFinite(args.until_ts)) {
+        filters.push('m.ts <= ?');
+        matchParams.push(Math.floor(args.until_ts));
+      }
       const filterClause = filters.length ? `AND ${filters.join(' AND ')}` : '';
       // When grouping, fetch wider so we have enough unique conversations after dedup.
       const fetchLimit = groupByConv ? Math.min(500, limit * 10) : limit;
@@ -2091,6 +2154,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (chatFilter) {
           likeFilters.push('LOWER(c.title) LIKE LOWER(?)');
           likeParams.push(`%${chatFilter}%`);
+        }
+        if (convIdFilter) {
+          likeFilters.push('m.conversation_id = ?');
+          likeParams.push(convIdFilter);
+        }
+        if (Number.isFinite(args.since_ts)) {
+          likeFilters.push('m.ts >= ?');
+          likeParams.push(Math.floor(args.since_ts));
+        }
+        if (Number.isFinite(args.until_ts)) {
+          likeFilters.push('m.ts <= ?');
+          likeParams.push(Math.floor(args.until_ts));
         }
         // Naive substring match — sufficient for the rare case where someone
         // wants to retrieve from compacted summaries. No FTS5 ranking; we
@@ -2266,6 +2341,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
     if (name === 'memex_get_conversation') {
       const limit = Math.min(2000, Math.max(1, args.limit || 200));
+      const offset = Math.max(0, args.offset || 0);
+      const order = args.order === 'desc' ? 'DESC' : 'ASC';
       const includeSubagents = args.include_subagents === true;
       const format = pickFormat(args);
 
@@ -2279,24 +2356,34 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         for (const s of subs) ids.push(s.conversation_id);
       }
       const placeholders = ids.map(() => '?').join(',');
+      // Total across the id set — so callers know how far to page and never
+      // assume a truncated window is the whole conversation.
+      const total = db
+        .prepare(`SELECT COUNT(*) AS n FROM messages WHERE conversation_id IN (${placeholders})`)
+        .get(...ids).n;
       const rows = db
         .prepare(
           `SELECT conversation_id, sender, role, text, ts
              FROM messages
             WHERE conversation_id IN (${placeholders})
-         ORDER BY ts ASC
-            LIMIT ?`
+         ORDER BY ts ${order}
+            LIMIT ? OFFSET ?`
         )
-        .all(...ids, limit);
+        .all(...ids, limit, offset);
       if (rows.length === 0) {
         return format === 'json'
-          ? jsonResult({ conversation_id: args.conversation_id, count: 0, messages: [], subagent_ids: ids.slice(1) })
-          : textResult(`No messages found for ${args.conversation_id}.`);
+          ? jsonResult({ conversation_id: args.conversation_id, count: 0, total, offset, order: order.toLowerCase(), messages: [], subagent_ids: ids.slice(1) })
+          : textResult(total > 0
+              ? `No messages in this window (total ${total}, offset ${offset}). Lower the offset or use order:"desc" for the newest.`
+              : `No messages found for ${args.conversation_id}.`);
       }
       if (format === 'json') {
         return jsonResult({
           conversation_id: args.conversation_id,
           count: rows.length,
+          total,
+          offset,
+          order: order.toLowerCase(),
           subagent_ids: ids.slice(1),
           messages: rows.map((r) => ({
             ts: r.ts || null,
@@ -2329,9 +2416,21 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           return `[${fmtDateTime(r.ts) || ''}] **${r.sender}**${tag}: ${r.text}`;
         })
         .join('\n');
-      const header = includeSubagents && ids.length > 1
-        ? `_Including ${ids.length - 1} subagent transcript(s)._\n\n`
-        : '';
+      // Window header so a truncated view never looks like the whole chat.
+      const shownEnd = offset + rows.length;
+      const windowed = total > rows.length || offset > 0;
+      const parts = [];
+      if (windowed) {
+        const ord = order === 'DESC' ? 'newest first' : 'oldest first';
+        parts.push(`_Showing ${offset + 1}–${shownEnd} of ${total} messages (${ord})._`);
+        if (order === 'ASC' && shownEnd < total) {
+          parts.push(`_More recent messages exist — page with offset:${shownEnd}, or order:"desc" for the freshest._`);
+        }
+      }
+      if (includeSubagents && ids.length > 1) {
+        parts.push(`_Including ${ids.length - 1} subagent transcript(s)._`);
+      }
+      const header = parts.length ? parts.join('\n') + '\n\n' : '';
       return textResult(header + formatted);
     }
 

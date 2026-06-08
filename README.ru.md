@@ -616,8 +616,12 @@ Sources:
 ### `memex_overview(recent_limit?, format?)`
 Снэпшот корпуса одним вызовом — для ориентации в начале сессии. Возвращает: общее число сообщений, breakdown по источникам (telegram / claude-code / claude-cowork), date range, и последние N разговоров с заголовками. Этот call даёт агенту mental map за ~500 токенов и резко повышает качество последующих `memex_search` запросов (т.к. агент уже знает что у пользователя в памяти есть, а чего нет). Server-side instructions явно рекомендуют вызывать его первым шагом в новой сессии.
 
-### `memex_search(query, limit?, source?, group_by_conversation?, include_archived?, format?)`
-Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой. Опциональный фильтр по source.
+### `memex_search(query, limit?, source?, project?, chat?, conversation_id?, since_ts?, until_ts?, sort?, half_life_days?, group_by_conversation?, include_archived?, expand_match?, format?)`
+Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой.
+
+**Фильтры скоупа:** `source` (telegram/claude-code/…), `project` (по project_path), `chat` (нечёткий матч по названию), **`conversation_id` (точный поиск ВНУТРИ одной сессии)**.
+
+**Фильтр по датам (v0.12):** `since_ts` / `until_ts` (Unix-секунды, включительно) — ограничить окном: «что обсуждали про X в июне». Это настоящий фильтр, в отличие от `sort` (только порядок) и `half_life_days` (только recency-boost).
 
 **По умолчанию `group_by_conversation: true`** — возвращает один лучший хит на каждый conversation_id плюс `match_count` (сколько всего совпадений в этом чате). Это убирает шум, когда один длинный диалог занимает всю выдачу одинаковыми кусками. Передай `false` чтобы получить классический список всех совпадений.
 
@@ -631,8 +635,8 @@ Full-text поиск через FTS5. Возвращает ranked сниппет
 
 Архивные чаты скрыты по дефолту, помечены 🗄️ если включены через `include_archived: true`.
 
-### `memex_get_conversation(conversation_id, limit?, format?)`
-Полный transcript одного чата.
+### `memex_get_conversation(conversation_id, limit?, offset?, order?, include_subagents?, format?)`
+Transcript одного чата. **Пагинация (v0.12):** `offset` листает длинные сессии (0, 200, 400…), `order` задаёт порядок — `asc` (старые первыми, дефолт) или `desc` (свежие первыми). Вывод сообщает `total` — сколько всего сообщений, чтобы знать докуда листать. Для сессии на тысячи сообщений `order:"desc"` отдаёт хвост в один вызов (раньше был доступен только старый «нос»).
 
 ### `memex_archive_conversation(conversation_id, archive?)`
 Заархивировать (или восстановить) чат. Архивный чат остаётся в индексе и доступен для поиска через `include_archived: true`, но не засоряет дефолтную выдачу `memex_list_conversations` / `memex_search`. Передай `archive: false` чтобы расколоть.

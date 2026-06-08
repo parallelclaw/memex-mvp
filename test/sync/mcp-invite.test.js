@@ -14,9 +14,25 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+// Hermetic free port: bind to :0 (OS-assigned), capture, release. The invite
+// tool probes the TCP port to decide its liveness warning — so a port we KNOW
+// is closed lets us assert the warning deterministically, even on a dev box
+// that happens to have a real sync-server listening on 8766.
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.once('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
 
 const REPO_ROOT = new URL('../..', import.meta.url).pathname;
 const SERVER_JS = join(REPO_ROOT, 'server.js');
@@ -99,6 +115,7 @@ console.log('memex_sync_invite MCP tool:');
 
 // ── with the experimental flag ───────────────────────────────────────────────
 const dirOn = makeMemexDir();
+const closedPort = await getFreePort();   // guaranteed-closed → deterministic liveness warning
 let onResults;
 await t('handshake + tools/list + tools/call complete', async () => {
   onResults = await mcpSession({
@@ -107,9 +124,12 @@ await t('handshake + tools/list + tools/call complete', async () => {
     requests: [
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
       { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'memex_sync_invite', arguments: { host: 'localhost', port: 8766, ttl_minutes: 30 } } },
+      // Separate call on a known-closed port so the liveness-warning assertion
+      // doesn't depend on whether 8766 happens to be free on the test host.
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'memex_sync_invite', arguments: { host: 'localhost', port: closedPort, ttl_minutes: 30 } } },
     ],
   });
-  assert.ok(onResults[2] && onResults[3], 'got both responses');
+  assert.ok(onResults[2] && onResults[3] && onResults[4], 'got all responses');
 });
 
 await t('tools/list includes memex_sync_invite when flag set', () => {
@@ -131,8 +151,9 @@ await t('tools/call returns a valid, parseable pair_blob', () => {
 });
 
 await t('response warns when sync-server is not running', () => {
-  const payload = JSON.parse(onResults[3].result.content[0].text);
-  // In the test env no sync-server is installed, so we expect the warning.
+  // Use the known-closed-port call (id 4) so this is deterministic regardless
+  // of whether port 8766 is in use on the test host.
+  const payload = JSON.parse(onResults[4].result.content[0].text);
   assert.ok(payload.server_warning, 'should warn that server is not running');
   assert.match(payload.server_warning, /sync-server/i);
 });

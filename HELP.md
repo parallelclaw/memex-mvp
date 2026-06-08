@@ -283,11 +283,11 @@ Memex по дефолту сортирует по **релевантности**
 | Tool | Что делает |
 |---|---|
 | `memex_overview` | Снэпшот корпуса: источники, сколько сообщений, последние чаты, статус auto-capture |
-| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `chat`, `half_life_days`, `expand_match`, `sort` |
+| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `chat`, `conversation_id` (поиск ВНУТРИ одной сессии), `since_ts`/`until_ts` (фильтр по диапазону дат), `half_life_days`, `expand_match`, `sort` |
 | `memex_store_document(content, url?, title?)` | Сохранить внешний документ (web-страница, AI-chat share, paste) в memex. Агент сам делает fetch, memex хранит verbatim. Учит Jina-трюк для Cloudflare-страниц |
 | `memex_list_projects` | Список всех проектов с количеством разговоров |
 | `memex_list_conversations` | Список чатов отсортированных по recency |
-| `memex_get_conversation(id)` | Полный transcript одного чата |
+| `memex_get_conversation(id)` | Transcript одного чата. Параметры: `limit`, `offset` (листать длинные сессии), `order` (`asc`=старые/`desc`=свежие первыми), `include_subagents`. Вывод сообщает `total` — сколько всего сообщений |
 | `memex_recent` | Последние N сообщений по всем источникам |
 | `memex_archive_conversation(id)` | Скрыть чат из дефолтных списков (не удаляет) |
 | `memex_export_markdown` | Экспорт чата в Markdown (для Obsidian) |
@@ -299,6 +299,24 @@ Memex по дефолту сортирует по **релевантности**
 | `memex_telegram_import` *(v0.10+)* | Импорт выбранных экспортов в memex.db (по индексу или title). Auto-allowlist |
 | `memex_telegram_skip` *(v0.10+)* | Пометить чаты как «не индексировать» — применяется к будущим re-export'ам |
 | `memex_telegram_mode` *(v0.10+)* | Get/set режим: `pick` (default), `auto`, `manual` |
+
+---
+
+## 🔎 Рецепты поиска для агентов (как доставать память эффективно)
+
+Частые задачи и точный способ их решить — особенно для длинных сессий и узких запросов:
+
+| Задача | Как сделать |
+|---|---|
+| **Тема за конкретный период** («что обсуждали про X в июне») | `memex_search(query, since_ts, until_ts)`. Это фильтр по датам — в отличие от `sort` (только порядок) и `half_life_days` (только буст). |
+| **Ключевое слово внутри одной большой сессии** | `memex_search(query, conversation_id=<id>)` — точный скоуп в один чат (а не нечёткий `chat` по названию). |
+| **Самые свежие сообщения длинной сессии** | `memex_get_conversation(id, order:"desc")` — хвост в один вызов. Дефолт `asc` отдаёт самые старые. |
+| **Навигация по сессии на тысячи сообщений** | Сначала `memex_search(query, conversation_id)` чтобы найти место, потом `memex_get_conversation(id, offset, limit)` чтобы прочитать окно вокруг. |
+| **Листать длинный чат страницами** | `memex_get_conversation(id, limit, offset)` — `offset` 0, 200, 400… Вывод показывает `total`, чтобы знать докуда листать. |
+| **Эволюция документа/решения во времени** | `memex_search(query, sort:"date_asc")` — старые→новые, читать вперёд. |
+| **Найти в чате по человеку/названию** | `memex_search(query, chat:"<часть названия>")` — нечёткий подстрочный матч по заголовку. |
+
+> Даты — Unix-секунды. Напр. «с 1 июня 2026» → `since_ts: 1780272000`. Не уверен в границах — сначала `memex_list_conversations(since_ts=…)` чтобы увидеть, какие сессии попадают в окно.
 
 ---
 

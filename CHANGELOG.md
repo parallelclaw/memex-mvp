@@ -2,6 +2,39 @@
 
 Notable changes to memex-mvp. Older history lives in the git log.
 
+## 0.12.0 — agent retrieval: reach any part of memory
+
+Sharper recall for agents querying memex — especially across long sessions and
+narrow time windows. Backward-compatible: every new parameter is optional and
+defaults to the previous behaviour.
+
+### Added
+- **`memex_get_conversation` paging** — new `offset` and `order` (`asc`|`desc`)
+  parameters, plus a `total` count in the output. A long session (e.g. 3000
+  messages) can now return its **freshest** tail (`order:"desc"`) or be paged
+  end-to-end — previously only the first ~N (oldest) were reachable. Fixes a real
+  gap found live: an agent could not show the June messages of a 2900-message
+  Claude Code session.
+- **`memex_search` date-range filter** — `since_ts` / `until_ts` (Unix seconds,
+  inclusive) restrict results to a window ("what did we discuss about X in June").
+  A true filter, distinct from `sort` (orders only) and `half_life_days` (boosts
+  only). Numeric bounds naturally exclude undated rows.
+- **`memex_search` within-conversation scope** — `conversation_id` confines a
+  keyword search to ONE session (exact id, unlike the fuzzy `chat` title match).
+  Pair it with `memex_get_conversation` paging to locate, then read around a hit
+  in a huge session.
+- **Retrieval recipes** baked into the tool descriptions and `HELP.md` (new
+  "Рецепты поиска для агентов" table) so agents discover these paths without
+  guessing — date window, within-session search, freshest-first, page-a-giant.
+
+### Fixed
+- **`memex_get_conversation` no longer hides the tail of long conversations** —
+  the handler always sorted `ts ASC LIMIT N` with no offset, so the newest
+  messages of any session past the limit were unreachable.
+- **`test/sync/mcp-invite.test.js` is now hermetic** — the liveness-warning
+  assertion used a hard-coded port and failed on hosts that actually run a
+  sync-server on 8766; it now probes a guaranteed-closed port.
+
 ## 0.11.11 — experimental multi-device sync
 
 First cut of **local-first, multi-device sync** — converge two machines'

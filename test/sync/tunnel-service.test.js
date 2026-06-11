@@ -65,6 +65,18 @@ t('optional identity file flag', () => {
   assert.match(s, /-i "\/home\/u\/\.ssh\/id_ed25519" -o IdentitiesOnly=yes/);
   assert.doesNotMatch(script, /IdentitiesOnly/);
 });
+t('no stray escaped-space continuation (the live `\\ \\` flap bug, 2026-06-11)', () => {
+  // Without identity, a careless idFlags join once produced `...CountMax=3 \ \`
+  // — bash passes a literal space arg to ssh and the tunnel flaps forever.
+  for (const s of [script, buildTunnelScript({ sshTarget: 'u@h', localPort: 1, remotePort: 2, identity: '/k' })]) {
+    assert.ok(!s.includes('\\ \\'), 'script must not contain a backslash-space-backslash sequence');
+    assert.ok(!/\\ +$/m.test(s), 'no line may end in backslash-space(s)');
+    // Every continuation line must end in a clean single backslash.
+    for (const line of s.split('\n').slice(3, -2)) {
+      assert.match(line, /\\$/, `continuation line must end with \\: "${line}"`);
+    }
+  }
+});
 
 console.log('tunnel launchd plist:');
 const plist = buildTunnelLaunchAgentPlist();

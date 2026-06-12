@@ -2,6 +2,57 @@
 
 Notable changes to memex-mvp. Older history lives in the git log.
 
+## 0.13.0 — `sync-join`: cross-device memory in two copy-paste steps
+
+Multi-device sync goes from "for operators" to "for lazy users". Laptop with
+Claude/Cursor + a server with an agent: the agent runs three commands and
+hands you a `memex-join:` token; you paste **one command** on the laptop.
+Dogfooded end-to-end by migrating the maintainer's own live mesh — every step
+below shipped only after surviving that.
+
+### Added
+- **`memex-sync sync-join <memex-join:...>`** — one-command spoke setup:
+  token validation → SSH probe (prints your pubkey + exact instructions if
+  access is missing) → durable forward tunnel (launchd KeepAlive / systemd
+  Restart=always; `ExitOnForwardFailure`, `ServerAlive 30×3`, explicit IPv4
+  loopback) → pinned-cert health check → remote registration → first sync →
+  15-min auto-sync schedule → hourly watchdog → **marker self-test** that
+  proves a note round-trips before declaring success (`✓ end-to-end verified:
+  … 3.4s` on the live pair). Flags: `--alias`, `--local-port`, `--every`,
+  `--no-watchdog`, `--no-selftest`.
+- **`memex-sync sync-server invite --join [--ssh-target u@h]`** — hub-side
+  join-token emission (`memex-join:` = pair blob + `ssh_target`, host pinned
+  to 127.0.0.1, TTL 30m). The server stays loopback-only; nothing is ever
+  exposed publicly — all traffic rides inside SSH on port 22.
+- **`memex-sync sync-watchdog`** — read-only hourly health pass (installed by
+  join): remotes' `last_sync_at` freshness + tunnel unit state; on silence
+  writes `~/.memex/sync-alert.txt` + desktop notification. The "tunnel died
+  silently for 6 days" failure mode, productized away.
+- **`sync-status`** now reports the tunnel keeper (route, self-healing state)
+  and watchdog alongside server/schedule/remotes.
+
+### Changed
+- **No env var after joining** — a successful `sync-join` persists
+  `sync.enabled: true`; every sync command then works in any shell without
+  `MEMEX_SYNC_EXPERIMENTAL=1`.
+- **Replication is resumable** — cursors persist after every clean pull page
+  and push batch, so an interrupted first sync (network reset, sleep, Ctrl-C)
+  resumes instead of restarting from zero; transient network errors
+  (ECONNRESET/EPIPE/ETIMEDOUT/ECONNREFUSED) retry in place with backoff tuned
+  to the tunnel's ~15s self-heal.
+- **Re-joining a known hub keeps cursors** — if the token's cert fingerprint
+  matches the existing remote's, sync-join preserves cursor state instead of
+  forcing a full re-replication of an already-converged pair.
+- **Docs lead with the lazy flow** — landing page, README (EN/RU), SYNC.md
+  quickstart, HELP.md section, MULTI_MACHINE.md legacy patterns marked
+  deprecated.
+
+### Fixed
+- Tunnel-keeper script generation emitted a broken line continuation (`\ \`)
+  when no SSH identity file was configured — ssh received a stray empty
+  argument and the tunnel flapped forever. Regression-tested, including
+  backslash hygiene of every continuation line.
+
 ## 0.12.0 — agent retrieval: reach any part of memory
 
 Sharper recall for agents querying memex — especially across long sessions and

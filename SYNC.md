@@ -797,3 +797,32 @@ but the HTTP response doesn't return it to the pushing client (only the pull pat
 surfaces skips). A server-side FTS corruption could silently drop pushed rows
 without the client knowing. Mirror the pull-side retry/abort on the server, or
 return `skipped` in the push response so the client can react.
+
+### 6. Provenance: per-row `origin` (node identity) ⭐ next minor candidate
+
+In a synced mesh, nothing records WHICH node captured a row. Two live failures
+on the maintainer's 3-node mesh (2026-06-12), both from agents querying their
+own synced DB:
+
+- An agent looked for its peer's sessions, found no `source='vps1'` (a label
+  it *invented* — telling: that's how users expect it to work), and concluded
+  sync was broken. The 12,826 peer rows were present all along — blended into
+  the same `source='openclaw'` its own capture uses.
+- Sharper: **conversation-key collision across nodes.** Two OpenClaw instances
+  (different VPSes) both capture the same human's Telegram presence, keyed by
+  the same Telegram id → both write `openclaw-tg-<id>` and sync MERGES two
+  different agents' dialogues into ONE interleaved conversation. msg_id-dedup
+  keeps it lossless, but "what did I discuss with agent A vs agent B" is
+  unanswerable.
+
+Fix shape (additive, wire-compatible):
+- `origin` column on messages (e.g. short host label or stable node id),
+  stamped at CAPTURE time, carried verbatim on the wire like `channel`.
+- `origin:` filter in `memex_search` + origin shown in `get_conversation`
+  headers; `memex_overview` breaks counts down per origin.
+- Do NOT namespace conversation ids by node — same-chat dedup across nodes is
+  a feature (live capture + export of the same chat must still converge).
+  Provenance belongs on the row, not in the key.
+- Backfill: existing rows get the local node's origin at migration time on
+  each node BEFORE the next sync round (rows already replicated elsewhere
+  keep NULL = "pre-provenance era"; honest and cheap).

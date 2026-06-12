@@ -36,7 +36,7 @@ function freshDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       source TEXT NOT NULL, conversation_id TEXT NOT NULL, msg_id TEXT,
       role TEXT, sender TEXT, text TEXT, ts INTEGER,
-      metadata TEXT, edited_at INTEGER, uuid TEXT,
+      metadata TEXT, edited_at INTEGER, uuid TEXT, channel TEXT, origin TEXT,
       UNIQUE(source, conversation_id, msg_id)
     );
     CREATE TABLE conversations (

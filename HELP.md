@@ -283,7 +283,7 @@ Memex по дефолту сортирует по **релевантности**
 | Tool | Что делает |
 |---|---|
 | `memex_overview` | Снэпшот корпуса: источники, сколько сообщений, последние чаты, статус auto-capture |
-| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `chat`, `conversation_id` (поиск ВНУТРИ одной сессии), `since_ts`/`until_ts` (фильтр по диапазону дат), `half_life_days`, `expand_match`, `sort` |
+| `memex_search(query)` | Полнотекстовый поиск (FTS5) с recency boost'ом. Параметры: `project`, `source`, `chat`, `conversation_id` (поиск ВНУТРИ одной сессии), `since_ts`/`until_ts` (фильтр по диапазону дат), `origin` (v0.14 — с какого УЗЛА захвачено: "vps1", "macbook-pro"), `half_life_days`, `expand_match`, `sort` |
 | `memex_store_document(content, url?, title?)` | Сохранить внешний документ (web-страница, AI-chat share, paste) в memex. Агент сам делает fetch, memex хранит verbatim. Учит Jina-трюк для Cloudflare-страниц |
 | `memex_list_projects` | Список всех проектов с количеством разговоров |
 | `memex_list_conversations` | Список чатов отсортированных по recency |
@@ -315,6 +315,7 @@ Memex по дефолту сортирует по **релевантности**
 | **Листать длинный чат страницами** | `memex_get_conversation(id, limit, offset)` — `offset` 0, 200, 400… Вывод показывает `total`, чтобы знать докуда листать. |
 | **Эволюция документа/решения во времени** | `memex_search(query, sort:"date_asc")` — старые→новые, читать вперёд. |
 | **Найти в чате по человеку/названию** | `memex_search(query, chat:"<часть названия>")` — нечёткий подстрочный матч по заголовку. |
+| **«Что я обсуждал с агентом на конкретной машине»** (synced-меш) | `memex_search(query, origin:"vps1")` — v0.14: каждый узел штампует свои захваты своим именем. Какие origins есть — видно в `memex_overview`. В слитых чатах (два агента в одном Telegram) `memex_get_conversation` помечает строки `[@origin]`. Строки до v0.14 — без origin. |
 
 > Даты — Unix-секунды. Напр. «с 1 июня 2026» → `since_ts: 1780272000`. Не уверен в границах — сначала `memex_list_conversations(since_ts=…)` чтобы увидеть, какие сессии попадают в окно.
 

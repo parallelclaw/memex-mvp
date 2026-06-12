@@ -2,6 +2,41 @@
 
 Notable changes to memex-mvp. Older history lives in the git log.
 
+## 0.14.0 — provenance: know which machine captured every row
+
+In a synced mesh, all nodes' captures share the same `source` labels — two
+OpenClaw instances both write `source='openclaw'`, and when they bridge the
+same Telegram account they even interleave into ONE conversation. Two agents
+in a row misread their own synced DB because of this (one invented a
+nonexistent `source='vps1'` to look for — telling). v0.14 stamps every row
+with the node that captured it.
+
+### Added
+- **`origin` column on messages** — stamped at capture time on every local
+  write path (capture daemon, MCP imports, Telegram import, store_document,
+  sync self-test, OpenClaw plugin). Value resolution: `MEMEX_ORIGIN` env →
+  `origin` in `~/.memex/config.json` → sanitised short hostname, which is
+  then **persisted** so a later hostname change doesn't fork the node's
+  identity. Rename your node by editing `origin` in config.json.
+- **Wire carries provenance** — sync pull/push move `origin` verbatim in both
+  directions; a synced row keeps the origin of the node that captured it,
+  never the receiver's. Old peers interoperate (unknown field ignored;
+  their rows arrive as NULL = "pre-provenance era").
+- **`memex_search(origin: "vps1")`** — filter recall by capture node.
+- **`memex_get_conversation`** tags each line `[@origin]` when a conversation
+  interleaves rows from more than one node (the merged-Telegram-chat case);
+  single-origin chats stay untagged. JSON format always includes `origin`.
+- **`memex_overview`** shows a per-origin breakdown when the corpus is
+  multi-node.
+
+### Notes
+- No blind backfill: a node cannot tell its own pre-v0.14 rows from peer rows
+  that synced in before provenance existed, and fabricating provenance is
+  worse than NULL. Re-imports of local source files DO backfill origin via
+  the conflict branch (`COALESCE(existing, incoming)` — never overwrites).
+- The OpenClaw plugin (`plugins/memex-openclaw`) ships separately from the
+  npm package — update it on agent nodes to start stamping there.
+
 ## 0.13.0 — `sync-join`: cross-device memory in two copy-paste steps
 
 Multi-device sync goes from "for operators" to "for lazy users". Laptop with

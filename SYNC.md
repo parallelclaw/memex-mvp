@@ -798,7 +798,7 @@ surfaces skips). A server-side FTS corruption could silently drop pushed rows
 without the client knowing. Mirror the pull-side retry/abort on the server, or
 return `skipped` in the push response so the client can react.
 
-### 6. Provenance: per-row `origin` (node identity) ⭐ next minor candidate
+### 6. Provenance: per-row `origin` (node identity) — ✅ SHIPPED in v0.14.0
 
 In a synced mesh, nothing records WHICH node captured a row. Two live failures
 on the maintainer's 3-node mesh (2026-06-12), both from agents querying their
@@ -823,6 +823,16 @@ Fix shape (additive, wire-compatible):
 - Do NOT namespace conversation ids by node — same-chat dedup across nodes is
   a feature (live capture + export of the same chat must still converge).
   Provenance belongs on the row, not in the key.
-- Backfill: existing rows get the local node's origin at migration time on
-  each node BEFORE the next sync round (rows already replicated elsewhere
-  keep NULL = "pre-provenance era"; honest and cheap).
+- Backfill: deliberately NONE by default — post-hoc a node cannot tell its
+  own NULL rows from peer rows that synced in pre-provenance, and a blind
+  stamp would FABRICATE provenance. Instead: forward-stamping from v0.14 +
+  the conflict branch backfills origin when a local RE-IMPORT of the source
+  file re-encounters a row (origin = COALESCE(existing, incoming) — never
+  overwrites). History without a re-import stays NULL = "pre-v0.14 era".
+
+As shipped: `getOrigin()` (env MEMEX_ORIGIN → config `origin` → persisted
+sanitised hostname) baked into every local-capture INSERT; wire carries
+`origin` verbatim both directions; `memex_search(origin:)`; multi-origin
+conversations tag lines `[@origin]` in `memex_get_conversation`;
+`memex_overview` shows the per-origin breakdown; OpenClaw plugin stamps via
+the same resolution (reads config, never writes it).

@@ -276,7 +276,7 @@ All sources land in the same FTS5 corpus, searchable by one `memex_search` call.
 | Tool                          | What it does                                                              |
 |-------------------------------|---------------------------------------------------------------------------|
 | `memex_overview`              | Corpus snapshot — sources, counts, recent chats, daemon health           |
-| `memex_search`                | Full-text search with BM25 × recency boost. Filter by date range (`since_ts`/`until_ts`), one session (`conversation_id`), `source`/`project`/`chat` |
+| `memex_search`                | Full-text search with BM25 × recency boost. Filter by date range (`since_ts`/`until_ts`), one session (`conversation_id`), capture node (`origin`, v0.14), `source`/`project`/`chat` |
 | `memex_recent`                | Most recent messages across all sources                                  |
 | `memex_get_conversation`      | Transcript by `conversation_id` — page long sessions with `offset`/`order` (`desc` = freshest first); reports `total` |
 | `memex_list_conversations`    | Conversations sorted by activity, filterable by source                   |

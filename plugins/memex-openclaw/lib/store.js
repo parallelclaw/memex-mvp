@@ -15,9 +15,9 @@
  */
 
 import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve, join } from 'node:path';
+import { homedir, hostname } from 'node:os';
 
 // v0.1.3 ROOT CAUSE FIX FOR BUG 1:
 //   v0.1.1 used `let Database; try { Database = (await import(...)).default }`
@@ -60,6 +60,31 @@ function safeAlter(db, sql) {
   } catch (err) {
     if (!String(err.message).toLowerCase().includes('duplicate column')) throw err;
   }
+}
+
+/**
+ * This node's identity for provenance stamping (v0.14). Mirrors
+ * memex-mvp's lib/config.js getOrigin resolution: MEMEX_ORIGIN env →
+ * `origin` in ~/.memex/config.json → sanitised short hostname. The plugin
+ * only READS the config (the memex CLI owns writing it) so two writers
+ * never race on config.json.
+ */
+function sanitizeOrigin(value) {
+  const s = String(value || '').split('.')[0].toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+  return s || null;
+}
+
+export function resolveOrigin(dbPath) {
+  const fromEnv = sanitizeOrigin(process.env.MEMEX_ORIGIN);
+  if (fromEnv) return fromEnv;
+  try {
+    const cfgPath = join(dirname(dirname(dbPath)), 'config.json');
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'));
+    const fromCfg = sanitizeOrigin(cfg.origin);
+    if (fromCfg) return fromCfg;
+  } catch (_) { /* no config yet — fall through */ }
+  return sanitizeOrigin(hostname()) || 'node';
 }
 
 /**
@@ -124,6 +149,7 @@ export function initialiseSchema(db) {
   safeAlter(db, 'ALTER TABLE messages ADD COLUMN edited_at INTEGER');
   safeAlter(db, 'ALTER TABLE messages ADD COLUMN uuid TEXT');
   safeAlter(db, 'ALTER TABLE messages ADD COLUMN channel TEXT');
+  safeAlter(db, 'ALTER TABLE messages ADD COLUMN origin TEXT'); // v0.14 provenance — which node captured the row
   safeAlter(db, 'ALTER TABLE conversations ADD COLUMN archived_at INTEGER');
   safeAlter(db, 'ALTER TABLE conversations ADD COLUMN parent_conversation_id TEXT');
   safeAlter(db, 'ALTER TABLE conversations ADD COLUMN project_path TEXT');
@@ -177,10 +203,11 @@ export class MemexStore {
     initialiseSchema(this.db);
 
     // Prepared statements (faster on the hot path).
+    this.origin = resolveOrigin(this.dbPath);
     this._insertMsg = this.db.prepare(`
       INSERT OR IGNORE INTO messages
-        (source, conversation_id, msg_id, role, sender, text, ts, metadata, channel)
-      VALUES ('openclaw', @conversationId, @msgId, @role, @sender, @text, @ts, @metadata, @channel)
+        (source, conversation_id, msg_id, role, sender, text, ts, metadata, channel, origin)
+      VALUES ('openclaw', @conversationId, @msgId, @role, @sender, @text, @ts, @metadata, @channel, @origin)
     `);
 
     this._upsertConv = this.db.prepare(`
@@ -238,6 +265,7 @@ export class MemexStore {
       ts: ts || Math.floor(Date.now() / 1000),
       metadata: JSON.stringify(metadata || {}),
       channel: channel ?? null,
+      origin: this.origin ?? null,
     });
     return result.changes > 0;
   }

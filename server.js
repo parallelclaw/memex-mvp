@@ -40,6 +40,7 @@ import {
   isSourceEnabled,
   obsidianVaultsFromConfig,
   getSearchHalfLifeDays,
+  getOrigin,
   KNOWN_SOURCES,
   CONFIG_PATH,
 } from './lib/config.js';
@@ -122,9 +123,15 @@ const db = initializeDb(DB_PATH);
 // uuid is COALESCE'd: if a row was first inserted before the uuid column
 // existed (or by a source that doesn't carry one), a later re-import can
 // backfill it — but a populated uuid never gets blanked.
+// v0.14 provenance: every row captured BY THIS PROCESS is stamped with this
+// node's origin. The value is process-constant and sanitised to [a-z0-9-]
+// (see getOrigin), so it's baked into the statement as a literal — all the
+// .run() call sites stay untouched. The conflict branch backfills origin onto
+// pre-provenance rows on re-import without ever overwriting an existing one.
+const LOCAL_ORIGIN = getOrigin();
 const insertMessage = db.prepare(`
-  INSERT INTO messages (source, conversation_id, msg_id, role, sender, text, ts, metadata, edited_at, uuid)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO messages (source, conversation_id, msg_id, role, sender, text, ts, metadata, edited_at, uuid, origin)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '${LOCAL_ORIGIN}')
   ON CONFLICT(source, conversation_id, msg_id) DO UPDATE SET
     text = CASE
       WHEN excluded.edited_at IS NOT NULL
@@ -134,7 +141,8 @@ const insertMessage = db.prepare(`
       WHEN excluded.edited_at IS NOT NULL
        AND (messages.edited_at IS NULL OR excluded.edited_at > messages.edited_at)
       THEN excluded.edited_at ELSE messages.edited_at END,
-    uuid = COALESCE(messages.uuid, excluded.uuid)
+    uuid = COALESCE(messages.uuid, excluded.uuid),
+    origin = COALESCE(messages.origin, excluded.origin)
 `);
 // On re-imports the additive counter would drift (it doubles every time the
 // same file gets reprocessed, because messages dedupe via UNIQUE(msg_id) but
@@ -1367,6 +1375,16 @@ const TOOLS = [
             'Independent of `source` — set both for narrowest scope, set only `channel` to ' +
             'find e.g. "all Telegram messages anywhere in memex".',
         },
+        origin: {
+          type: 'string',
+          description:
+            'Optional origin filter (v0.14+) — WHICH NODE captured the row. In a synced ' +
+            'multi-device mesh, rows from every machine share the same source labels (two ' +
+            'OpenClaw instances both write source="openclaw"), and can even interleave in one ' +
+            'conversation; `origin` is the per-node identity stamped at capture time (e.g. ' +
+            '"vps1", "macbook-pro"). Use memex_overview to see which origins exist. Rows ' +
+            'captured before v0.14 have no origin and are excluded by this filter.',
+        },
         project: {
           type: 'string',
           description:
@@ -2039,6 +2057,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         filters.push('m.channel = ?');
         matchParams.push(args.channel);
       }
+      if (args.origin) {
+        filters.push('m.origin = ?');
+        matchParams.push(String(args.origin).toLowerCase());
+      }
       if (!includeArchived) {
         filters.push('(c.archived_at IS NULL OR c.archived_at = 0)');
       }
@@ -2143,6 +2165,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (args.channel) {
           likeFilters.push('m.channel = ?');
           likeParams.push(args.channel);
+        }
+        if (args.origin) {
+          likeFilters.push('m.origin = ?');
+          likeParams.push(String(args.origin).toLowerCase());
         }
         if (!includeArchived) {
           likeFilters.push('(c.archived_at IS NULL OR c.archived_at = 0)');
@@ -2363,7 +2389,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         .get(...ids).n;
       const rows = db
         .prepare(
-          `SELECT conversation_id, sender, role, text, ts
+          `SELECT conversation_id, sender, role, text, ts, origin
              FROM messages
             WHERE conversation_id IN (${placeholders})
          ORDER BY ts ${order}
@@ -2391,13 +2417,21 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             sender: r.sender,
             role: r.role,
             text: r.text,
+            origin: r.origin || null,
             from_subagent: r.conversation_id !== args.conversation_id ? r.conversation_id : null,
           })),
         });
       }
+      // When a conversation interleaves rows captured on DIFFERENT nodes (two
+      // OpenClaw instances bridging the same Telegram account is the live
+      // example), tag each line with its origin — otherwise the reader can't
+      // tell which agent said what. Single-origin chats stay untagged (no noise).
+      const distinctOrigins = new Set(rows.map((r) => r.origin).filter(Boolean));
+      const multiOrigin = distinctOrigins.size > 1;
       const formatted = rows
         .map((r) => {
-          const tag = r.conversation_id !== args.conversation_id ? ' [↳ subagent]' : '';
+          const tag = (r.conversation_id !== args.conversation_id ? ' [↳ subagent]' : '') +
+                      (multiOrigin ? ` [@${r.origin || '?'}]` : '');
           // Boundary rows store the JSON compactMetadata in `text`. Render
           // them as a divider with the token-delta so the user sees WHERE
           // long sessions were compacted. Summary rows are flagged so it's
@@ -2651,6 +2685,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
          ORDER BY msgs DESC`
         )
         .all();
+      // v0.14 provenance — which NODE captured the rows. NULL = pre-provenance
+      // era. Only meaningful in synced meshes; single-node corpora show one row.
+      const origins = db
+        .prepare(
+          `SELECT COALESCE(origin, '(pre-v0.14)') AS origin, COUNT(*) AS msgs
+             FROM messages
+         GROUP BY origin
+         ORDER BY msgs DESC`
+        )
+        .all();
       const total = db.prepare(`SELECT COUNT(*) AS c FROM messages`).get().c;
       const activeConv = db
         .prepare(
@@ -2725,6 +2769,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             messages: s.msgs,
             conversations: s.chats,
           })),
+          origins: origins.map((o) => ({
+            origin: o.origin,
+            messages: o.msgs,
+          })),
           recent_conversations: recent.map((r) => ({
             conversation_id: r.conversation_id,
             title: r.title || null,
@@ -2773,6 +2821,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         lines.push(
           `- **${s.source}** — ${s.msgs.toLocaleString()} messages across ${s.chats} chat(s)`
         );
+      }
+      // Origins — only worth screen space when the corpus is actually
+      // multi-node (more than just NULL/one origin). Synced-mesh users see
+      // which machine captured what; single-node users see nothing extra.
+      const realOrigins = origins.filter((o) => o.origin !== '(pre-v0.14)');
+      if (realOrigins.length > 1 || (realOrigins.length === 1 && origins.length > 1)) {
+        lines.push('', '### Origins (which node captured the rows)');
+        for (const o of origins) {
+          lines.push(`- **${o.origin}** — ${o.msgs.toLocaleString()} messages`);
+        }
+        lines.push(`_Filter searches by node: memex_search(query, origin: "${realOrigins[0].origin}")_`);
       }
       lines.push('', `### ${recent.length} most recent conversations`);
       for (const r of recent) {

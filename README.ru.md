@@ -645,10 +645,10 @@ Sources:
 ### `memex_overview(recent_limit?, format?)`
 Снэпшот корпуса одним вызовом — для ориентации в начале сессии. Возвращает: общее число сообщений, breakdown по источникам (telegram / claude-code / claude-cowork), date range, и последние N разговоров с заголовками. Этот call даёт агенту mental map за ~500 токенов и резко повышает качество последующих `memex_search` запросов (т.к. агент уже знает что у пользователя в памяти есть, а чего нет). Server-side instructions явно рекомендуют вызывать его первым шагом в новой сессии.
 
-### `memex_search(query, limit?, source?, project?, chat?, conversation_id?, since_ts?, until_ts?, sort?, half_life_days?, group_by_conversation?, include_archived?, expand_match?, format?)`
+### `memex_search(query, limit?, source?, project?, chat?, conversation_id?, origin?, since_ts?, until_ts?, sort?, half_life_days?, group_by_conversation?, include_archived?, expand_match?, format?)`
 Full-text поиск через FTS5. Возвращает ranked сниппеты с `<<word>>` подсветкой.
 
-**Фильтры скоупа:** `source` (telegram/claude-code/…), `project` (по project_path), `chat` (нечёткий матч по названию), **`conversation_id` (точный поиск ВНУТРИ одной сессии)**.
+**Фильтры скоупа:** `source` (telegram/claude-code/…), `project` (по project_path), `chat` (нечёткий матч по названию), **`conversation_id` (точный поиск ВНУТРИ одной сессии)**, **`origin` (v0.14 — с какого узла захвачено: в synced-меше source'ы всех машин совпадают, origin различает)**.
 
 **Фильтр по датам (v0.12):** `since_ts` / `until_ts` (Unix-секунды, включительно) — ограничить окном: «что обсуждали про X в июне». Это настоящий фильтр, в отличие от `sort` (только порядок) и `half_life_days` (только recency-boost).
 

@@ -1,6 +1,6 @@
 # 📚 Install memex — cross-AI memory in 2 minutes
 
-> One prompt sets up local-first AI memory across **Claude Code, Cowork, Cursor, Cline, Continue, and Zed** — plus Obsidian notes and Telegram chats. No cloud. No account. No data leaves your machine.
+> One prompt sets up local-first AI memory across **Claude Code, Cowork, Cursor, and OpenClaw** — plus Obsidian notes and Telegram chats. No cloud. No account. No data leaves your machine.
 
 ## What this skill does
 
@@ -8,7 +8,7 @@ After you drop the skill into your agent (`~/.claude/skills/` for Claude Code, o
 
 1. **Discovery** — read-only checks for which MCP client you're using and what AI data already exists on your machine
 2. **Fast path (v1.1+)** — `curl -fsSL https://memex.parallelclaw.ai/install.sh | bash`: one hosted bash script does npm install (with EACCES auto-fix to `~/.npm-global`), daemon setup, v0.8 auto-context hook, history backfill, and `claude mcp add memex` if Claude Code CLI is on PATH. Idempotent.
-3. **Fallback: manual five-step** — if curl fails, the user declines, or the agent is inside a GUI client (Cursor/Cline/Continue/Zed) where the MCP config still needs editing: `npm install -g memex-mvp` → MCP config merge → `memex-sync install` → `memex-sync scan`.
+3. **Fallback: manual five-step** — if curl fails, the user declines, or the agent is inside a GUI client (Cursor) where the MCP config still needs editing: `npm install -g memex-mvp` → MCP config merge → `memex-sync install` → `memex-sync scan`.
 4. **MCP config merge** (only needed for GUI clients) — adds a single absolute-path `command` entry into your client's `mcpServers` config. Never overwrites your other servers.
 5. **Restart hint + verification commands** — including the v0.7+ CLI fallback (`memex overview`, `memex search "foo"`) so you can verify memex works even if MCP didn't wire up cleanly.
 
@@ -16,7 +16,7 @@ End-to-end: **~60 seconds** via fast path, **~2 minutes** via manual flow, fully
 
 ## What is memex?
 
-Memex is a **local-first MCP server** that captures every conversation you have with an AI — across **Claude Code, Cowork (including subagent transcripts), Cursor, Cline, Continue, Zed**, plus **Obsidian notes**, **Telegram chats**, and **web pages / AI chat shares** (v0.6+ via `memex_store_document` — agent fetches, memex stores verbatim) — into one searchable SQLite + FTS5 corpus.
+Memex is a **local-first MCP server** that captures every conversation you have with an AI — across **Claude Code, Cowork (including subagent transcripts), Cursor, OpenClaw**, plus **Obsidian notes**, **Telegram chats**, and **web pages / AI chat shares** (v0.6+ via `memex_store_document` — agent fetches, memex stores verbatim) — into one searchable SQLite + FTS5 corpus.
 
 Any MCP-compatible agent can then query that corpus through 18 standard tools (`memex_search`, `memex_recent`, `memex_overview`, `memex_store_document`, the `memex_telegram_*` family for v0.10+ chat capture, …).
 
@@ -73,7 +73,7 @@ See [examples.md](examples.md) for more sample dialogues, including EACCES recov
 
 - **Node.js 20–24** (LTS recommended). Install via [nodejs.org](https://nodejs.org), `brew install node`, or [nvm](https://github.com/nvm-sh/nvm)
 - **macOS or Linux** (Windows untested for memex itself; skill works anywhere your agent has shell access)
-- **An MCP-compatible CLI agent**: Claude Code, OpenClaw, Cursor (with MCP), Cline, Continue, or Zed. Web-only agents (ChatGPT, Claude.ai) can't execute install steps
+- **An MCP-compatible CLI agent**: Claude Code, OpenClaw, or Cursor (with MCP). Web-only agents (ChatGPT, Claude.ai) can't execute install steps
 
 ## Install the skill
 

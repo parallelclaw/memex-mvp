@@ -810,7 +810,7 @@ memex_help anytime. The Jina trick is documented there in detail.
 ON YOUR VERY FIRST INTERACTION IN A NEW SESSION — BEFORE responding
 to the user's first message — CALL memex_overview. This is not
 optional. It is your equivalent of a SessionStart hook for clients
-that don't have one (Cursor, Cline, Continue, Zed, Claude Desktop —
+that don't have one (Cursor, Claude Desktop, OpenClaw —
 i.e. everyone except Claude Code CLI).
 
 Why this first, automatically:

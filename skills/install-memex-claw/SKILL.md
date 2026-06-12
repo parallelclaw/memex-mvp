@@ -1,6 +1,6 @@
 ---
 name: install-memex-claw
-description: Wire memex (the local-first MCP memory server) into an OpenClaw gateway — works wherever OpenClaw runs (Linux or macOS, VPS or workstation, self-hosted OpenClaw or Moonshot Kimi-Claw). Installs the memex-mvp daemon that auto-captures every OpenClaw session in ~/.openclaw/agents/main/sessions/ into a single SQLite + FTS5 corpus, and merges memex into the gateway's MCP-server config so the LLM gets 11 search/retrieval tools (memex_search, memex_recent, memex_overview, etc.). Auto-detects whether memex-mvp is already installed (e.g. via the generic install-memex skill for Claude Code) — if yes, skips install and just wires OpenClaw + back-fills past sessions; if no, does the full platform-aware install (Linux → systemd user-service, macOS → LaunchAgent). Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. PAIRS with the generic install-memex skill — if the user ALSO uses Claude Code, Cursor, Cline, Continue, or Zed on the same machine, recommend they run install-memex separately for those flows.
+description: Wire memex (the local-first MCP memory server) into an OpenClaw gateway — works wherever OpenClaw runs (Linux or macOS, VPS or workstation, self-hosted OpenClaw or Moonshot Kimi-Claw). Installs the memex-mvp daemon that auto-captures every OpenClaw session in ~/.openclaw/agents/main/sessions/ into a single SQLite + FTS5 corpus, and merges memex into the gateway's MCP-server config so the LLM gets 11 search/retrieval tools (memex_search, memex_recent, memex_overview, etc.). Auto-detects whether memex-mvp is already installed (e.g. via the generic install-memex skill for Claude Code) — if yes, skips install and just wires OpenClaw + back-fills past sessions; if no, does the full platform-aware install (Linux → systemd user-service, macOS → LaunchAgent). Zero questions to the user — discovery → actions → verification. Use when the user says "set up memex for OpenClaw", "wire memex into my OpenClaw", "make OpenClaw remember its sessions", "поставь memex здесь", or similar. PAIRS with the generic install-memex skill — if the user ALSO uses Claude Code or Cursor on the same machine, recommend they run install-memex separately for those flows.
 version: 3.0.0
 metadata:
   openclaw:
@@ -380,7 +380,7 @@ Daemon:
   • Survives SSH logout if linger is enabled
 
 Pair with:
-  • install-memex (generic skill) — if you also use Claude Code, Cursor, Cline, etc.
+  • install-memex (generic skill) — if you also use Claude Code, Cursor, etc.
     on this same machine, they all share ~/.memex/data/memex.db
   • memex-hermes (pip package) — if you run Hermes Agent on this machine
 ```

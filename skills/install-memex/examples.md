@@ -2,7 +2,7 @@
 
 Sample interactions when the user invokes this skill. These show typical happy paths and how the skill handles common edge cases.
 
-> **Note (v1.1+):** The skill now leads with the **fast-path one-liner** (`curl -fsSL https://memex.parallelclaw.ai/install.sh | bash`) after Discovery — see Example 0 below. The legacy five-step examples (1–5 below) stay as the fallback when the agent is inside a GUI client (Cursor / Cline / Continue / Zed — still need step 2 manually after the script), the user declines curl, or the script fails.
+> **Note (v1.1+):** The skill now leads with the **fast-path one-liner** (`curl -fsSL https://memex.parallelclaw.ai/install.sh | bash`) after Discovery — see Example 0 below. The legacy five-step examples (1–5 below) stay as the fallback when the agent is inside a GUI client (Cursor — still needs step 2 manually after the script), the user declines curl, or the script fails.
 
 ---
 
@@ -16,7 +16,6 @@ Sample interactions when the user invokes this skill. These show typical happy p
 > ✓ Found Claude Code data at ~/.claude/projects/ (14 sessions)
 > ✓ Found Cowork sessions (5 subagent transcripts)
 > ✗ Cursor data not found
-> ✗ Continue / Zed not found
 > ```
 >
 > After install, memex will auto-index conversations from: **Claude Code, Cowork**. v0.10+ also auto-detects Telegram Desktop exports — when you export a chat, I'll ask which to import.
@@ -197,7 +196,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 >
 > - **Reinstall** (e.g. to update to the latest version): I can run `npm install -g memex-mvp@latest`
 > - **Add a new source** (Obsidian vault, Telegram exports, etc.)
-> - **Add memex to another MCP client** (you have it in Cursor; want it in Cline / Continue / Zed too?)
+> - **Add memex to another MCP client** (you have it in Cursor; want it in Claude Code too?)
 > - **Nothing** — already good
 
 ---
@@ -210,7 +209,7 @@ Sample interactions when the user invokes this skill. These show typical happy p
 >
 > You have three options to install memex:
 >
-> 1. **CLI agents** (best UX): Open Claude Code, Cursor, Cline, Continue, or Zed and ask me there. Those have shell access and will run this skill end-to-end.
+> 1. **CLI agents** (best UX): Open Claude Code, Cursor, or OpenClaw and ask me there. Those have shell access and will run this skill end-to-end.
 >
 > 2. **Manual install** (~5 minutes, you run the commands): Follow https://memex.parallelclaw.ai/#quickstart — 4 steps in your terminal.
 >

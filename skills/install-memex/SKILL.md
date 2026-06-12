@@ -1,6 +1,6 @@
 ---
 name: install-memex
-description: Make Claude, Cursor, Cline, Continue, and Zed remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
+description: Make Claude, Cursor, and OpenClaw remember every AI conversation forever — one local SQLite corpus shared across all of them. Installs memex (local-first MCP server) in ~60 seconds via curl one-liner. Includes auto-capture daemon for Claude Code / Cowork / Cursor / Obsidian; v0.10 Telegram auto-detect (export from Desktop → memex stages it → AI proactively asks which to import, privacy-first per-chat consent); v0.8 SessionStart hook for the Brian Chesky moment ("Claude already knows what you were doing"); URL / Perplexity / AI chat share capture via memex_store_document. 18 MCP tools, no cloud, no account, verbatim storage. Use when the user says "install memex", "set up memex", "add memory to my AI", "make my agent remember across sessions", "сохрани мои чаты", or similar.
 version: 1.6.0
 metadata:
   openclaw:
@@ -57,7 +57,7 @@ Memex has its OWN storage at `~/.memex/data/memex.db`. It READS from each tool's
 
 ## Prerequisite
 
-This skill only works if you are running INSIDE an AI agent that has direct access to the user's shell — i.e. one of: Claude Code (CLI), Cursor, Cline, Continue, Zed, OR an OpenClaw / Hermes agent running on a Linux VPS. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute `npm`/file operations. If you are NOT a CLI-based agent with shell access, stop now and tell the user to use the manual install at https://memex.parallelclaw.ai/#quickstart.
+This skill only works if you are running INSIDE an AI agent that has direct access to the user's shell — i.e. one of: Claude Code (CLI), Cursor, OR an OpenClaw / Hermes agent running on a Linux VPS. Web-based agents (ChatGPT in browser, Claude.ai web, Claude Desktop without tools, etc.) cannot execute `npm`/file operations. If you are NOT a CLI-based agent with shell access, stop now and tell the user to use the manual install at https://memex.parallelclaw.ai/#quickstart.
 
 **Platform note (v0.10.14+):** memex now runs natively on **both macOS and Linux**. `memex-sync install` auto-detects platform: macOS → LaunchAgent, Linux → systemd user-service. On Linux it will also try to `loginctl enable-linger $USER` so the daemon survives SSH logout — if that needs sudo, the script prints a clear next step instead of failing. **VPS deployments** (OpenClaw / Hermes running on Ubuntu/Debian etc.) work end-to-end — capture sessions from `~/.openclaw/agents/main/sessions/` automatically.
 
@@ -65,7 +65,7 @@ This skill only works if you are running INSIDE an AI agent that has direct acce
 
 Scan the user's setup so you can tailor advice and tell them exactly what memex will pick up.
 
-1. Identify which MCP client you're running inside (you should know from context — Claude Code CLI, Cursor, Cline, Continue, or Zed).
+1. Identify which MCP client you're running inside (you should know from context — Claude Code CLI, Cursor, or OpenClaw).
 2. Run these read-only checks one by one:
    ```sh
    ls -d ~/.claude/projects 2>/dev/null
@@ -100,7 +100,7 @@ What the script does, in order:
 
 After the script finishes:
 - If the user is in **Claude Code (CLI)** → install is complete. Skip straight to step 6 (verification + restart). Also do step 5 (offer Telegram capture).
-- If the user is in **Cursor / Cline / Continue / Zed** → the npm install + daemon + auto-context + scan are done, but the GUI client's MCP config still needs the memex entry. **Skip step 1 (already installed)**, **skip step 3** (daemon already installed) and **skip step 4** (scan already ran). **Do step 2** (wire MCP into the GUI client's config), **step 5** (offer Telegram), and **step 6** (verify + restart).
+- If the user is in **Cursor** → the npm install + daemon + auto-context + scan are done, but the GUI client's MCP config still needs the memex entry. **Skip step 1 (already installed)**, **skip step 3** (daemon already installed) and **skip step 4** (scan already ran). **Do step 2** (wire MCP into the GUI client's config), **step 5** (offer Telegram), and **step 6** (verify + restart).
 
 If the script fails for any reason — non-zero exit, weird output, user uncomfortable piping curl to bash — fall back to the **Manual install** below.
 
@@ -163,15 +163,13 @@ Common config locations:
 |--------------|-----------------------------------------------------|
 | Claude Code  | `~/.claude/config.json` (or platform equivalent)    |
 | Cursor       | `~/.cursor/mcp.json`                                |
-| Cline        | VS Code `settings.json` (`cline.mcpServers`)        |
-| Continue     | `~/.continue/config.json`                           |
-| Zed          | `~/.config/zed/settings.json` (`context_servers`)   |
+| OpenClaw     | dedicated guide: memex.parallelclaw.ai/openclaw/    |
 
 Tell the user which one you've inferred and which file you'll edit. If unclear, ask.
 
 Read the existing config (if present). Show the user a diff before saving.
 
-Get the **absolute** path to the memex binary — GUI apps (Cursor, Cline, Claude Desktop) on macOS often don't inherit shell PATH, so a bare `"command": "memex"` fails with `spawn memex ENOENT`. Run:
+Get the **absolute** path to the memex binary — GUI apps (Cursor, Claude Desktop) on macOS often don't inherit shell PATH, so a bare `"command": "memex"` fails with `spawn memex ENOENT`. Run:
 
 ```sh
 which memex
@@ -316,7 +314,7 @@ Then run `memex web --open` (in a backgrounded shell if your shell wrapper suppo
 
 These confirm everything works end-to-end.
 
-**Brian Chesky moment beyond Claude Code (v0.10.7+):** the SessionStart hook works only in Claude Code CLI. But starting v0.10.7, the same proactive behaviour is taught to agents in Cursor / Cline / Continue / Zed / Claude Desktop via SERVER_INSTRUCTIONS — these agents call `memex_overview` automatically on first interaction, read its `telegram_pending` field, and surface pending exports in their first reply. Slightly higher latency (one MCP roundtrip vs hook's instant inject), but same UX.
+**Brian Chesky moment beyond Claude Code (v0.10.7+):** the SessionStart hook works only in Claude Code CLI. But starting v0.10.7, the same proactive behaviour is taught to agents in Cursor / Claude Desktop via SERVER_INSTRUCTIONS — these agents call `memex_overview` automatically on first interaction, read its `telegram_pending` field, and surface pending exports in their first reply. Slightly higher latency (one MCP roundtrip vs hook's instant inject), but same UX.
 
 **CLI fallback (v0.7+):** if the MCP integration doesn't pick up in the user's client for any reason, tell them they can verify memex from the terminal directly — same binary, no MCP needed:
 

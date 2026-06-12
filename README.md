@@ -367,6 +367,15 @@ Interrupted first syncs **resume** from the last good page. Re-joining the same
 hub keeps sync cursors — no pointless full re-replication. After a successful
 join, no `MEMEX_SYNC_EXPERIMENTAL` env var is needed for any sync command.
 
+**Provenance (v0.14).** Every row is stamped with the node that captured it,
+and the stamp travels with sync — so "what did I discuss with the VPS agent
+vs. on my laptop?" stays answerable after the corpora merge:
+`memex_search(query, origin: "vps1")`. Conversations where two agents
+interleave (e.g. two OpenClaw instances bridging one Telegram account) get
+per-line `[@node]` tags in `memex_get_conversation`. Name your node by setting
+`origin` in `~/.memex/config.json` (defaults to the hostname, persisted) —
+best done **before** data accumulates, since old rows keep their stamp.
+
 **Advanced topologies** — multi-node mesh, reverse tunnels (laptop-as-hub),
 transit hubs gluing nodes that can't see each other (proven live on a
 San-Francisco Mac + Italy VPS + Asia VPS mesh) — are documented with the wire

@@ -36,6 +36,12 @@ auto-sync, hourly watchdog, and a **marker self-test** that proves a note
 round-trips before declaring success. Everything below this section is the
 operational detail and the wire-protocol spec.
 
+> **Tip — name your nodes first (v0.14).** Each node stamps its captures with
+> an `origin` label (defaults to the hostname). Set a friendly one (`mac`,
+> `vps1`, …) via `origin` in `~/.memex/config.json` on each node BEFORE data
+> accumulates — old rows keep whatever stamp they got. This is what powers
+> `memex_search(origin: …)` and the `[@node]` tags in merged conversations.
+
 This document is **both** the operational guide and the wire-protocol spec.
 Implementers and users read different sections.
 

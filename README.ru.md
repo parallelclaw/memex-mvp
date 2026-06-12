@@ -8,7 +8,7 @@
 
 > **Единое хранилище для всех твоих AI и Telegram чатов.**
 
-Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Cursor, Cline, Claude Code, Continue, Zed) через 8 простых tool'ов.
+Локальный MCP-сервер, который индексирует **все ваши разговоры с AI** — Claude Code, Claude Cowork, Telegram-боты, ChatGPT-экспорты — в один FTS5-search и отдаёт их **любому MCP-совместимому AI-агенту** (Claude Code, Cursor, OpenClaw) через 8 простых tool'ов.
 
 Никакого облака. Никакого аккаунта. Только твой ноут.
 
@@ -48,7 +48,7 @@ MCP server (stdio JSON-RPC)
 - **Node.js 20.x – 24.x** (рекомендуется **22 LTS**). В репо есть `.nvmrc` со значением `22` — если у тебя `nvm`, выполни `nvm use` в директории проекта.
 - **macOS 12+ или Linux** с inotify (Windows — только через WSL).
 - **Xcode Command Line Tools** на macOS (`xcode-select --install`) — нужны для нативной сборки `better-sqlite3`, если для твоей Node-версии нет prebuilt binaries.
-- **MCP-совместимый AI-клиент** для использования: Claude Code, Cursor, Cline, Continue, Zed или любой другой клиент с поддержкой MCP. Без этого memex стрит индекс, но обращаться к нему будет некому.
+- **MCP-совместимый AI-клиент** для использования: Claude Code, Cursor, OpenClaw или любой другой клиент с поддержкой MCP. Без этого memex стрит индекс, но обращаться к нему будет некому.
 
 ### Опциональное (по ситуации)
 
@@ -140,7 +140,7 @@ curl -fsSL https://raw.githubusercontent.com/parallelclaw/memex-mvp/main/skills/
 
 ### Сохранение URL'ов в memex (v0.6+)
 
-После установки в любом MCP-агенте (Claude Code, Cursor, Cline, Continue, Zed) можно сохранять **web-страницы, AI-chat share'ы и pasted-тексты** прямо в memex-память:
+После установки в любом MCP-агенте (Claude Code, Cursor, OpenClaw) можно сохранять **web-страницы, AI-chat share'ы и pasted-тексты** прямо в memex-память:
 
 ```
 Сохрани https://www.perplexity.ai/share/<id> в memex
@@ -173,7 +173,7 @@ memex --help                                 # справка по команд�
 
 У каждого query-subcommand'a есть `--json` для machine-readable вывода: `memex search foo --json | jq '.results[].snippet'`. БД открывается **read-only** — безопасно запускать пока daemon пишет.
 
-При запуске **без аргументов** (`memex`) бинарь по-прежнему работает как MCP stdio server (как и вызывают его Claude Code / Cursor / Cline из своих конфигов). CLI-режим и MCP-режим — один и тот же пакет, без дополнительной установки.
+При запуске **без аргументов** (`memex`) бинарь по-прежнему работает как MCP stdio server (как и вызывают его Claude Code / Cursor / OpenClaw из своих конфигов). CLI-режим и MCP-режим — один и тот же пакет, без дополнительной установки.
 
 **Использовать CLI, когда:**
 - MCP-интеграция не подцепилась к твоему агенту → `memex overview` подтвердит что сам memex здоров
@@ -199,7 +199,7 @@ memex context --no-source telegram  # исключить источник
 
 Хук **сохраняет существующие хуки** (gstack, твои кастомные) — добавляет только свою запись.
 
-**Сейчас native SessionStart есть только в Claude Code.** Для Cursor / Cline / Continue / Zed fallback через MCP-tool — в roadmap v0.9.0.
+**Сейчас native SessionStart есть только в Claude Code.** Для Cursor fallback через MCP-tool доступен (v0.9+).
 
 ### Подключение к Claude Code
 
@@ -223,13 +223,13 @@ which node  # → путь до бинарника node (например /Users
 }
 ```
 
-**Почему абсолютный путь к node, а не просто `"node"`?** GUI-приложения (Cursor, Cline VS Code, Claude Desktop) на macOS часто **не наследуют PATH из shell'a** (`~/.zshrc`). С `"command": "node"` MCP-сервер падает с `spawn node ENOENT` — особенно если node поставлен через nvm. Всегда используй путь из `which node`.
+**Почему абсолютный путь к node, а не просто `"node"`?** GUI-приложения (Cursor, Claude Desktop) на macOS часто **не наследуют PATH из shell'a** (`~/.zshrc`). С `"command": "node"` MCP-сервер падает с `spawn node ENOENT` — особенно если node поставлен через nvm. Всегда используй путь из `which node`.
 
 Перезапусти Claude Code. Готово — у тебя в session появятся `memex_*` tool'ы.
 
-### Подключение к Cursor / Cline / Continue / Zed
+### Подключение к Cursor / OpenClaw
 
-Каждый клиент имеет свой `mcpServers` config (обычно в `~/.cursor/mcp.json`, `.cline/...`, и т.п.). Структура та же — `command` = абсолютный путь до node, `args` = `[путь к server.js]`. Та же ENOENT-проблема актуальна для всех GUI-MCP клиентов.
+Каждый клиент имеет свой `mcpServers` config (у Cursor — `~/.cursor/mcp.json`; для OpenClaw — отдельный гайд memex.parallelclaw.ai/openclaw/). Структура та же — `command` = абсолютный путь до node, `args` = `[путь к server.js]`. Та же ENOENT-проблема актуальна для всех GUI-MCP клиентов.
 
 ---
 
@@ -354,7 +354,7 @@ Privacy: agent через `memex_sources_status` сам показывает ч�
 
 ### Подсказка для агента
 
-Если ты подключил memex к Claude Code/Cursor/Cline и каждый раз когда вызываешь `memex_overview` видишь сверху ⚪ или 🔴 — это значит auto-capture не включён. Агент сам это увидит и предложит юзеру команду `npx memex-sync install`. Это та самая «один раз и забыл» механика — без README-чтения.
+Если ты подключил memex к Claude Code/Cursor/OpenClaw и каждый раз когда вызываешь `memex_overview` видишь сверху ⚪ или 🔴 — это значит auto-capture не включён. Агент сам это увидит и предложит юзеру команду `npx memex-sync install`. Это та самая «один раз и забыл» механика — без README-чтения.
 
 ---
 
@@ -608,7 +608,7 @@ memex web --help
 
 ## Проверь что работает
 
-В Claude Code/Cursor/Cline напиши:
+В Claude Code/Cursor/OpenClaw напиши:
 
 ```
 Используй memex_list_sources — что у меня в локальной памяти?
@@ -640,7 +640,7 @@ Sources:
 > **Все tool'ы поддерживают параметр `format: "markdown" | "json"`** (дефолт `"markdown"`).
 > Markdown — для глаз, JSON — для агентов: меньше токенов, можно парсить поля напрямую.
 
-> **Server-side instructions для агентов.** В MCP `initialize`-ответе сервер отдаёт ~3 КБ системного контекста: что хранится, какой tool когда выбирать, FTS5-синтаксис, известные ограничения. Любой подключающийся агент (Claude Code, Cursor, Cline, Continue) получает это автоматически — отдельную инструкцию писать не нужно. Текст в `SERVER_INSTRUCTIONS` в [server.js](server.js).
+> **Server-side instructions для агентов.** В MCP `initialize`-ответе сервер отдаёт ~3 КБ системного контекста: что хранится, какой tool когда выбирать, FTS5-синтаксис, известные ограничения. Любой подключающийся агент (Claude Code, Cursor, OpenClaw) получает это автоматически — отдельную инструкцию писать не нужно. Текст в `SERVER_INSTRUCTIONS` в [server.js](server.js).
 
 ### `memex_overview(recent_limit?, format?)`
 Снэпшот корпуса одним вызовом — для ориентации в начале сессии. Возвращает: общее число сообщений, breakdown по источникам (telegram / claude-code / claude-cowork), date range, и последние N разговоров с заголовками. Этот call даёт агенту mental map за ~500 токенов и резко повышает качество последующих `memex_search` запросов (т.к. агент уже знает что у пользователя в памяти есть, а чего нет). Server-side instructions явно рекомендуют вызывать его первым шагом в новой сессии.

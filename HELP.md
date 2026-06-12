@@ -2,7 +2,7 @@
 
 > **Кратко:** memex — твой локальный архив всех разговоров с AI. Сохраняет дословно. Любой AI-агент через MCP видит всю твою историю.
 
-Если ты только установил memex и не знаешь что делать — этот файл объясняет на конкретных кейсах. Скопируй промпт, вставь в свой AI (Claude Code, Cursor, Cline, Continue, Zed) — и попробуй.
+Если ты только установил memex и не знаешь что делать — этот файл объясняет на конкретных кейсах. Скопируй промпт, вставь в свой AI (Claude Code, Cursor, OpenClaw) — и попробуй.
 
 ---
 
@@ -231,7 +231,7 @@ Memex по дефолту сортирует по **релевантности**
 
 Ты читаешь что-то — Perplexity research thread, длинную статью, GitHub-обсуждение, AI-chat share — и хочешь чтобы это жило в memex-памяти, искалось из любого AI-чата.
 
-**В любом MCP-агенте (Claude Code, Cursor, Cline, Continue, Zed):**
+**В любом MCP-агенте (Claude Code, Cursor, OpenClaw):**
 
 ```
 Сохрани https://perplexity.ai/share/<id> в memex
@@ -423,7 +423,7 @@ memex get web-1582ab51a7b7 --json > backup.json
 - Shell-скрипты / автоматизация
 - Дебаг: «вижу ли я свою историю напрямую?»
 
-**`memex` (без аргументов)** — это MCP stdio-сервер. Это поведение по умолчанию для Claude Code / Cursor / Cline через их MCP-config'и. CLI-команды активируются только при наличии распознанного subcommand'a.
+**`memex` (без аргументов)** — это MCP stdio-сервер. Это поведение по умолчанию для Claude Code / Cursor / OpenClaw через их MCP-config'и. CLI-команды активируются только при наличии распознанного subcommand'a.
 
 ---
 
@@ -507,7 +507,7 @@ memex context --freshness-days 30    # только последние 30 дне
 
 **Privacy:** хук ничего не отправляет наружу — это локальная инъекция в локальную Claude-сессию. Но в context могут попасть фрагменты из любых indexed sources (включая Telegram). Чтобы исключить — добавь `--no-source telegram` в команду хука (правится в `~/.claude/settings.json`).
 
-**Где это пока не работает:** Cursor, Cline, Continue, Zed — у них нет native SessionStart hook'а. Fallback через MCP-tool — в roadmap v0.9.0. Сейчас auto-context работает только в **Claude Code и OpenClaw**.
+**Где это пока не работает:** Cursor — нет native SessionStart hook'а; fallback через MCP-tool (v0.9+). Сейчас auto-context работает в **Claude Code и OpenClaw**.
 
 ---
 

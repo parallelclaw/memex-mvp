@@ -1,7 +1,7 @@
 {
   "name": "memex-mvp",
   "version": "0.14.1",
-  "description": "Local-first MCP server for cross-agent AI memory. One SQLite + FTS5 corpus across Claude Code, Cowork, Cursor, Continue, Zed, Obsidian, and Telegram — passively captured, verbatim, searchable from any MCP-compatible client.",
+  "description": "Local-first MCP server for cross-agent AI memory. One SQLite + FTS5 corpus across Claude Code, Cowork, Cursor, OpenClaw, Obsidian, and Telegram — passively captured, verbatim, searchable from any MCP-compatible client.",
   "type": "module",
   "main": "server.js",
   "bin": {

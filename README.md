@@ -8,7 +8,7 @@
 
 > **A single store for all your AI and Telegram chats.**
 
-A local-first MCP server that indexes **every conversation you have with AI** — Claude Code, Claude Cowork, Cursor, Cline, Continue, Zed, Obsidian notes, and selected Telegram chats — into one searchable SQLite + FTS5 corpus and serves it back to **any MCP-compatible client** through a handful of tools.
+A local-first MCP server that indexes **every conversation you have with AI** — Claude Code, Claude Cowork, Cursor, OpenClaw, Obsidian notes, and selected Telegram chats — into one searchable SQLite + FTS5 corpus and serves it back to **any MCP-compatible client** through a handful of tools.
 
 No cloud. No account. No data leaves your machine.
 
@@ -19,7 +19,7 @@ parser  (Telegram JSON · Claude Code JSONL · Cursor SQLite · Obsidian md)
      ↓
 SQLite + FTS5  (~/.memex/data/memex.db)
      ↓
-MCP server  →  Cursor · Cline · Claude Code · Continue · Zed · Codex · …
+MCP server  →  Claude Code · Cursor · OpenClaw · …
 ```
 
 ---
@@ -95,7 +95,7 @@ After install, point your client at `memex` (an alias of `server.js` exposed on 
 claude mcp add memex --scope user -- memex
 ```
 
-### Cursor / Cline / Continue / Zed
+### Cursor / OpenClaw
 
 Add to that client's MCP config (e.g. `~/.cursor/mcp.json`):
 
@@ -150,7 +150,7 @@ For Telegram, the privacy gate fires for any chat that isn't on your allow-list 
 
 Every query supports `--json` for machine-readable output: `memex search foo --json | jq '.results[].snippet'`. The DB is opened **read-only** — safe to run while `memex-sync` daemon is writing.
 
-When called **without arguments** (`memex`), the binary still runs as an MCP stdio server (the way Claude Code / Cursor / Cline launch it). CLI mode and MCP mode are the same package — no extra install.
+When called **without arguments** (`memex`), the binary still runs as an MCP stdio server (the way Claude Code / Cursor / OpenClaw launch it). CLI mode and MCP mode are the same package — no extra install.
 
 ---
 
@@ -172,13 +172,13 @@ memex context --no-source telegram  # exclude a source
 
 The hook respects existing hooks (e.g. `gstack`, custom user hooks) — they're preserved untouched.
 
-**Currently only Claude Code has native SessionStart hooks.** For Cursor / Cline / Continue / Zed, MCP-tool-based fallback is on the v0.9.0 roadmap.
+**Currently only Claude Code has native SessionStart hooks.** For Cursor, an MCP-tool-based fallback is available (v0.9+).
 
 ---
 
 ## Save URLs into memex (v0.6+)
 
-Once memex is installed, any MCP-aware agent can also save **web pages, AI chat shares, and pasted text** into your memex memory — searchable from any other AI chat later. In Claude Code, Cursor, Cline, …:
+Once memex is installed, any MCP-aware agent can also save **web pages, AI chat shares, and pasted text** into your memex memory — searchable from any other AI chat later. In Claude Code, Cursor, OpenClaw, …:
 
 ```
 Save https://www.perplexity.ai/share/<id> to memex
@@ -261,7 +261,7 @@ Five pages:
 | Claude Code sessions  | Auto: `memex-sync` watches `~/.claude/projects/`               |
 | Claude Cowork         | Auto: same watcher, including all subagent transcripts         |
 | Cursor IDE chats      | Auto: reads Cursor's local SQLite session store                |
-| Continue / Zed        | Auto: filesystem watchers per platform                         |
+| OpenClaw sessions     | Auto: watches `~/.openclaw/agents/main/sessions/`              |
 | Obsidian notes        | Auto: per-vault markdown watcher                               |
 | Telegram exports      | **v0.10+: auto.** Daemon watches `~/Downloads/Telegram Desktop/`. Each new ChatExport appears in `memex telegram pending` — review chat-by-chat, import the ones you want. Privacy-first: nothing lands in the DB without your `memex telegram import <indices>`. Allow-list remembers your decisions so future re-exports auto-merge. JSON + HTML both supported. (Legacy path still works: drop into `~/.memex/inbox/`.) |
 | Telegram (live)       | Run [`memex-bot`](bot/README.md) — captures messages you send/forward to your private bot |

@@ -2,6 +2,14 @@
 
 Notable changes to memex-mvp. Older history lives in the git log.
 
+## 0.14.1 — patch: schema migration at sync-server boot
+
+Upgrading a hub by `npm install -g` alone (no daemon/MCP boot in between) and
+restarting the sync-server crash-looped it: the pull handler prepares a SELECT
+over the new `origin` column at startup, against a not-yet-migrated DB.
+`startSyncServer` now runs `initializeDb` before opening its handle. Found
+live during the 0.14.0 rollout.
+
 ## 0.14.0 — provenance: know which machine captured every row
 
 In a synced mesh, all nodes' captures share the same `source` labels — two

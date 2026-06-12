@@ -1746,9 +1746,9 @@
                 data-ru="<strong>Cross-AI памяти не существует by design</strong> (ChatGPT, Cursor, Cline, Zed, Telegram-боты — каждый держит свой silo) → любой MCP-клиент читает одну и ту же память через 11 стандартных тулзов.">
               <strong>Cross-AI памяти не существует by design</strong> (ChatGPT, Cursor, Cline, Zed, Telegram-боты — каждый держит свой silo) → любой MCP-клиент читает одну и ту же память через 11 стандартных тулзов.
             </li>
-            <li data-en="<strong>Tied to one machine</strong> (Claude Code history lives in <code>~/.claude/projects/</code> on a specific laptop) → memex is a plain SQLite file — sync via iCloud / Syncthing / rsync — your choice."
-                data-ru="<strong>Привязка к одной машине</strong> (история Claude Code на конкретном ноуте) → memex — обычный SQLite-файл, синк через iCloud / Syncthing / rsync на твой вкус.">
-              <strong>Привязка к одной машине</strong> (история Claude Code на конкретном ноуте) → memex — обычный SQLite-файл, синк через iCloud / Syncthing / rsync на твой вкус.
+            <li data-en="<strong>Tied to one machine</strong> (Claude Code history lives in <code>~/.claude/projects/</code> on a specific laptop) → memex has <strong>built-in cross-device sync</strong> (v0.13): two copy-paste steps connect a laptop and a server — no cloud relay, no public ports, conflict-free."
+                data-ru="<strong>Привязка к одной машине</strong> (история Claude Code на конкретном ноуте) → у memex <strong>встроенный кросс-девайс синк</strong> (v0.13): два copy-paste шага связывают ноут и сервер — без облака-посредника, без публичных портов, бесконфликтно.">
+              <strong>Привязка к одной машине</strong> (история Claude Code на конкретном ноуте) → у memex <strong>встроенный кросс-девайс синк</strong> (v0.13): два copy-paste шага связывают ноут и сервер — без облака-посредника, без публичных портов, бесконфликтно.
             </li>
             <li data-en="<strong>Account dies → memory dies</strong> (Anthropic banned multiple orgs without warning; country policy blocks RU/CN/IR/KP-owned companies) → the SQLite file on your laptop doesn't depend on any provider. Yours by architecture — not policy."
                 data-ru="<strong>Аккаунт умирает — память умирает</strong> (Anthropic блокирует без предупреждения; country policy режет RU/CN/IR/KP) → SQLite-файл на твоём ноуте не зависит от провайдера. Твоё by architecture, не по policy.">
@@ -1916,30 +1916,31 @@
         <summary data-en="Across multiple devices — does memex work?"
                  data-ru="Несколько устройств — как memex там работает?">Across multiple devices — does memex work?</summary>
         <div class="faq-body">
-          <p data-en="Memex lives on one machine — daemon catches local files, SQLite builds locally. Three patterns for multi-device today:"
-             data-ru="Memex живёт на одной машине — daemon ловит локальные файлы, SQLite строится локально. Три паттерна для multi-device сегодня:">
-            Memex живёт на одной машине — daemon ловит локальные файлы, SQLite строится локально. Три паттерна для multi-device сегодня:
+          <p data-en="<strong>Yes — built-in real sync (v0.13).</strong> Laptop with Claude/Cursor + a server with an agent (OpenClaw etc.)? Connect their memory in two copy-paste steps. No public ports, no firewall changes, no manual SSH keys, no services to write."
+             data-ru="<strong>Да — встроенный настоящий синк (v0.13).</strong> Ноут с Claude/Cursor + сервер с агентом (OpenClaw и т.п.)? Свяжи их память за два copy-paste шага. Без публичных портов, без правки фаервола, без ручных SSH-ключей, без написания сервисов.">
+            <strong>Да — встроенный настоящий синк (v0.13).</strong> Ноут с Claude/Cursor + сервер с агентом (OpenClaw и т.п.)? Свяжи их память за два copy-paste шага. Без публичных портов, без правки фаервола, без ручных SSH-ключей, без написания сервисов.
           </p>
-          <ul>
-            <li data-en="<strong>Sync the SQLite file.</strong> <code>~/.memex/data/memex.db</code> is a regular file — replicate via iCloud / Syncthing / rsync. Daemon writes on your primary machine; others read through their local memex MCP. One writer, many readers."
-                data-ru="<strong>Синк SQLite-файла.</strong> <code>~/.memex/data/memex.db</code> — обычный файл, реплицируй через iCloud / Syncthing / rsync. Daemon пишет на основной машине, остальные читают через свой локальный memex MCP. Один writer, много readers.">
-              <strong>Синк SQLite-файла.</strong> <code>~/.memex/data/memex.db</code> — обычный файл, реплицируй через iCloud / Syncthing / rsync. Daemon пишет на основной машине, остальные читают через свой локальный memex MCP. Один writer, много readers.
-            </li>
-            <li data-en="<strong>Memex on each device independently.</strong> Install separately on each laptop. No sync, no conflicts — but memory isn't unified."
-                data-ru="<strong>Memex на каждом устройстве независимо.</strong> Установи отдельно на каждый ноут. Нет синка, нет конфликтов — но память не унифицирована.">
-              <strong>Memex на каждом устройстве независимо.</strong> Установи отдельно на каждый ноут. Нет синка, нет конфликтов — но память не унифицирована.
-            </li>
-            <li data-en="<strong>Mobile via Telegram bot</strong> <em>(roadmap, code drafted)</em>. Forward messages to @memex_bot — bot writes JSON to <code>~/.memex/inbox/</code> on your primary machine."
-                data-ru="<strong>Mobile через Telegram-бот</strong> <em>(в roadmap'е, код написан)</em>. Пересылаешь сообщения в @memex_bot — бот пишет JSON в <code>~/.memex/inbox/</code> основной машины.">
-              <strong>Mobile через Telegram-бот</strong> <em>(в roadmap'е, код написан)</em>. Пересылаешь сообщения в @memex_bot — бот пишет JSON в <code>~/.memex/inbox/</code> основной машины.
-            </li>
-          </ul>
-          <p data-en="iCloud setup on macOS:"
-             data-ru="iCloud setup на macOS:">iCloud setup на macOS:</p>
-<pre><code>export MEMEX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/memex"</code></pre>
-          <p data-en="⚠ <strong>One writer only.</strong> Run <code>memex-sync</code> daemon on exactly one machine — others read the synced file. Concurrent writers via filesystem sync can corrupt the WAL."
-             data-ru="⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине, остальные только читают. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.">
-            ⚠ <strong>Только один writer.</strong> Auto-capture daemon (<code>memex-sync</code>) запускай ровно на одной машине, остальные только читают. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.
+          <p data-en="<strong>Step 1 — paste this prompt to the agent on your server:</strong>"
+             data-ru="<strong>Шаг 1 — кинь этот промпт агенту на сервере:</strong>"><strong>Шаг 1 — кинь этот промпт агенту на сервере:</strong></p>
+<pre><code>Set up memex sync as a hub and give me a join token for my laptop:
+1. npm install -g memex-mvp@latest   (skip if installed)
+2. memex-sync sync-server install --bind 127.0.0.1
+3. memex-sync sync-server invite --join
+Send me the memex-join:... line.</code></pre>
+          <p data-en="<strong>Step 2 — one command on your laptop:</strong>"
+             data-ru="<strong>Шаг 2 — одна команда на ноуте:</strong>"><strong>Шаг 2 — одна команда на ноуте:</strong></p>
+<pre><code>memex-sync sync-join memex-join:eyJ2...</code></pre>
+          <p data-en="That one command builds a self-healing SSH tunnel (survives sleep and network changes), pins the server certificate, runs the first sync, installs 15-minute auto-sync + an hourly health watchdog, and finishes by <strong>proving</strong> the loop: it round-trips a test note and prints the time. The server stays on loopback — nothing is ever exposed to the internet; everything rides inside SSH on port 22."
+             data-ru="Эта одна команда поднимает самовосстанавливающийся SSH-туннель (переживает сон и смену сети), пиннит сертификат сервера, делает первый синк, ставит авто-синк каждые 15 минут + ежечасный watchdog, и в конце <strong>доказывает</strong> петлю: прогоняет тестовую заметку туда-обратно и печатает время. Сервер остаётся на loopback — наружу не торчит ничего; весь трафик едет внутри SSH на порту 22.">
+            Эта одна команда поднимает самовосстанавливающийся SSH-туннель (переживает сон и смену сети), пиннит сертификат сервера, делает первый синк, ставит авто-синк каждые 15 минут + ежечасный watchdog, и в конце <strong>доказывает</strong> петлю: прогоняет тестовую заметку туда-обратно и печатает время. Сервер остаётся на loopback — наружу не торчит ничего; весь трафик едет внутри SSH на порту 22.
+          </p>
+          <p data-en="Conflict-free by design: verbatim memory is append-only (<code>UNIQUE(source, conversation_id, msg_id)</code>) — there is nothing to merge. Interrupted first syncs resume from where they stopped. Advanced topologies (multi-node mesh, reverse tunnels, transit hubs) are documented in <a href='https://github.com/parallelclaw/memex-mvp/blob/main/SYNC.md' target='_blank' rel='noopener'>SYNC.md</a>."
+             data-ru="Бесконфликтно by design: verbatim-память append-only (<code>UNIQUE(source, conversation_id, msg_id)</code>) — мёржить нечего. Прерванный первый синк продолжается с места обрыва. Продвинутые топологии (мульти-нода, reverse-туннели, транзит-хабы) — в <a href='https://github.com/parallelclaw/memex-mvp/blob/main/SYNC.md' target='_blank' rel='noopener'>SYNC.md</a>.">
+            Бесконфликтно by design: verbatim-память append-only (<code>UNIQUE(source, conversation_id, msg_id)</code>) — мёржить нечего. Прерванный первый синк продолжается с места обрыва. Продвинутые топологии (мульти-нода, reverse-туннели, транзит-хабы) — в <a href="https://github.com/parallelclaw/memex-mvp/blob/main/SYNC.md" target="_blank" rel="noopener">SYNC.md</a>.
+          </p>
+          <p data-en="No server? The SQLite file still copies anywhere by hand, and a managed relay for laptop-only setups is on the roadmap."
+             data-ru="Нет сервера? SQLite-файл по-прежнему можно перенести руками, а managed-relay для чисто-ноутбучных сетапов — в roadmap.">
+            Нет сервера? SQLite-файл по-прежнему можно перенести руками, а managed-relay для чисто-ноутбучных сетапов — в roadmap.
           </p>
         </div>
       </details>

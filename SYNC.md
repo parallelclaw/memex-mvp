@@ -1,11 +1,40 @@
 # memex sync — multi-device replication
 
-> **Status:** experimental in v0.11.11+. Enable with `MEMEX_SYNC_EXPERIMENTAL=1`.
-> Wire protocol may change before v0.12. Pin your memex version on both sides.
+> **Status:** engine experimental since v0.11.11; the **`sync-join` lazy flow is
+> the v0.13 front door**. After one successful `sync-join`, no
+> `MEMEX_SYNC_EXPERIMENTAL` env var is needed (the join persists
+> `sync.enabled: true`). Manual/advanced commands on a machine that never
+> joined still want the env var. Pin your memex version on both sides.
 
 A pair of memex instances (laptop + VPS, or two laptops, or any N) keep their
 `~/.memex/data/memex.db` files **converging** — same conversations and messages
 visible from every device, no cloud relay, no shared file system.
+
+## Quickstart (the lazy path — 2 steps)
+
+The canonical setup: your laptop (Claude/Cursor) + one always-on server where
+your agent lives. **Step 1 — paste to the agent on the server:**
+
+```
+Set up memex sync as a hub and give me a join token for my laptop:
+1. npm install -g memex-mvp@latest   (skip if installed)
+2. memex-sync sync-server install --bind 127.0.0.1
+3. memex-sync sync-server invite --join
+Send me the memex-join:... line.
+```
+
+**Step 2 — one command on the laptop:**
+
+```sh
+memex-sync sync-join memex-join:eyJ2...
+```
+
+That orchestrates everything: SSH probe (prints your pubkey + instructions if
+access is missing), a self-healing forward tunnel (launchd/systemd KeepAlive),
+pinned-cert health check, first sync (resumable if interrupted), 15-min
+auto-sync, hourly watchdog, and a **marker self-test** that proves a note
+round-trips before declaring success. Everything below this section is the
+operational detail and the wire-protocol spec.
 
 This document is **both** the operational guide and the wire-protocol spec.
 Implementers and users read different sections.
@@ -17,7 +46,7 @@ Implementers and users read different sections.
 1. [Why this exists](#why-this-exists) — what problem we're solving
 2. [How it works (30s version)](#how-it-works-30s-version) — for users
 3. [Transports](#transports) — SSH, Tailscale, HTTPS pair, mDNS
-4. [Setup walkthrough](#setup-walkthrough) — `memex sync setup`
+4. [Setup walkthrough](#setup-walkthrough) — manual steps behind `sync-join`
 5. [Wire protocol (spec)](#wire-protocol-spec) — for implementers
 6. [Security model](#security-model)
 7. [Trade-offs we made](#trade-offs-we-made)
@@ -80,7 +109,9 @@ wire protocol — pick one:
 | **mDNS LAN** | Two devices on same Wi-Fi, no VPS | Zero (auto-discovery) |
 | **Caddy + public HTTPS** | Advanced, want public access | Domain + Caddy install |
 
-`memex sync setup` probes the environment and recommends the leanest path.
+`memex-sync sync-join` (v0.13) automates the SSH-tunnel transport end-to-end —
+the canonical lazy path. The full environment-probing wizard that picks among
+ALL transports is Roadmap §1.
 
 ### SSH tunnel (default for SSH-capable users)
 
@@ -469,11 +500,18 @@ that "worked yesterday" — without a guest reboot or any user change. We saw
 this on a HOSTKEY VPS where 8766 just stopped passing externally. Public
 ports are subject to anyone's firewall above the OS.
 
-### B. SSH tunnel (spoke initiates `ssh -L`)
+### B. SSH tunnel (spoke initiates `ssh -L`) ⭐ THE CANONICAL PATTERN — automated by `sync-join`
 
 Spoke `ssh -L 8766:localhost:8766 user@vps` over the existing port 22; sync
 client talks to `localhost:8766`. Hub doesn't expose 8766 publicly; the
 spoke's Mac VPN/proxy mostly relays SSH (it usually does to standard ports).
+
+This is what `memex-sync sync-join` builds (v0.13): the always-on server is
+the hub on loopback, the laptop dials out with a supervised `-L` tunnel.
+Strictly better than C for the common laptop+server case — the authoritative
+always-reachable node is the one that's actually always on. **Live since
+2026-06-11** on the maintainer's own Mac↔VPS pair (migrated off pattern C
+via `sync-join` itself; built-in marker self-test round-tripped in 3.4s).
 
 ### C. Mac-as-hub via reverse SSH tunnel (`ssh -R`) ⭐
 
@@ -535,9 +573,16 @@ shared. Each spoke needs SSH access to the transit-hub (one pubkey paste
 into `~/.ssh/authorized_keys` per spoke, no sudo).
 
 **Real session evidence:** the 3-node mesh (Mac in San Francisco / VPN + a
-HOSTKEY VPS in Milan + an Alibaba VPS in Asia) is currently running this
-exact topology after every other public-port approach hit a firewall wall.
-33k + 7k rows synced cleanly via SSH tunnels at ~165 s/round.
+HOSTKEY VPS in Milan + an Alibaba VPS in Asia) ran this exact topology after
+every other public-port approach hit a firewall wall. 33k + 7k rows synced
+cleanly via SSH tunnels at ~165 s/round.
+
+**Topology update (2026-06-11):** the Mac↔VPS-EU leg has since migrated to
+the canonical pattern B via `sync-join` (VPS-EU is now the hub on loopback;
+the Mac dials in with a supervised `-L` tunnel). The Asia spoke still uses
+its D-style reverse tunnel into VPS-EU, whose 5-min schedule keeps the
+third node converged — C/D remain the right tools when a node can't be a
+normal `-L` client.
 
 ---
 

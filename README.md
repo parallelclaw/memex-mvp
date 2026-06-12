@@ -326,58 +326,56 @@ See [PRIVACY section in the Russian README](README.ru.md#приватность-
 
 ## Cross-device
 
-**Experimental real-time sync (v0.11.11+).** memex can now converge two or
-more machines' databases over the network — laptop + VPS, two VPSes via a
-common transit, any number of nodes — with no cloud relay. HTTP push/pull
-+ cursors, conflict-free via the existing `UNIQUE(source, conversation_id,
-msg_id)` constraint (append-only verbatim memory never edits, so there's
-nothing to merge), TLS + 256-bit bearer, durable as a systemd/LaunchAgent
-service, hands-off on a timer.
+**Built-in real sync (v0.13).** Laptop with Claude/Cursor + a server with an
+agent (OpenClaw etc.)? Connect their memory in **two copy-paste steps** — no
+public ports, no firewall changes, no manual SSH keys, no hand-written services.
 
-**The right mental model.** A "hub" is whichever node is reachable by the
-others, NOT necessarily a fancy always-on VPS. SSH access (port 22) counts
-as reachable — meaning every machine you can SSH into is a hub candidate.
-The deployed-patterns table in [SYNC.md](SYNC.md#deployed-patterns-whats-been-proven-live)
-walks through four real topologies, in decreasing order of "easy":
+**Step 1 — paste this prompt to the agent on your server:**
 
-  1. **VPS-as-hub on a public port** — easiest when nothing blocks the port
-  2. **VPS-as-hub via SSH tunnel** — when public port is blocked
-  3. **Mac-as-hub via reverse SSH tunnel** — when the laptop is the only
-     reachable node, via `ssh -fN -R` from the VPS to the Mac. No public port
-     anywhere; sync rides on port 22 only.
-  4. **Transit-hub via chained `ssh -R`** — multi-node mesh where one VPS
-     acts as a meeting point others reverse-tunnel into. Used live for a
-     San Francisco Mac + Italy VPS + Asia VPS that no public-port plan
-     could glue together (Asia/Europe SSH path works; Mac VPN to Asia
-     didn't).
-
-The simplest happy path:
-
-```sh
-export MEMEX_SYNC_EXPERIMENTAL=1
-# hub (always-on machine):
-memex-sync sync-server install --bind 0.0.0.0
-memex-sync sync-server invite --host <public-ip>     # prints memex-pair:...
-# spoke (laptop):
-memex-sync sync-pair memex-pair:...                  # one paste — host+cert+token
-memex-sync sync-run vps
-memex-sync sync-schedule install --every 15m         # auto-sync from here
+```
+Set up memex sync as a hub and give me a join token for my laptop:
+1. npm install -g memex-mvp@latest   (skip if installed)
+2. memex-sync sync-server install --bind 127.0.0.1
+3. memex-sync sync-server invite --join
+Send me the memex-join:... line.
 ```
 
-Agents can emit the pairing token from a chat phrase via the
-`memex_sync_invite` MCP tool. Full guide + wire-protocol spec:
-**[SYNC.md](SYNC.md)**. Gated behind `MEMEX_SYNC_EXPERIMENTAL=1`; the
-protocol may change before it graduates to stable.
+**Step 2 — one command on your laptop:**
 
-A **mesh-bootstrap wizard** that probes reachability and picks the right
-topology automatically (so you don't have to know whether you're in case
-1, 2, 3, or 4) is the next big item — see
-[Roadmap §1 in SYNC.md](SYNC.md#1-mesh-bootstrap-wizard---top-priority-the-consolidating-product-feature).
+```sh
+memex-sync sync-join memex-join:eyJ2...
+```
+
+What that one command does, in order — and verifies at each step:
+
+```
+✓ token valid (openclaw@203.0.113.7, expires in 28m)
+✓ SSH access — OK                       (no key? it prints yours + what to do)
+✓ self-healing tunnel up                (survives sleep, network changes, reboot)
+✓ hub sync-server alive (cert pinned)
+✓ first sync: pulled N · pushed M
+✓ auto-sync every 15m installed
+✓ health watchdog installed             (alerts if sync goes silent > 1h)
+✓ end-to-end verified: a test note round-tripped in 3.4s
+```
+
+The server binds **loopback only** — nothing is ever exposed to the internet;
+all traffic rides inside SSH on port 22 (the one port that's never blocked).
+Conflict-free by design: verbatim memory is append-only
+(`UNIQUE(source, conversation_id, msg_id)`), so there is nothing to merge.
+Interrupted first syncs **resume** from the last good page. Re-joining the same
+hub keeps sync cursors — no pointless full re-replication. After a successful
+join, no `MEMEX_SYNC_EXPERIMENTAL` env var is needed for any sync command.
+
+**Advanced topologies** — multi-node mesh, reverse tunnels (laptop-as-hub),
+transit hubs gluing nodes that can't see each other (proven live on a
+San-Francisco Mac + Italy VPS + Asia VPS mesh) — are documented with the wire
+protocol in **[SYNC.md](SYNC.md)**. Agents can emit pair tokens via the
+`memex_sync_invite` MCP tool.
 
 **Simple alternative (no sync engine).** The corpus is one SQLite file plus a small
-inbox directory, so any file-sync tool (iCloud Drive symlink, Syncthing, one-time
-`scp`) handles it for single-writer setups. See [README.ru.md](README.ru.md#между-устройствами--across-devices)
-and [MULTI_MACHINE.md](MULTI_MACHINE.md) for tested recipes.
+inbox directory, so a one-time `scp` covers migrations. See
+[MULTI_MACHINE.md](MULTI_MACHINE.md) for legacy file-sync recipes.
 
 ---
 

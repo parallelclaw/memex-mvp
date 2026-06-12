@@ -362,43 +362,72 @@ Privacy: agent через `memex_sources_status` сам показывает ч�
 
 ### По-русски
 
-Memex живёт на одной машине: daemon ловит локальные файлы, SQLite строится локально, MCP отдаёт локально.
+**Встроенный настоящий синк (v0.13) — два copy-paste шага.** Ноут с
+Claude/Cursor + сервер с агентом (OpenClaw и т.п.) связывают память без
+публичных портов, правки фаервола, ручных SSH-ключей и написания сервисов.
 
-Три паттерна для multi-device сегодня:
+**Шаг 1 — кинь этот промпт агенту на сервере:**
 
-1. **Синк SQLite-файла.** `~/.memex/data/memex.db` — обычный файл. Реплицируй через iCloud / Syncthing / rsync / git-annex. Daemon пишет на основной машине; остальные читают тот же файл через свой локальный memex MCP-сервер. Один writer, много readers.
-2. **Memex на каждом устройстве независимо.** Установи memex отдельно на каждый ноут. Каждый строит свой корпус. Нет синка, нет конфликтов — но память не унифицирована.
-3. **Mobile через Telegram-бот** *(в roadmap'е, код написан в `bot/`).* Пересылаешь сообщения в @memex_bot с телефона → бот пишет JSON в `~/.memex/inbox/` основной машины → индексируется автоматически.
-
-**iCloud setup на macOS:**
-```bash
-# Option A — symlink ~/.memex/data в iCloud Drive
-mv ~/.memex/data ~/Library/Mobile\ Documents/com~apple~CloudDocs/memex/data
-ln -s ~/Library/Mobile\ Documents/com~apple~CloudDocs/memex/data ~/.memex/data
-
-# Option B — указать memex'у на iCloud-путь через env var
-export MEMEX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/memex"
+```
+Настрой memex-sync как хаб и выдай join-токен для моего ноута:
+1. npm install -g memex-mvp@latest   (пропусти, если уже стоит)
+2. memex-sync sync-server install --bind 127.0.0.1
+3. memex-sync sync-server invite --join
+Пришли мне строку memex-join:...
 ```
 
-⚠ **Только один writer.** Auto-capture daemon (`memex-sync`) запускай ровно на одной машине. Остальные устройства читают синхронизированный файл через свой локальный memex MCP-сервер — на них daemon не запускай. Параллельные writer'ы через filesystem sync могут корраптнуть WAL.
+**Шаг 2 — одна команда на ноуте:**
 
-Подробнее — 3 паттерна с примерами для Syncthing/rsync — в [MULTI_MACHINE.md](MULTI_MACHINE.md).
+```bash
+memex-sync sync-join memex-join:eyJ2...
+```
+
+Эта команда сама: проверяет SSH (нет доступа — печатает твой pubkey и что с
+ним сделать), поднимает **самовосстанавливающийся** туннель (переживает сон,
+смену сети, ребут), пиннит сертификат сервера, делает первый синк
+(прерванный — продолжается с места обрыва), ставит авто-синк каждые 15 минут
+и ежечасный watchdog, и в конце **доказывает** петлю — прогоняет тестовую
+заметку туда-обратно и печатает время. Сервер остаётся на loopback; весь
+трафик едет внутри SSH (порт 22). Бесконфликтно: verbatim-память append-only,
+мёржить нечего.
+
+Mobile: пересылай сообщения в Telegram-бота (`bot/`) — попадут на основную
+машину и разойдутся синком. Продвинутые топологии (мульти-нода, reverse-туннели,
+транзит-хабы) — в [SYNC.md](SYNC.md). Legacy file-sync рецепты (iCloud/Syncthing,
+single-writer, DEPRECATED) — в [MULTI_MACHINE.md](MULTI_MACHINE.md).
 
 ### In English
 
-Memex lives on one machine: daemon catches local files, SQLite builds locally, MCP serves locally.
+**Built-in real sync (v0.13) — two copy-paste steps.** A laptop with
+Claude/Cursor + a server with an agent connect their memory with no public
+ports, no firewall changes, no manual SSH keys, no hand-written services.
 
-Three patterns for multi-device today:
+**Step 1 — paste to the agent on the server:**
 
-1. **Sync the SQLite file.** `~/.memex/data/memex.db` is a regular file. Replicate via iCloud / Syncthing / rsync / git-annex. Daemon writes on your primary machine; other machines read the same file through their local memex MCP server. One writer, many readers.
-2. **Memex on each device independently.** Install memex separately on each laptop. Each builds its own corpus. No sync, no conflicts — but memory isn't unified.
-3. **Mobile via Telegram bot** *(roadmap, code drafted in `bot/`).* Forward messages or write thoughts to @memex_bot from your phone → bot writes JSON to `~/.memex/inbox/` on your primary machine → indexed automatically.
+```
+Set up memex sync as a hub and give me a join token for my laptop:
+1. npm install -g memex-mvp@latest   (skip if installed)
+2. memex-sync sync-server install --bind 127.0.0.1
+3. memex-sync sync-server invite --join
+Send me the memex-join:... line.
+```
 
-iCloud setup on macOS: same commands as in the Russian section above (paths are language-agnostic).
+**Step 2 — one command on the laptop:**
 
-⚠ **One writer only.** Run the auto-capture daemon (`memex-sync`) on exactly one machine. Other devices read the synced file through their local memex MCP server — they should not run the daemon on the same shared DB. Concurrent writers via filesystem sync can corrupt the WAL.
+```bash
+memex-sync sync-join memex-join:eyJ2...
+```
 
-For 3 detailed patterns with Syncthing/rsync examples — see [MULTI_MACHINE.md](MULTI_MACHINE.md).
+It verifies SSH (or prints your pubkey + instructions), builds a self-healing
+tunnel (survives sleep/network changes/reboot), pins the server cert, runs the
+first sync (resumable), installs 15-min auto-sync + an hourly watchdog, and
+finishes by **proving** the loop with a round-tripped test note. The server
+stays on loopback; everything rides inside SSH on port 22. Conflict-free:
+verbatim memory is append-only — nothing to merge.
+
+Advanced topologies (multi-node, reverse tunnels, transit hubs) — see
+[SYNC.md](SYNC.md). Legacy file-sync recipes (single-writer, DEPRECATED) —
+[MULTI_MACHINE.md](MULTI_MACHINE.md).
 
 ---
 

@@ -153,6 +153,10 @@ if (subcommand && subcommand !== '--help' && subcommand.startsWith('-') === fals
     // v0.13 lazy-user flow — one-command join + silent-failure watchdog
     'sync-join':     async () => (await import('./lib/sync/cli.js')).cmdSyncJoin(),
     'sync-watchdog': async () => (await import('./lib/sync/cli.js')).cmdSyncWatchdog(),
+    // Foreman tracer (v0) — agent-to-agent task ledger (tasks = agent-task messages)
+    'task-delegate': async () => (await import('./lib/tasks.js')).cmdTaskDelegate(),
+    'task-list':     async () => (await import('./lib/tasks.js')).cmdTaskList(),
+    'task-update':   async () => (await import('./lib/tasks.js')).cmdTaskUpdate(),
     serve: cmdServe, // explicit foreground; same as no-arg
     // All scan / export modes fall through to module-level logic at EOF.
     // cmdServe is a no-op marker so the dispatch doesn't error.
